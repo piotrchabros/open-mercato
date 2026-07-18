@@ -7757,23 +7757,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@open-mercato/onboarding@workspace:*, @open-mercato/onboarding@workspace:packages/onboarding":
+"@open-mercato/manufacturing@workspace:packages/manufacturing":
   version: 0.0.0-use.local
-  resolution: "@open-mercato/onboarding@workspace:packages/onboarding"
-  dependencies:
-    "@open-mercato/shared": "workspace:*"
-    "@types/jest": "npm:^30.0.0"
-    jest: "npm:^30.4.2"
-    ts-jest: "npm:^29.4.11"
-    typescript: "npm:7.0.2"
-  peerDependencies:
-    "@open-mercato/shared": "workspace:*"
-  languageName: unknown
-  linkType: soft
-
-"@open-mercato/production@workspace:packages/production":
-  version: 0.0.0-use.local
-  resolution: "@open-mercato/production@workspace:packages/production"
+  resolution: "@open-mercato/manufacturing@workspace:packages/manufacturing"
   dependencies:
     "@open-mercato/core": "workspace:*"
     "@open-mercato/shared": "workspace:*"
@@ -7790,6 +7776,20 @@ __metadata:
     "@open-mercato/shared": "workspace:*"
     react: ^19.0.0
     zod: ">=3.23.0"
+  languageName: unknown
+  linkType: soft
+
+"@open-mercato/onboarding@workspace:*, @open-mercato/onboarding@workspace:packages/onboarding":
+  version: 0.0.0-use.local
+  resolution: "@open-mercato/onboarding@workspace:packages/onboarding"
+  dependencies:
+    "@open-mercato/shared": "workspace:*"
+    "@types/jest": "npm:^30.0.0"
+    jest: "npm:^30.4.2"
+    ts-jest: "npm:^29.4.11"
+    typescript: "npm:7.0.2"
+  peerDependencies:
+    "@open-mercato/shared": "workspace:*"
   languageName: unknown
   linkType: soft
 

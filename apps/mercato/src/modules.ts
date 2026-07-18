@@ -103,9 +103,9 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'translations', from: '@open-mercato/core' },
   { id: 'scheduler', from: '@open-mercato/scheduler' },
   // Production planning vertical (BOMs, routings, production orders, MRP).
-  // Entire surface is gated by the `production_enabled` feature toggle
+  // Entire surface is gated by the `manufacturing_enabled` feature toggle
   // (fail-closed, default off) — see .ai/specs/2026-07-18-production-planning-module.md.
-  { id: 'production', from: '@open-mercato/production' },
+  { id: 'manufacturing', from: '@open-mercato/manufacturing' },
   { id: 'inbox_ops', from: '@open-mercato/core' },
   { id: 'payment_gateways', from: '@open-mercato/core' },
   { id: 'checkout', from: '@open-mercato/checkout' },
