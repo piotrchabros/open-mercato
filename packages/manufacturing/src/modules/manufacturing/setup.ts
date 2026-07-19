@@ -53,6 +53,10 @@ export const setup: ModuleSetupConfig = {
       'manufacturing.stock.view',
       'manufacturing.stock.manage',
       'manufacturing.orders.view',
+      // The receive-stock dialog's product/variant picker reads
+      // GET /api/catalog/products and /api/catalog/variants, both gated
+      // on this catalog feature.
+      'catalog.products.view',
     ],
     operator: [
       'manufacturing.operator.view',

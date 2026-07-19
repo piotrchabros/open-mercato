@@ -12,6 +12,7 @@ import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { createCrud } from '@open-mercato/ui/backend/utils/crud'
 import { CrudForm, type CrudField } from '@open-mercato/ui/backend/CrudForm'
+import { LookupSelect, type LookupSelectItem } from '@open-mercato/ui/backend/inputs/LookupSelect'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
@@ -47,6 +48,8 @@ type MovementRow = {
   reversesMovementId: string | null
   createdAt: string
 }
+
+type ProductLookupItem = LookupSelectItem & { defaultUnit: string | null }
 
 type ReceiveFormValues = {
   productId: string
@@ -84,6 +87,10 @@ export default function StockPage() {
   const [reloadToken, setReloadToken] = React.useState(0)
 
   const [receiveOpen, setReceiveOpen] = React.useState(false)
+  const [receiveProduct, setReceiveProduct] = React.useState<ProductLookupItem | null>(null)
+  const [receiveVariant, setReceiveVariant] = React.useState<LookupSelectItem | null>(null)
+  const productLookupRef = React.useRef(new Map<string, ProductLookupItem>())
+  const variantLookupRef = React.useRef(new Map<string, LookupSelectItem>())
   const [adjustTarget, setAdjustTarget] = React.useState<StockRow | null>(null)
   const [detailsTarget, setDetailsTarget] = React.useState<StockRow | null>(null)
   const [importOpen, setImportOpen] = React.useState(false)
@@ -129,16 +136,107 @@ export default function StockPage() {
     [t],
   )
 
+  const loadProductItems = React.useCallback(async (query: string): Promise<LookupSelectItem[]> => {
+    const params = new URLSearchParams({ pageSize: '20' })
+    if (query.trim().length) params.set('search', query.trim())
+    else params.set('sortField', 'title')
+    const call = await apiCall<{ items?: Array<Record<string, unknown>> }>(
+      `/api/catalog/products?${params.toString()}`,
+      undefined,
+      { fallback: { items: [] } },
+    )
+    const items = Array.isArray(call.result?.items) ? call.result.items : []
+    return items.flatMap((item) => {
+      const id = typeof item.id === 'string' ? item.id : null
+      if (!id) return []
+      const title = typeof item.title === 'string' && item.title.length
+        ? item.title
+        : typeof item.name === 'string' && item.name.length
+          ? item.name
+          : id
+      const sku = typeof item.sku === 'string' && item.sku.length ? item.sku : null
+      const defaultUnit = typeof item.default_unit === 'string' && item.default_unit.length ? item.default_unit : null
+      const mapped: ProductLookupItem = { id, title, subtitle: sku ?? undefined, defaultUnit }
+      productLookupRef.current.set(id, mapped)
+      return [mapped]
+    })
+  }, [])
+
+  const loadVariantItems = React.useCallback(async (productId: string, query: string): Promise<LookupSelectItem[]> => {
+    if (!productId) return []
+    const call = await apiCall<{ items?: Array<Record<string, unknown>> }>(
+      `/api/catalog/variants?productId=${encodeURIComponent(productId)}&pageSize=50`,
+      undefined,
+      { fallback: { items: [] } },
+    )
+    const items = Array.isArray(call.result?.items) ? call.result.items : []
+    const mapped = items.flatMap((item) => {
+      const id = typeof item.id === 'string' ? item.id : null
+      if (!id) return []
+      const title = typeof item.name === 'string' && item.name.length ? item.name : id
+      const sku = typeof item.sku === 'string' && item.sku.length ? item.sku : null
+      const entry: LookupSelectItem = { id, title, subtitle: sku ?? undefined }
+      variantLookupRef.current.set(id, entry)
+      return [entry]
+    })
+    const needle = query.trim().toLowerCase()
+    if (!needle.length) return mapped
+    return mapped.filter(
+      (entry) => entry.title.toLowerCase().includes(needle) || (entry.subtitle ?? '').toLowerCase().includes(needle),
+    )
+  }, [])
+
   const receiveFields = React.useMemo<CrudField[]>(
     () => [
-      { id: 'productId', label: t('manufacturing.stock.receive.field.product_id', 'Product ID'), type: 'text', required: true },
-      { id: 'variantId', label: t('manufacturing.stock.receive.field.variant_id', 'Variant ID'), type: 'text' },
+      {
+        id: 'productId',
+        label: t('manufacturing.stock.receive.field.product', 'Product'),
+        type: 'custom',
+        required: true,
+        component: ({ value, setValue, setFormValue }) => (
+          <LookupSelect
+            value={typeof value === 'string' && value.length ? value : null}
+            onChange={(next) => {
+              const picked = next ? (productLookupRef.current.get(next) ?? null) : null
+              setReceiveProduct(picked)
+              setReceiveVariant(null)
+              setValue(next ?? '')
+              setFormValue?.('variantId', '')
+              if (picked?.defaultUnit) setFormValue?.('uom', picked.defaultUnit)
+            }}
+            fetchItems={loadProductItems}
+            options={receiveProduct ? [receiveProduct] : undefined}
+            minQuery={0}
+          />
+        ),
+      },
+      {
+        id: 'variantId',
+        label: t('manufacturing.stock.receive.field.variant', 'Variant'),
+        type: 'custom',
+        component: ({ value, setValue, values }) => {
+          const productId = typeof values?.productId === 'string' ? values.productId : ''
+          return (
+            <LookupSelect
+              value={typeof value === 'string' && value.length ? value : null}
+              onChange={(next) => {
+                setReceiveVariant(next ? (variantLookupRef.current.get(next) ?? null) : null)
+                setValue(next ?? '')
+              }}
+              fetchItems={(query) => loadVariantItems(productId, query)}
+              options={receiveVariant ? [receiveVariant] : undefined}
+              minQuery={0}
+              disabled={!productId.length}
+            />
+          )
+        },
+      },
       { id: 'qty', label: t('manufacturing.stock.receive.field.qty', 'Quantity'), type: 'number', required: true },
       { id: 'uom', label: t('manufacturing.stock.receive.field.uom', 'UoM'), type: 'text', required: true },
       { id: 'batchNumber', label: t('manufacturing.stock.receive.field.batch_number', 'Batch number'), type: 'text' },
       { id: 'expiresAt', label: t('manufacturing.stock.receive.field.expires_at', 'Expires at'), type: 'date' },
     ],
-    [t],
+    [t, receiveProduct, receiveVariant, loadProductItems, loadVariantItems],
   )
 
   const handleReceiveSubmit = React.useCallback(
@@ -219,7 +317,15 @@ export default function StockPage() {
         />
         {ConfirmDialogElement}
 
-        <Dialog open={receiveOpen} onOpenChange={(next) => !next && setReceiveOpen(false)}>
+        <Dialog
+          open={receiveOpen}
+          onOpenChange={(next) => {
+            if (next) return
+            setReceiveOpen(false)
+            setReceiveProduct(null)
+            setReceiveVariant(null)
+          }}
+        >
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>{t('manufacturing.stock.receive.title', 'Receive stock')}</DialogTitle>
