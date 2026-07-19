@@ -29,6 +29,7 @@ COPY packages/enterprise/package.json ./packages/enterprise/
 COPY packages/eslint-plugin-ds/package.json ./packages/eslint-plugin-ds/
 COPY packages/events/package.json ./packages/events/
 COPY packages/gateway-stripe/package.json ./packages/gateway-stripe/
+COPY packages/manufacturing/package.json ./packages/manufacturing/
 COPY packages/onboarding/package.json ./packages/onboarding/
 COPY packages/queue/package.json ./packages/queue/
 COPY packages/scheduler/package.json ./packages/scheduler/
@@ -99,6 +100,7 @@ COPY packages/enterprise/package.json ./packages/enterprise/
 COPY packages/eslint-plugin-ds/package.json ./packages/eslint-plugin-ds/
 COPY packages/events/package.json ./packages/events/
 COPY packages/gateway-stripe/package.json ./packages/gateway-stripe/
+COPY packages/manufacturing/package.json ./packages/manufacturing/
 COPY packages/onboarding/package.json ./packages/onboarding/
 COPY packages/queue/package.json ./packages/queue/
 COPY packages/scheduler/package.json ./packages/scheduler/
@@ -156,6 +158,7 @@ COPY --from=dev-build /app/packages/onboarding/dist /opt/prebuilt/dist/onboardin
 COPY --from=dev-build /app/packages/queue/dist /opt/prebuilt/dist/queue
 COPY --from=dev-build /app/packages/search/dist /opt/prebuilt/dist/search
 COPY --from=dev-build /app/packages/scheduler/dist /opt/prebuilt/dist/scheduler
+COPY --from=dev-build /app/packages/manufacturing/dist /opt/prebuilt/dist/manufacturing
 COPY --from=dev-build /app/packages/ai-assistant/dist /opt/prebuilt/dist/ai-assistant
 COPY --from=dev-build /app/packages/create-app/dist /opt/prebuilt/dist/create-app
 
@@ -207,6 +210,7 @@ COPY --from=builder /app/packages/enterprise/package.json ./packages/enterprise/
 COPY --from=builder /app/packages/eslint-plugin-ds/package.json ./packages/eslint-plugin-ds/
 COPY --from=builder /app/packages/events/package.json ./packages/events/
 COPY --from=builder /app/packages/gateway-stripe/package.json ./packages/gateway-stripe/
+COPY --from=builder /app/packages/manufacturing/package.json ./packages/manufacturing/
 COPY --from=builder /app/packages/onboarding/package.json ./packages/onboarding/
 COPY --from=builder /app/packages/queue/package.json ./packages/queue/
 COPY --from=builder /app/packages/scheduler/package.json ./packages/scheduler/
