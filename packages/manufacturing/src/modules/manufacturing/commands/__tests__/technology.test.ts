@@ -1,6 +1,6 @@
 export {}
 
-import { E } from '../../../../../generated/entities.ids.generated'
+import { E } from '#generated/entities.ids.generated'
 
 // Mocked em/container harness for manufacturing technology commands, modeled on
 // packages/scheduler/src/modules/scheduler/commands/__tests__/jobs.undo.test.ts.

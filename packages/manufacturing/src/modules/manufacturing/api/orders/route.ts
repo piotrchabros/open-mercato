@@ -9,7 +9,7 @@ import {
   orderUpdateSchema,
   orderListQuerySchema,
 } from '../../data/validators.js'
-import { E } from '../../../../../generated/entities.ids.generated.js'
+import { E } from '#generated/entities.ids.generated'
 import {
   createManufacturingCrudOpenApi,
   createPagedListResponseSchema,

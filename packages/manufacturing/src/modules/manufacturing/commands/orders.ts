@@ -29,7 +29,7 @@ import {
 import { loadStockItemsByProduct, findStockItemFor, type ShortageLine } from '../lib/materialShortages.js'
 import { emitManufacturingEvent } from '../events.js'
 import { enforceManufacturingOrderOptimisticLock } from './shared.js'
-import { E } from '../../../../generated/entities.ids.generated.js'
+import { E } from '#generated/entities.ids.generated'
 
 /**
  * Manufacturing order commands (spec § Status machine / Data Models, Phase 3).

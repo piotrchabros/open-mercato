@@ -1,6 +1,6 @@
 export {}
 
-import { E } from '../../../../../generated/entities.ids.generated'
+import { E } from '#generated/entities.ids.generated'
 
 // Mocked em/container harness for manufacturing report commands, modeled on
 // `commands/__tests__/orders.test.ts`.

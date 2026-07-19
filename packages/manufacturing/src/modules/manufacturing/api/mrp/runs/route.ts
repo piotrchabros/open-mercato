@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { makeCrudRoute } from '@open-mercato/shared/lib/crud/factory'
 import { MrpRun } from '../../../data/entities.js'
 import { mrpRunCreateSchema, mrpRunListQuerySchema } from '../../../data/validators.js'
-import { E } from '../../../../../../generated/entities.ids.generated.js'
+import { E } from '#generated/entities.ids.generated'
 import { createManufacturingCrudOpenApi, createPagedListResponseSchema } from '../../openapi.js'
 
 const rawBodySchema = z.object({}).passthrough()

@@ -11,7 +11,7 @@ import type { MrpRunCreateInput, MrpSuggestionsBulkActionInput } from '../data/v
 import { emitManufacturingEvent } from '../events.js'
 import { getMrpRunQueue } from '../lib/mrp/queue.js'
 import { isManufacturingEnabledForTenant } from '../lib/manufacturingToggle.js'
-import { E } from '../../../../generated/entities.ids.generated.js'
+import { E } from '#generated/entities.ids.generated'
 
 /**
  * MRP run/suggestion commands (task 5.2, spec § MRP engine + Data Models).

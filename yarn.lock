@@ -7406,6 +7406,7 @@ __metadata:
     "@open-mercato/enterprise": "workspace:*"
     "@open-mercato/events": "workspace:*"
     "@open-mercato/gateway-stripe": "workspace:*"
+    "@open-mercato/manufacturing": "workspace:*"
     "@open-mercato/onboarding": "workspace:*"
     "@open-mercato/queue": "workspace:*"
     "@open-mercato/scheduler": "workspace:*"
@@ -7757,7 +7758,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@open-mercato/manufacturing@workspace:packages/manufacturing":
+"@open-mercato/manufacturing@workspace:*, @open-mercato/manufacturing@workspace:packages/manufacturing":
   version: 0.0.0-use.local
   resolution: "@open-mercato/manufacturing@workspace:packages/manufacturing"
   dependencies:

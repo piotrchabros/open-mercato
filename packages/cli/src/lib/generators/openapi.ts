@@ -473,12 +473,24 @@ process.stdout.write(JSON.stringify(deepClone(doc), (_, v) =>
         return undefined
       })
 
-      // #generated/* → core package generated/* (Node subpath imports)
+      // #generated/* → importer package generated/* (Node subpath imports)
       build.onResolve({ filter: /^#generated\// }, (args: any) => {
         const rest = args.path.slice('#generated/'.length)
-        const base = path.join(coreGeneratedRoot, rest)
-        for (const ext of ['.ts', '/index.ts']) {
-          if (fs.existsSync(base + ext)) return { path: base + ext }
+        const generatedRoots: string[] = []
+        let dir = args.importer ? path.dirname(args.importer) : ''
+        while (dir && dir.startsWith(rootDir) && dir !== path.dirname(dir)) {
+          if (fs.existsSync(path.join(dir, 'package.json'))) {
+            generatedRoots.push(path.join(dir, 'generated'))
+            break
+          }
+          dir = path.dirname(dir)
+        }
+        generatedRoots.push(coreGeneratedRoot)
+        for (const generatedRoot of generatedRoots) {
+          const base = path.join(generatedRoot, rest)
+          for (const ext of ['.ts', '/index.ts']) {
+            if (fs.existsSync(base + ext)) return { path: base + ext }
+          }
         }
         return undefined
       })

@@ -11,7 +11,7 @@ import {
   ManufacturingOrderOperation,
   ManufacturingOrderMaterial,
 } from '../entities'
-import { E } from '../../../../../generated/entities.ids.generated'
+import { E } from '#generated/entities.ids.generated'
 import { extensions } from '../extensions'
 
 function metaFor(entityClass: { name: string }) {

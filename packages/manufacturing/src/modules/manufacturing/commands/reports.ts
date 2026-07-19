@@ -36,7 +36,7 @@ import {
 import { emitManufacturingEvent } from '../events.js'
 import { enforceManufacturingOrderOptimisticLock } from './shared.js'
 import { transitionOrderToInProgress, transitionOrderToCompleted, reopenOrderFromReversal } from './orders.js'
-import { E } from '../../../../generated/entities.ids.generated.js'
+import { E } from '#generated/entities.ids.generated'
 
 /**
  * Shop-floor report commands (spec § Data Models / Status machine, Phase 4

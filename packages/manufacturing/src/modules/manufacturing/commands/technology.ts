@@ -34,7 +34,7 @@ import type {
   PlanningParamsUpdateInput,
 } from '../data/validators.js'
 import { emitManufacturingEvent } from '../events.js'
-import { E } from '../../../../generated/entities.ids.generated.js'
+import { E } from '#generated/entities.ids.generated'
 
 // ---------------------------------------------------------------------------
 // Scope helpers

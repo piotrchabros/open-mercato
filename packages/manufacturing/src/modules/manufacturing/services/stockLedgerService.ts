@@ -15,7 +15,7 @@ import {
   type StockMovementRef,
   type StockBatchSummary,
 } from '../lib/stockProvider.js'
-import { E } from '../../../../generated/entities.ids.generated.js'
+import { E } from '#generated/entities.ids.generated'
 
 /**
  * Default `manufacturingStockProvider` implementation (spec decision i),
