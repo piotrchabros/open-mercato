@@ -1,3 +1,9 @@
+---
+type: "Reference"
+title: "Open Mercato — Code Wiki Quickstart"
+description: "Entry point for the Open Mercato code wiki — monorepo overview, quick start, essential commands, wiki sections, key conventions, and backlog."
+---
+
 # Open Mercato — Code Wiki Quickstart
 
 Open Mercato is an open-source **AI-Engineering Foundation Framework** — a modular, multi-tenant CRM/ERP platform built on Next.js App Router, TypeScript, MikroORM, and Awilix DI. It ships with ready-made business modules (customers, sales, catalog, auth, etc.) and a spec-first, AI-assisted development workflow.

@@ -1,3 +1,9 @@
+---
+type: "Reference"
+title: "Testing Guidance"
+description: "Testing strategy for Open Mercato — Jest unit tests, Playwright integration specs, validation commands, and key test suites by domain."
+---
+
 # Testing Guidance
 
 Open Mercato uses a layered testing strategy: unit tests (Jest), integration tests (self-contained spec files), and manual QA gating.
@@ -105,6 +111,17 @@ node scripts/docker-exec.mjs test
 | `packages/search/src/modules/search/lib/__tests__/provider-probe.test.ts` | Provider availability probe |
 | `packages/search/src/vector/lib/__tests__/ollama-url-safety.test.ts` | Ollama URL safety |
 | `packages/core/src/modules/query_index/__tests__/status-coverage-waterfall.test.ts` | Query index status diagnostics (PR #4015) |
+
+### CRM Interaction Unification & Calendar
+
+| Test | What it verifies |
+|------|-----------------|
+| `packages/core/src/modules/customers/__integration__/TC-CRM-084-interaction-statuses-dictionary.spec.ts` | `interaction-statuses` dictionary seeds all five default statuses |
+| `packages/core/src/modules/customers/__integration__/TC-CRM-085-interaction-status-lifecycle.spec.ts` | Interaction status transitions through planned → in_progress → done |
+| `packages/core/src/modules/customers/__integration__/TC-CRM-086-deal-open-activities-enricher.spec.ts` | `in_progress` interaction counts toward deal `openActivitiesCount` |
+| `packages/core/src/modules/customers/__integration__/TC-CAL-001.spec.ts`–`TC-CAL-011.spec.ts` | Calendar API range reads, conflict detection, recurrence, preferences |
+| `packages/core/src/modules/customers/lib/__tests__/interactionReadModel.test.ts` | Interaction read model hydration (authors, deals, custom fields) |
+| `packages/core/src/modules/customers/lib/__tests__/interactionStatus.test.ts` | Open/terminal status semantics helper |
 
 ### Module Decoupling
 
