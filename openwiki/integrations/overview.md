@@ -1,3 +1,9 @@
+---
+type: "Reference"
+title: "Integrations Overview"
+description: "External integrations for Open Mercato — AI assistant, search providers, webhooks, provider packages (Stripe, Gmail, IMAP, S3, Akeneo, checkout), and official modules ecosystem."
+---
+
 # Integrations Overview
 
 Open Mercato integrates with external services through dedicated provider packages, an AI assistant layer, a webhook system, and an official modules ecosystem. Each integration is a self-contained npm workspace package.

@@ -1,3 +1,9 @@
+---
+type: "Reference"
+title: "Architecture Overview"
+description: "Module system, auto-discovery, Awilix DI, routing, MikroORM v7 database, multi-tenancy, and RBAC for Open Mercato."
+---
+
 # Architecture Overview
 
 Open Mercato is built on a modular monorepo architecture where business features live in self-contained modules, auto-discovered by a code generator and wired together through per-request dependency injection.

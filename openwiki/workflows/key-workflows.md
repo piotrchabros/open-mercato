@@ -1,3 +1,9 @@
+---
+type: "Reference"
+title: "Key Workflows"
+description: "Major runtime and development workflows — request lifecycle, CRUD factory, command pattern, event bus, search indexing, workflow engine, AI mutations, custom fields, widget injection, cache, and workers."
+---
+
 # Key Workflows
 
 This page covers the major runtime and development workflows in Open Mercato — how requests flow through the system, how data mutations work, how events propagate, and how cross-module features connect.

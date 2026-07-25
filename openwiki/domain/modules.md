@@ -1,3 +1,9 @@
+---
+type: "Reference"
+title: "Domain Modules"
+description: "Major business domain modules in packages/core — sales, customers, catalog, entities, attachments, customer accounts, messages, workflows, business rules, dictionaries, directory, and configs."
+---
+
 # Domain Modules
 
 This page covers the major business domain modules in `packages/core/src/modules/`. Each module follows the convention-based structure described in [architecture/overview.md](../architecture/overview.md).
@@ -79,8 +85,57 @@ Full CRM: people, companies, deals (sales opportunities), activities, todos, com
 2. **Transaction safety:** Multi-phase mutations use `withAtomicFlush(em, phases, { transaction: true })` — never interleave `em.find`/`em.findOne` between a scalar mutation and `em.flush()`.
 3. **Primary address enforcement:** `enforcePrimaryAddress` sets `isPrimary = false` on all other addresses for the same entity.
 4. **Deal lifecycle events:** `customers.deal.won` / `customers.deal.lost` beyond standard CRUD.
-5. **Interaction projection:** `recomputeNextInteraction` recalculates next planned interaction when interactions are created, completed, canceled, or reverted. Statuses: `planned`, `completed`, `canceled`.
+5. **Interaction projection:** `recomputeNextInteraction` recalculates the next scheduled open interaction when interactions are created, completed, canceled, or reverted. Only considers rows where `scheduled_at IS NOT NULL` and `status NOT IN (terminal set)`. Sort order: `scheduled_at ASC, priority DESC NULLS LAST, created_at ASC, id ASC`.
 6. **Email integration:** `customers.email.linked` and `customers.email.visibility_changed` events for email channel linking.
+
+### Interaction Unification (Activities → Interactions)
+
+The customers module is undergoing a gradual unification of three legacy entities — `CustomerActivity`, `CustomerTodoLink`, and standalone tasks — into a single canonical `CustomerInteraction` model. This is controlled by per-tenant feature flags, not a hard cutover.
+
+**Specs:**
+- `.ai/specs/implemented/SPEC-046b-2026-02-27-customers-interactions-unification.md` — original unification
+- `.ai/specs/2026-06-18-configurable-crm-interaction-statuses.md` — dictionary-backed interaction statuses
+- `.ai/specs/2026-06-18-customers-interactions-legacy-removal.md` — planned legacy retirement
+
+**Canonical entity (`CustomerInteraction`):** `packages/core/src/modules/customers/data/entities.ts` — supports interaction types (calls, meetings, tasks, emails), scheduling with recurrence, participants, visibility per type (`private`/`shared` for email, `team`/`public` for activities), soft-delete (`deleted_at`), pinning, and cross-module links (`external_message_id` for email channel integration).
+
+**Feature flags** (`lib/interactionFeatureFlags.ts`): three per-tenant toggles resolved via `featureTogglesService`:
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `customers.interactions.unified` | `false` | Enables canonical-only read path |
+| `customers.interactions.legacy-adapters` | `true` | Keeps legacy activity/todo bridges active |
+| `customers.interactions.external-sync` | `false` | Enables external system sync |
+
+**Legacy bridge** (`lib/legacyActivityBridge.ts`): `ensureCanonicalActivityBridge()` creates a canonical `CustomerInteraction` from a legacy `CustomerActivity` row on demand, reusing the legacy PK as the canonical ID. `resolveCanonicalActivityTargetId()` is called from the interactions API to transparently serve historical activities that haven't been migrated yet. The legacy `activities` command (`commands/activities.ts`) maps create/update inputs to the canonical interaction commands with `source: 'adapter:activity'`.
+
+**Todo compatibility** (`lib/todoCompatibility.ts`): canonical task interactions (`interactionType: 'task'`) coexist with legacy `CustomerTodoLink` rows. `listCanonicalTodoRows()` queries `CustomerInteraction` with type `task`; `listLegacyTodoRows()` resolves legacy todo links via the Query Engine. Both map to a unified `CustomerTodoRow` shape. `mapInteractionRecordToTodoSummary()` and `mapInteractionRecordToActivitySummary()` in `lib/interactionCompatibility.ts` provide the read-model adapters.
+
+**Configurable interaction statuses** (`lib/interactionStatus.ts`): statuses are dictionary-backed (`interaction-statuses` dictionary kind, managed via `/api/customers/dictionaries/interaction-statuses`). The open/terminal semantic is centralized in code: `isTerminalInteractionStatus()` treats `done`, `canceled`, and legacy `completed` as terminal; any unknown status counts as open (safe default for the open-activities badge). Default seeded set: `planned`, `in_progress`, `waiting`, `done`, `canceled`. The deals list enricher (`customers.deal-pipeline-state`) counts `_pipeline.openActivitiesCount` as interactions whose status is NOT in the terminal set.
+
+```mermaid
+stateDiagram-v2
+    [*] --> planned
+    planned --> in_progress
+    planned --> waiting
+    planned --> done
+    planned --> canceled
+    in_progress --> waiting
+    in_progress --> done
+    in_progress --> canceled
+    waiting --> in_progress
+    waiting --> done
+    waiting --> canceled
+    done --> [*]
+    canceled --> [*]
+```
+
+Interaction status lifecycle — planned, in_progress, and waiting are open (non-terminal); done and canceled are terminal. The `complete` action always targets `done`; `cancel` always targets `canceled`.
+
+**Interaction read model** (`lib/interactionReadModel.ts`): `hydrateCanonicalInteractions()` loads author names, deal titles, and custom field values for a set of `CustomerInteraction` rows, with optional response enrichment via `applyResponseEnrichers`. Uses `findWithDecryption` for encrypted fields.
+
+**Calendar** (`lib/calendar/`): full calendar grid support — range queries (`from`/`to` filtering on `coalesce(occurred_at, scheduled_at, created_at)`), conflict detection (`mine`/`all` scope), recurrence expansion, preferences (weekends, conflict warnings, CRM activity visibility, event categories). Calendar preferences stored in `om.customers.calendar.preferences.v1` localStorage key. Source spec: `.ai/specs/2026-06-11-crm-calendar.md`.
+
+**Interaction commands** (`commands/interactions.ts`): `customers.interactions.create`, `customers.interactions.update`, `customers.interactions.complete`, `customers.interactions.cancel` — all go through the command pattern with `withAtomicFlush`, optimistic locking on the parent entity, undo/redo snapshots, custom field snapshots, and `emitCrudSideEffects` post-commit. Events: `customers.interaction.created`, `.updated`, `.completed`, `.canceled`, `.reverted`, `.deleted`.
 
 ### Cross-Module Patterns
 - **Widget injection:** AI assistant triggers on People/Companies list `:search-trailing` slots; deal analyzer on Deals list

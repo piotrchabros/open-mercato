@@ -1,3 +1,9 @@
+---
+type: "Reference"
+title: "Source Map"
+description: "Package-by-package reference for the Open Mercato monorepo — apps, core packages, integration providers, configuration, and AI/agent infrastructure."
+---
+
 # Source Map
 
 Package-by-package reference for the Open Mercato monorepo. Use this to find where code lives and which package owns which concern.

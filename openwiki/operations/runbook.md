@@ -1,3 +1,9 @@
+---
+type: "Reference"
+title: "Operations Runbook"
+description: "Practical guide for developing, building, testing, deploying, and releasing Open Mercato — dev workflow, Docker, database migrations, env vars, official modules, CI/CD, and releases."
+---
+
 # Operations Runbook
 
 Practical guide for developing, building, testing, and deploying Open Mercato.
