@@ -55,10 +55,18 @@ function buildOrgScopeCacheKey(parts: {
   effectiveTenantId: string
   selectedOrgId: string | null
   requestedTenantId: string | null
+  boundOrgId: string | null
 }): string {
   const selected = parts.selectedOrgId ?? 'none'
   const requested = parts.requestedTenantId ?? 'none'
-  return `${ORG_SCOPE_CACHE_KEY_PREFIX}:${parts.userId}:${parts.effectiveTenantId}:${selected}:${requested}`
+  // The bound organization is part of the key even though it is already folded
+  // into selectedOrgId below. Belt and braces: without it, an implementation
+  // slip that stopped forcing the selection would silently share one cache
+  // entry between a platform-host and a bound-host request for the same user —
+  // a cross-organization leak that only appears under concurrency, and only
+  // once OM_ORG_SCOPE_CACHE_TTL_MS is turned on.
+  const bound = parts.boundOrgId ?? 'none'
+  return `${ORG_SCOPE_CACHE_KEY_PREFIX}:${parts.userId}:${parts.effectiveTenantId}:${selected}:${requested}:${bound}`
 }
 
 // Tag builders are exported so the modules that own the "this user's scope
@@ -390,6 +398,45 @@ export async function resolveOrganizationScope({
   }
 }
 
+/**
+ * Confines a resolved scope to the organization its hostname is bound to (#4271).
+ *
+ * Fails CLOSED. If the caller has no access to the bound organization the scope
+ * collapses to an empty one rather than falling back to their home org — that
+ * fallback is exactly the "half-bound" failure where an operator on
+ * acme.example.com silently works on their own organization instead.
+ *
+ * Also collapses `filterIds`/`allowedIds` of `null`, which mean "unrestricted".
+ * A super-admin resolves to unrestricted by default, and leaving that as-is on
+ * a bound host would turn the binding into decoration.
+ */
+function clampToHostBinding(
+  scope: OrganizationScope,
+  binding: { tenantId: string; organizationId: string },
+): OrganizationScope {
+  const granted = scope.selectedId === binding.organizationId
+  if (!granted) {
+    return {
+      selectedId: null,
+      filterIds: [],
+      allowedIds: [],
+      tenantId: binding.tenantId,
+      selectionRejected: true,
+    }
+  }
+
+  // The bound org plus its descendants — narrowing, never widening. `filterIds`
+  // is already that subtree when a concrete org resolved; the fallback covers
+  // the unrestricted case.
+  const subtree = scope.filterIds ?? [binding.organizationId]
+  return {
+    selectedId: binding.organizationId,
+    filterIds: subtree,
+    allowedIds: subtree,
+    tenantId: binding.tenantId,
+  }
+}
+
 export async function resolveOrganizationScopeForRequest({
   container,
   auth,
@@ -447,8 +494,14 @@ export async function resolveOrganizationScopeForRequest({
         : undefined
   const requestedTenantId = typeof requestedTenant === 'string' && requestedTenant.trim().length > 0 ? requestedTenant.trim() : null
   const isSuperAdminActor = auth.isSuperAdmin === true
-  let effectiveTenantId = requestedTenantId ?? actorTenant ?? null
-  if (actorTenant && effectiveTenantId && effectiveTenantId !== actorTenant && !isSuperAdminActor) {
+
+  // #4271: the request arrived on a hostname bound to one organization. The
+  // binding is server-derived (stamped by applySuperAdminScope) and outranks
+  // both scope cookies — they are discarded rather than reconciled.
+  const hostBinding = (auth as { hostBinding?: { tenantId: string; organizationId: string } | null }).hostBinding ?? null
+
+  let effectiveTenantId = hostBinding ? hostBinding.tenantId : requestedTenantId ?? actorTenant ?? null
+  if (!hostBinding && actorTenant && effectiveTenantId && effectiveTenantId !== actorTenant && !isSuperAdminActor) {
     effectiveTenantId = actorTenant
   }
   if (!effectiveTenantId) {
@@ -461,7 +514,13 @@ export async function resolveOrganizationScopeForRequest({
     orgId: actorTenant && actorTenant === effectiveTenantId ? actorOrgId ?? null : null,
   }
 
-  const rawSelected = selectedId !== undefined ? selectedId : (request ? getSelectedOrganizationFromRequest(request) : null)
+  const rawSelected = hostBinding
+    ? hostBinding.organizationId
+    : selectedId !== undefined
+      ? selectedId
+      : request
+        ? getSelectedOrganizationFromRequest(request)
+        : null
   const normalizedSelectedId = typeof rawSelected === 'string' && rawSelected.trim().length > 0
     ? rawSelected.trim()
     : null
@@ -475,6 +534,7 @@ export async function resolveOrganizationScopeForRequest({
         effectiveTenantId,
         selectedOrgId: normalizedSelectedId,
         requestedTenantId: requestedTenantId ?? null,
+        boundOrgId: hostBinding?.organizationId ?? null,
       })
     : null
 
@@ -502,9 +562,11 @@ export async function resolveOrganizationScopeForRequest({
       tenantId: effectiveTenantId,
     })
 
+    const scope = hostBinding ? clampToHostBinding(baseScope, hostBinding) : baseScope
+
     if (cache && cacheKey && userId && typeof cache.set === 'function') {
       try {
-        await cache.set(cacheKey, baseScope, {
+        await cache.set(cacheKey, scope, {
           ttl: ttlMs,
           tags: buildOrgScopeCacheTags({ userId, effectiveTenantId }),
         })
@@ -513,7 +575,7 @@ export async function resolveOrganizationScopeForRequest({
       }
     }
 
-    return baseScope
+    return scope
   }
 
   if (requestMemo && cacheKey) {
