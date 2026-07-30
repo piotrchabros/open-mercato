@@ -49,10 +49,29 @@ view behave exactly as they did before this feature existed.
 | See two unrelated organizations side by side | Use the platform domain. A bound host cannot show an organization outside its own subtree — that is the guarantee it exists to provide. |
 | Brand only some organizations | Nothing to do. The feature is opt-in per organization: one without a mapping is simply reachable via the platform host only. |
 
-:::caution Sessions do not follow you between branded domains
-Cookies are host-only, so moving from `crm.acme.com` to `crm.other.com` means signing in again.
-That isolation is deliberate, but it makes branded domains a poor fit for an operator who spends
-the day hopping between organizations. Give that person the platform domain.
+### Does switching organizations mean signing in again?
+
+Only if you change hostname. The two look similar from a chair and are not the same thing.
+
+| Action | Re-authentication |
+|---|---|
+| Picking another organization in the switcher, on the same host | **No.** It writes the `om_selected_org` cookie and refreshes the page. Same session throughout. |
+| Opening a different branded domain | **Yes.** Session cookies carry no `Domain` attribute, so they are host-only: the session on `crm.acme.com` is never sent to `crm.staffinit.com`. |
+
+The platform domain is no exception — signing in there does not sign you in on a branded host, and
+the reverse is equally true. This holds even when the hostnames share a parent domain, because
+host-only means precisely that host.
+
+This is pre-existing behaviour, not something per-organization domains introduced. It only starts
+to matter once there is more than one backend hostname to move between.
+
+The practical consequence: an operator covering all three organizations belongs on the platform
+domain, where switching is one click. Branded domains suit people tied to a single organization —
+a Staffinit employee signs in once on `crm.staffinit.com` and never moves.
+
+:::note One sign-in across every branded domain is cross-domain SSO
+Deliberately out of scope, here and in the portal custom-domain work it builds on. It needs a
+central identity provider and a redirect flow; no cookie setting can produce it.
 :::
 
 A user whose permissions cover several organizations still gets clamped to the bound one when they
@@ -202,7 +221,9 @@ is how WebAuthn works, and the alternative is the cross-tenant hole described ab
 passkey arriving on a new domain enrol a new one; recovery codes cover the gap.
 
 **Sessions are per domain.** Cookies are host-only, so signing in on `crm.staffinit.com` does not
-sign you in on the platform host. That is intentional isolation, not a bug.
+sign you in on the platform host — see [Does switching organizations mean signing in
+again?](#does-switching-organizations-mean-signing-in-again) for how that differs from using the
+switcher.
 
 **Email links need the host in `APP_ALLOWED_ORIGINS`.** Request-scoped senders — password reset,
 invitations, session refresh — resolve their base URL synchronously and read that static
