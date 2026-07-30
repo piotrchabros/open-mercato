@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { shouldUseSecureCookies } from '@open-mercato/shared/lib/auth/cookieSecurity'
 import { z } from 'zod'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import type { CommandBus, CommandRuntimeContext } from '@open-mercato/shared/lib/commands'
@@ -188,7 +189,7 @@ export async function PUT(req: Request) {
       httpOnly: true,
       path: '/',
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      secure: shouldUseSecureCookies(),
       maxAge: 60 * 60 * 8,
     })
     return res

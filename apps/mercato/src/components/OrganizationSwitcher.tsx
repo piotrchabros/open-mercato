@@ -48,6 +48,26 @@ type SwitcherState =
       hostBoundOrganizationId: string | null
     }
 
+/**
+ * Attributes for the client-written scope-selection cookies.
+ *
+ * These drive super-admin tenant/organization selection, so on a public custom
+ * domain they must not travel over plaintext or be readable cross-site.
+ * `Secure` is added whenever the page is served over https — hard-coding it
+ * would break plain-http local development, and hard-coding it off is what
+ * left them unprotected in the first place.
+ *
+ * `SameSite=Strict` rather than Lax: with per-organization hostnames, a
+ * sibling subdomain is same-site under Lax, so a cross-subdomain navigation
+ * could carry another organization's selection.
+ */
+const SCOPE_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30 // 30 days
+
+function scopeCookieAttributes(): string {
+  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:'
+  return `; max-age=${SCOPE_COOKIE_MAX_AGE_SECONDS}; samesite=strict${isHttps ? '; secure' : ''}`
+}
+
 type SelectedCookieState = {
   value: string
   hasCookie: boolean
@@ -152,9 +172,8 @@ export default function OrganizationSwitcher({ compact }: OrganizationSwitcherEx
     if (typeof document === 'undefined') return
     const resolved = next ?? ''
     setTenantCookieState({ value: resolved, hasCookie: true, raw: resolved })
-    const maxAge = 60 * 60 * 24 * 30
     try {
-      document.cookie = `om_selected_tenant=${encodeURIComponent(resolved)}; path=/; max-age=${maxAge}; samesite=lax`
+      document.cookie = `om_selected_tenant=${encodeURIComponent(resolved)}; path=/${scopeCookieAttributes()}`
     } catch {
       // ignore failures
     }
@@ -167,9 +186,8 @@ export default function OrganizationSwitcher({ compact }: OrganizationSwitcherEx
     const resolved = next ?? ''
     const cookieValue = next ?? ALL_ORGANIZATIONS_COOKIE_VALUE
     setCookieState({ value: resolved, hasCookie: true, raw: cookieValue })
-    const maxAge = 60 * 60 * 24 * 30 // 30 days
     if (typeof document !== 'undefined') {
-      document.cookie = `om_selected_org=${encodeURIComponent(cookieValue)}; path=/; max-age=${maxAge}; samesite=lax`
+      document.cookie = `om_selected_org=${encodeURIComponent(cookieValue)}; path=/${scopeCookieAttributes()}`
     }
     if (tenantId !== undefined) {
       persistTenant(tenantId ?? null, { refresh: false })

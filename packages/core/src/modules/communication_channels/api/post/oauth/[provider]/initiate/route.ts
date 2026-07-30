@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { shouldUseSecureCookies } from '@open-mercato/shared/lib/auth/cookieSecurity'
 import { z } from 'zod'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
@@ -165,7 +166,7 @@ export async function POST(req: Request, context: RouteContext): Promise<Respons
     name: COMMUNICATION_CHANNELS_OAUTH_STATE_COOKIE_NAME,
     value: finalCookie,
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(),
     sameSite: 'lax',
     path: '/',
     maxAge: Math.floor(COMMUNICATION_CHANNELS_OAUTH_STATE_TTL_MS / 1000),

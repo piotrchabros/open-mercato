@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { shouldUseSecureCookies } from '@open-mercato/shared/lib/auth/cookieSecurity'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { toAbsoluteUrl } from '@open-mercato/shared/lib/url'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
@@ -58,7 +59,7 @@ function redirectWithFlash(
     name: COMMUNICATION_CHANNELS_OAUTH_STATE_COOKIE_NAME,
     value: '',
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(),
     sameSite: 'lax',
     path: '/',
     maxAge: 0,

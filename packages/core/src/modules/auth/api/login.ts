@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { shouldUseSecureCookies } from '@open-mercato/shared/lib/auth/cookieSecurity'
 import { z } from 'zod'
 import type { OpenApiMethodDoc, OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { userLoginSchema } from '@open-mercato/core/modules/auth/data/validators'
@@ -232,12 +233,12 @@ export async function POST(req: Request) {
     : undefined
 
   const res = NextResponse.json(interceptedBody, { status: interceptedResponse.statusCode })
-  res.cookies.set('auth_token', authTokenForCookie, { httpOnly: true, path: '/', sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: accessTokenMaxAgeSeconds })
+  res.cookies.set('auth_token', authTokenForCookie, { httpOnly: true, path: '/', sameSite: 'lax', secure: shouldUseSecureCookies(), maxAge: accessTokenMaxAgeSeconds })
   if (remember && refreshTokenForCookie) {
     const expiresAt = new Date(Date.now() + rememberMeDays * 24 * 60 * 60 * 1000)
-    res.cookies.set('session_token', refreshTokenForCookie, { httpOnly: true, path: '/', sameSite: 'lax', secure: process.env.NODE_ENV === 'production', expires: expiresAt })
+    res.cookies.set('session_token', refreshTokenForCookie, { httpOnly: true, path: '/', sameSite: 'lax', secure: shouldUseSecureCookies(), expires: expiresAt })
   } else if (!remember && authTokenForCookie === token) {
-    res.cookies.set('session_token', sessionRefreshToken, { httpOnly: true, path: '/', sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: accessTokenMaxAgeSeconds })
+    res.cookies.set('session_token', sessionRefreshToken, { httpOnly: true, path: '/', sameSite: 'lax', secure: shouldUseSecureCookies(), maxAge: accessTokenMaxAgeSeconds })
   }
   return res
 }

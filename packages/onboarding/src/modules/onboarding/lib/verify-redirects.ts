@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { shouldUseSecureCookies } from '@open-mercato/shared/lib/auth/cookieSecurity'
 
 const TENANT_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 14
 
@@ -12,7 +13,7 @@ function setTenantCookie(response: NextResponse, tenantId: string) {
   response.cookies.set('om_login_tenant', tenantId, {
     httpOnly: false,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(),
     path: '/',
     maxAge: TENANT_COOKIE_MAX_AGE_SECONDS,
   })

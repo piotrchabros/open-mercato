@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { shouldUseSecureCookies } from '@open-mercato/shared/lib/auth/cookieSecurity'
 import { z } from 'zod'
 import type { OpenApiRouteDoc, OpenApiMethodDoc } from '@open-mercato/shared/lib/openapi'
 import { invitationAcceptSchema } from '@open-mercato/core/modules/customer_accounts/data/validators'
@@ -78,14 +79,14 @@ export async function POST(req: Request) {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(),
     maxAge: 60 * 60 * 8,
   })
   res.cookies.set('customer_session_token', rawToken, {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(),
     maxAge: 60 * 60 * 24 * 30,
   })
 

@@ -1,4 +1,5 @@
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
+import { shouldUseSecureCookies } from '@open-mercato/shared/lib/auth/cookieSecurity'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { createLogger } from '@open-mercato/shared/lib/logger'
 import { AuthService } from '@open-mercato/core/modules/auth/services/authService'
@@ -78,7 +79,7 @@ export async function GET(req: Request) {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(),
     maxAge: accessTokenMaxAgeSeconds,
   })
   return res

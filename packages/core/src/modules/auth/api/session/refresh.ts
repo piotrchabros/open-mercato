@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { shouldUseSecureCookies } from '@open-mercato/shared/lib/auth/cookieSecurity'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { AuthService } from '@open-mercato/core/modules/auth/services/authService'
@@ -47,14 +48,14 @@ function clearStaffAuthCookies(response: NextResponse) {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(),
     maxAge: 0,
   })
   response.cookies.set('session_token', '', {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(),
     maxAge: 0,
   })
   return response
@@ -80,7 +81,7 @@ export async function GET(req: Request) {
   }
   const jwt = signJwt(buildStaffJwtClaims(ctx))
   const res = buildSafeRedirectResponse(req, redirectTo)
-  res.cookies.set('auth_token', jwt, { httpOnly: true, path: '/', sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 8 })
+  res.cookies.set('auth_token', jwt, { httpOnly: true, path: '/', sameSite: 'lax', secure: shouldUseSecureCookies(), maxAge: 60 * 60 * 8 })
   return res
 }
 
@@ -140,7 +141,7 @@ export async function POST(req: Request) {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookies(),
     maxAge: 60 * 60 * 8,
   })
 
