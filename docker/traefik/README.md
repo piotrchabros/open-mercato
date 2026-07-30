@@ -159,7 +159,7 @@ What is required on the app side:
 |---|---|
 | `BACKEND_CUSTOM_DOMAINS_ENABLED=true` | Off by default. |
 | `TRUSTED_PROXY_CIDRS` | The app refuses to start without it. The request `Host` decides which organization an operator acts on, so it is only trustworthy behind a proxy that overwrites it — which is what this overlay does. Running the app on its published port with no proxy in front makes `Host` client-controlled. |
-| `PLATFORM_DOMAINS` | Must list the platform host, or the proxy treats it as a custom domain and issues a resolve lookup on every request. |
+| `PLATFORM_DOMAINS` | Must list the platform host, or the proxy treats it as a custom domain and issues a resolve lookup on every request. **Must NOT list the organizations' hostnames** — a host named here cannot bind to an organization *and* is refused a certificate by the ForwardAuth gate. It is an exclusion list, and it is not derived from `APP_URL`. |
 | `OM_SECURITY_WEBAUTHN_RP_ID` | Must stay **unset**. Pinning it to a shared parent domain would make every tenant host a valid relying party for every other tenant's passkey. |
 | `OM_ALLOW_FORCED_HOST` | Must stay off. It is mutually exclusive with this feature and the app refuses to start with both. |
 

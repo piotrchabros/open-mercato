@@ -44,7 +44,7 @@ view behave exactly as they did before this feature existed.
 
 | You want to | Do this |
 |---|---|
-| Switch freely between organizations as a super-admin | Work on the platform domain. Nothing changed there. |
+| Switch freely between organizations as a super-admin | Work on the platform domain — the host named in `PLATFORM_DOMAINS`. Nothing changed there. |
 | See a parent organization and its children at once | Bind the **parent's** domain. The scope is the bound organization *plus its descendants*, so the whole subtree is visible. |
 | See two unrelated organizations side by side | Use the platform domain. A bound host cannot show an organization outside its own subtree — that is the guarantee it exists to provide. |
 | Brand only some organizations | Nothing to do. The feature is opt-in per organization: one without a mapping is simply reachable via the platform host only. |
@@ -93,6 +93,46 @@ APP_ALLOWED_ORIGINS=https://crm.bespokesoft.pl,https://crm.staffinit.com
 is only trustworthy behind a proxy that overwrites it. The base compose file publishes the app
 directly on its port, where any client can send whatever `Host` it likes — so the app refuses to
 boot with the feature on and no proxy declared.
+
+### `PLATFORM_DOMAINS` is an exclusion list
+
+Two things about this variable are easy to get wrong, and neither fails in a way that points at
+the cause.
+
+**It is not derived from `APP_URL`.** They are separate settings. If `APP_URL` is
+`https://panel.example.com` and `PLATFORM_DOMAINS` is left unset, it falls back to
+`localhost,openmercato.com` — which does not contain your own host, so the proxy treats your admin
+panel as a customer domain and performs a database lookup on **every page request**. (This is
+exactly the bug the Railway deployer shipped: it set `APP_URL` and never `PLATFORM_DOMAINS`.)
+
+**Do not list the organizations' hostnames there.** `PLATFORM_DOMAINS` names the hosts that must
+*not* take part in per-organization routing. Adding `crm.acme.com` to it says "this is not an
+organization domain", and two things follow:
+
+- **The binding stops existing.** `resolveByHostname` returns `null` for a platform host, so no
+  `hostBinding` is produced, the scope clamp never engages, and the hostname behaves like an
+  ordinary admin panel with a full organization switcher — the opposite of what you configured it
+  for.
+- **The certificate is refused.** Traefik's `platform` router matches a single host
+  (`PLATFORM_PRIMARY_HOST`) and bypasses the ACME gate. Every other hostname reaches the catch-all
+  router, whose ForwardAuth asks `/api/customer_accounts/domain-check` — and that endpoint also
+  returns "not eligible" for a platform host. The host ends up with no TLS at all.
+
+So a three-organization instance wants a **fourth, neutral** hostname for administration:
+
+```bash
+PLATFORM_DOMAINS=panel.example.com
+PLATFORM_PRIMARY_HOST=panel.example.com   # same host, for the Traefik router
+
+# these stay OUT of the list, which is why they bind:
+#   crm.acme.com          → Acme
+#   crm.staffinit.com     → Staffinit
+#   crm.bluebee.marketing → BlueBee
+```
+
+An operator who needs every organization signs in on `panel.example.com` and gets the full
+switcher there. Nothing has to be added to `PLATFORM_DOMAINS` for that to work — it works
+*because* that host is the only entry.
 
 ### Two variables that must stay unset
 
