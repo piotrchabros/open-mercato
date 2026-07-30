@@ -98,6 +98,7 @@ export async function GET(req: Request) {
         organizationId: r.organizationId,
         orgSlug: r.orgSlug,
         status: r.status,
+        target: r.target,
       })),
     }),
   )

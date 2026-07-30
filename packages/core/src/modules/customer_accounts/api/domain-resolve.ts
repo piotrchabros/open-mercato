@@ -53,6 +53,7 @@ export async function GET(req: Request) {
       organizationId: result.organizationId,
       orgSlug: result.orgSlug,
       status: result.status,
+      target: result.target,
     }),
   )
 }

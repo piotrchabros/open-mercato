@@ -6,6 +6,12 @@ export type DomainResolution = {
   organizationId: string
   orgSlug: string | null
   status: 'active'
+  /**
+   * Which app this hostname serves. Absent on entries produced by a platform
+   * build older than #4271, hence optional — callers must treat a missing
+   * value as 'portal', which is what every pre-existing mapping was.
+   */
+  target?: 'portal' | 'backend'
 }
 
 type PositiveEntry = {

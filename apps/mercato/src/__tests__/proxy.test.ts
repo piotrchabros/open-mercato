@@ -145,3 +145,103 @@ describe('proxy', () => {
     expect(res.headers.get('x-middleware-next')).toBe('1')
   })
 })
+
+// ---------------------------------------------------------------------------
+// backend-target routing (task 3.3, #4271)
+// ---------------------------------------------------------------------------
+
+describe('proxy backend-target hosts', () => {
+  const ORIGINAL_ENV = { ...process.env }
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    ensureWarmUp.mockResolvedValue(undefined)
+    isPlatformHost.mockReturnValue(false)
+    process.env = { ...ORIGINAL_ENV }
+    process.env.BACKEND_CUSTOM_DOMAINS_ENABLED = '1'
+    process.env.TRUSTED_PROXY_CIDRS = '10.0.0.0/8'
+    delete process.env.OM_ALLOW_FORCED_HOST
+  })
+
+  afterAll(() => {
+    process.env = ORIGINAL_ENV
+  })
+
+  function backendMapping() {
+    return {
+      hostname: 'crm.acme.com',
+      tenantId: 't1',
+      organizationId: 'o1',
+      orgSlug: 'acme',
+      status: 'active' as const,
+      target: 'backend' as const,
+    }
+  }
+
+  it('serves /backend unrewritten on a backend host', async () => {
+    resolve.mockResolvedValue(backendMapping())
+    const res = await proxy(makeRequest('https://crm.acme.com/backend/customers', { host: 'crm.acme.com' }))
+
+    expect(res.headers.get('x-middleware-next')).toBe('1')
+    expect(res.headers.get('x-middleware-rewrite')).toBeNull()
+    expect(res.headers.get('x-middleware-request-x-next-url')).toBe('/backend/customers')
+    expect(res.headers.get('x-custom-domain')).toBe('1')
+  })
+
+  it('does not prefix the portal path on a backend host root request', async () => {
+    resolve.mockResolvedValue(backendMapping())
+    const res = await proxy(makeRequest('https://crm.acme.com/', { host: 'crm.acme.com' }))
+
+    expect(res.headers.get('x-middleware-rewrite')).toBeNull()
+    expect(res.headers.get('x-middleware-request-x-next-url')).toBe('/')
+  })
+
+  it('fails closed to a 404 passthrough when the feature flag is off', async () => {
+    // Disabling the flag must stop already-registered backend hosts from
+    // routing, otherwise the kill switch does not actually kill anything.
+    delete process.env.BACKEND_CUSTOM_DOMAINS_ENABLED
+    resolve.mockResolvedValue(backendMapping())
+    const res = await proxy(makeRequest('https://crm.acme.com/backend/customers', { host: 'crm.acme.com' }))
+
+    expect(res.headers.get('x-middleware-next')).toBe('1')
+    expect(res.headers.get('x-custom-domain')).toBeNull()
+  })
+
+  it('fails closed when enabled without a trusted-proxy assertion', async () => {
+    delete process.env.TRUSTED_PROXY_CIDRS
+    resolve.mockResolvedValue(backendMapping())
+    const res = await proxy(makeRequest('https://crm.acme.com/backend', { host: 'crm.acme.com' }))
+
+    expect(res.headers.get('x-custom-domain')).toBeNull()
+  })
+
+  it('treats a mapping with no target as portal, preserving pre-#4271 cache entries', async () => {
+    resolve.mockResolvedValue({
+      hostname: 'shop.acme.com',
+      tenantId: 't1',
+      organizationId: 'o1',
+      orgSlug: 'acme',
+      status: 'active' as const,
+    })
+    const res = await proxy(makeRequest('https://shop.acme.com/orders', { host: 'shop.acme.com' }))
+
+    const rewrite = res.headers.get('x-middleware-rewrite')
+    expect(rewrite).not.toBeNull()
+    expect(new URL(rewrite as string).pathname).toBe('/acme/portal/orders')
+  })
+
+  it('404s an admin route requested on a portal host', async () => {
+    resolve.mockResolvedValue({
+      hostname: 'shop.acme.com',
+      tenantId: 't1',
+      organizationId: 'o1',
+      orgSlug: 'acme',
+      status: 'active' as const,
+      target: 'portal' as const,
+    })
+    const res = await proxy(makeRequest('https://shop.acme.com/backend/customers', { host: 'shop.acme.com' }))
+
+    expect(res.status).toBe(404)
+    expect(res.headers.get('x-middleware-rewrite')).toBeNull()
+  })
+})

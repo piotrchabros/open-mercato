@@ -7,6 +7,7 @@ import {
   type CustomDomainRouter,
 } from './lib/customDomainResolver'
 import { tryNormalizeHostname } from '@open-mercato/core/modules/customer_accounts/lib/hostname'
+import { backendCustomDomainsUsable } from '@open-mercato/core/modules/customer_accounts/lib/backendCustomDomains'
 import { resolveRequestHostname } from '@open-mercato/shared/lib/http/requestHostname'
 
 function buildRewrittenPath(orgSlug: string, originalPathname: string): string {
@@ -17,15 +18,32 @@ function buildRewrittenPath(orgSlug: string, originalPathname: string): string {
   return `/${orgSlug}/portal${trimmed}`
 }
 
+type CustomHostResolution =
+  | { kind: 'portal'; orgSlug: string }
+  | { kind: 'backend' }
+  | { kind: 'unknown' }
+  | { kind: 'error' }
+
 async function resolveForCustomHost(
   router: CustomDomainRouter,
   hostname: string,
-): Promise<{ kind: 'resolved'; orgSlug: string } | { kind: 'unknown' } | { kind: 'error' }> {
+): Promise<CustomHostResolution> {
   try {
     const resolution = await router.resolve(hostname)
     if (!resolution) return { kind: 'unknown' }
+
+    // Entries cached by a build older than #4271 carry no target; every
+    // mapping that existed then was a portal one.
+    if ((resolution.target ?? 'portal') === 'backend') {
+      // Fail closed: a backend mapping must not route while the feature is
+      // off or misconfigured, otherwise disabling the flag would leave
+      // already-registered hosts live.
+      if (!backendCustomDomainsUsable()) return { kind: 'unknown' }
+      return { kind: 'backend' }
+    }
+
     if (!resolution.orgSlug) return { kind: 'unknown' }
-    return { kind: 'resolved', orgSlug: resolution.orgSlug }
+    return { kind: 'portal', orgSlug: resolution.orgSlug }
   } catch (err) {
     console.warn(`[proxy] custom-domain resolve failed for ${hostname}`, err)
     return { kind: 'error' }
@@ -71,6 +89,29 @@ export async function proxy(req: NextRequest) {
     // surfaces its standard 404, rather than rewriting to a non-existent org.
     requestHeaders.set('x-next-url', pathname)
     return NextResponse.next({ request: { headers: requestHeaders } })
+  }
+
+  if (result.kind === 'backend') {
+    // Backend-target host: serve the app as-is. No portal prefix, so /backend
+    // and /login resolve exactly as they do on the platform domain.
+    //
+    // Routing is all this branch does. The organization binding is NOT applied
+    // here: /api/* is excluded from the matcher (see config below), so any
+    // header set here is absent on the API surface and trivially forgeable by
+    // a client. Auth and organization-scope resolution re-read the Host
+    // themselves and clamp there.
+    requestHeaders.set('x-next-url', pathname)
+    requestHeaders.set('x-custom-domain', '1')
+    const backendResponse = NextResponse.next({ request: { headers: requestHeaders } })
+    backendResponse.headers.set('x-custom-domain', '1')
+    return backendResponse
+  }
+
+  if (pathname === '/backend' || pathname.startsWith('/backend/')) {
+    // Portal-target host asked for an admin route. Rewriting would produce
+    // /{orgSlug}/portal/backend/... and a confusing 404; answer directly so it
+    // is obvious the admin app is not served on this hostname.
+    return new NextResponse('Not found', { status: 404 })
   }
 
   const rewrittenPath = buildRewrittenPath(result.orgSlug, pathname)
