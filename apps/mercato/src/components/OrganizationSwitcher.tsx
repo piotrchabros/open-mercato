@@ -45,6 +45,7 @@ type SwitcherState =
       tenantId: string | null
       tenants: TenantRecord[]
       isSuperAdmin: boolean
+      hostBoundOrganizationId: string | null
     }
 
 type SelectedCookieState = {
@@ -67,6 +68,7 @@ type OrganizationSwitcherPayload = {
   tenantId?: string | null
   tenants?: unknown
   isSuperAdmin?: boolean
+  hostBoundOrganizationId?: string | null
 }
 
 function readSelectedOrganizationCookie(): SelectedCookieState {
@@ -230,6 +232,10 @@ export default function OrganizationSwitcher({ compact }: OrganizationSwitcherEx
       const fallbackSelected = selected ?? (shouldFallbackToFirst ? findFirstSelectable(rawItems) : null)
       const isSuperAdmin = Boolean(json.isSuperAdmin)
       const canViewAllOrganizations = Boolean(json.canViewAllOrganizations)
+      // #4271: the hostname pins the organization. Presentation only - the
+      // server rejects a mismatching selection with 403 regardless.
+      const hostBoundOrganizationId =
+        typeof json.hostBoundOrganizationId === 'string' ? json.hostBoundOrganizationId : null
       if (!rawItems.length && !manage && !isSuperAdmin && tenantList.length === 0) {
         setState({ status: 'hidden' })
         if (fallbackSelected) {
@@ -249,6 +255,7 @@ export default function OrganizationSwitcher({ compact }: OrganizationSwitcherEx
         tenantId: resolvedTenantId,
         tenants: tenantList,
         isSuperAdmin,
+        hostBoundOrganizationId,
       })
       const currentTenantCookie = tenantCookieRef.current
       if (resolvedTenantId !== null) {
@@ -323,7 +330,13 @@ export default function OrganizationSwitcher({ compact }: OrganizationSwitcherEx
     return items.map((node) => map(node, []))
   }, [state])
 
-  const hasOptions = nodes.length > 0 && state.status === 'ready'
+  // #4271: on a bound host the organization is fixed by the hostname. Render a
+  // static indicator instead of a picker, so the UI stops offering a choice the
+  // server answers with 403. This is presentation, not enforcement.
+  const hostBoundOrganizationId = state.status === 'ready' ? state.hostBoundOrganizationId : null
+  const isHostBound = hostBoundOrganizationId !== null
+
+  const hasOptions = nodes.length > 0 && state.status === 'ready' && !isHostBound
   const canManage = state.status === 'ready' && state.canManage
   const showAllOption = state.status === 'ready' && state.canViewAllOrganizations
   const tenantSelectOptions = state.status === 'ready' ? state.tenants : []

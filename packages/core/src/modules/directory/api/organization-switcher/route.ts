@@ -88,6 +88,39 @@ function buildOrganizationMenu(
   return { nodes: roots, selectableIds }
 }
 
+/**
+ * Collapses the switcher's choices on a hostname bound to an organization
+ * (#4271).
+ *
+ * PRESENTATION ONLY. `om_selected_org` is written by client JavaScript, so
+ * hiding a dropdown constrains nobody — enforcement lives in the auth clamp and
+ * the organization-scope resolver, which answer a mismatching selection with
+ * 403. This exists so the UI stops offering a choice the server will refuse.
+ *
+ * Exported for direct testing: reconstructing the whole route to assert three
+ * derived fields is far more setup than the logic warrants.
+ */
+export function applyHostBoundSwitcherView<T>(input: {
+  hostBinding: { organizationId: string } | null
+  canViewAllOrganizations: boolean
+  tenants: T[]
+}): { canViewAllOrganizations: boolean; tenants: T[]; hostBoundOrganizationId: string | null } {
+  if (!input.hostBinding) {
+    return {
+      canViewAllOrganizations: input.canViewAllOrganizations,
+      tenants: input.tenants,
+      hostBoundOrganizationId: null,
+    }
+  }
+  return {
+    // "All organizations" is a widening, which a bound host forbids outright.
+    canViewAllOrganizations: false,
+    // No tenant picker either: switching tenant on a bound host is a 403.
+    tenants: [],
+    hostBoundOrganizationId: input.hostBinding.organizationId,
+  }
+}
+
 export const metadata = {
   GET: { requireAuth: true },
 }
@@ -198,15 +231,21 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ items: [], selectedId: null, canManage: false })
     }
 
-    const canViewAllOrganizations = accessible === null
+    const hostBoundView = applyHostBoundSwitcherView({
+      hostBinding: (auth as { hostBinding?: { organizationId: string } | null }).hostBinding ?? null,
+      canViewAllOrganizations: accessible === null,
+      tenants: tenantRecords,
+    })
+
     const response = {
       items: menuData.nodes,
       selectedId,
       canManage: !!hasManageFeature,
-      canViewAllOrganizations,
+      canViewAllOrganizations: hostBoundView.canViewAllOrganizations,
       tenantId,
-      tenants: tenantRecords,
+      tenants: hostBoundView.tenants,
       isSuperAdmin: effectiveIsSuperAdmin,
+      hostBoundOrganizationId: hostBoundView.hostBoundOrganizationId,
     }
 
     await logCrudAccess({
