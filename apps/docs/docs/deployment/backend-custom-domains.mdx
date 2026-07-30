@@ -33,6 +33,32 @@ organization an operator acts on:
 The hostname can only ever *narrow* what a session already grants. It never grants access: a
 user without permission on the bound organization gets an empty scope, not a fallback to their own.
 
+## Working across several organizations
+
+A bound hostname serves exactly one organization. That raises an obvious question, and the answer
+is that **the platform domain is untouched and remains the multi-organization workspace**.
+
+The clamp only engages when a request arrives on a bound hostname. On the platform host there is
+no binding, so the organization switcher, the "all organizations" option and every cross-organization
+view behave exactly as they did before this feature existed.
+
+| You want to | Do this |
+|---|---|
+| Switch freely between organizations as a super-admin | Work on the platform domain. Nothing changed there. |
+| See a parent organization and its children at once | Bind the **parent's** domain. The scope is the bound organization *plus its descendants*, so the whole subtree is visible. |
+| See two unrelated organizations side by side | Use the platform domain. A bound host cannot show an organization outside its own subtree — that is the guarantee it exists to provide. |
+| Brand only some organizations | Nothing to do. The feature is opt-in per organization: one without a mapping is simply reachable via the platform host only. |
+
+:::caution Sessions do not follow you between branded domains
+Cookies are host-only, so moving from `crm.acme.com` to `crm.other.com` means signing in again.
+That isolation is deliberate, but it makes branded domains a poor fit for an operator who spends
+the day hopping between organizations. Give that person the platform domain.
+:::
+
+A user whose permissions cover several organizations still gets clamped to the bound one when they
+arrive on a branded host — and if they have no permission on it at all, they get an empty scope
+rather than a quiet fallback to an organization they *can* see.
+
 ## 1. Apply the migration
 
 The `target` column on `domain_mappings` is what separates a portal domain from a backend one.
