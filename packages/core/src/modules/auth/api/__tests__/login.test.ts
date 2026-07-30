@@ -325,3 +325,71 @@ describe('account enumeration hardening (issue #2242)', () => {
     expect(authServiceMock.verifyPassword).toHaveBeenCalledWith(null, 'secret')
   })
 })
+
+// ---------------------------------------------------------------------------
+// host-bound login (task 3.6, #4271)
+// ---------------------------------------------------------------------------
+
+describe('POST /api/auth/login on a hostname bound to an organization', () => {
+  const {
+    registerHostBindingResolver,
+  } = jest.requireActual<typeof import('@open-mercato/shared/lib/auth/hostBindingStore')>(
+    '@open-mercato/shared/lib/auth/hostBindingStore',
+  )
+
+  function loginRequest(host: string): Request {
+    const form = new URLSearchParams()
+    form.set('email', 'user@example.com')
+    form.set('password', 'secret')
+    return new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded', host },
+      body: form.toString(),
+    })
+  }
+
+  afterEach(() => registerHostBindingResolver(null))
+
+  test('signs in normally when the hostname is unbound', async () => {
+    registerHostBindingResolver(async () => null)
+    const res = await POST(loginRequest('app.openmercato.com'))
+    expect(res.status).toBe(200)
+  })
+
+  test('signs in when the user belongs to the bound tenant', async () => {
+    registerHostBindingResolver(async () => ({
+      hostname: 'crm.acme.com',
+      tenantId,
+      organizationId: orgId,
+    }))
+    const res = await POST(loginRequest('crm.acme.com'))
+    expect(res.status).toBe(200)
+  })
+
+  test('rejects a user from another tenant with the uniform invalid-credentials response', async () => {
+    // Must be indistinguishable from a wrong password: a distinct status or
+    // message would turn the bound host into an oracle for which tenants exist
+    // on it (issue #2242).
+    registerHostBindingResolver(async () => ({
+      hostname: 'crm.acme.com',
+      tenantId: randomUUID(),
+      organizationId: randomUUID(),
+    }))
+    const res = await POST(loginRequest('crm.acme.com'))
+    expect(res.status).toBe(401)
+    // The constant-time password check still ran, so the timing profile matches
+    // an ordinary failed login rather than short-circuiting on the host check.
+    expect(authServiceMock.verifyPassword).toHaveBeenCalled()
+  })
+
+  test('returns a retryable 503 when the binding cannot be determined', async () => {
+    // Fails closed. Proceeding would sign the user in under a branded domain
+    // whose organization we could not verify.
+    registerHostBindingResolver(async () => {
+      throw new Error('db down')
+    })
+    const res = await POST(loginRequest('crm.acme.com'))
+    expect(res.status).toBe(503)
+    expect(res.headers.get('retry-after')).toBe('2')
+  })
+})

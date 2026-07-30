@@ -405,7 +405,10 @@ async function handleRequest(
       })
       return response
     }
-    if (authResolution.status === 'error' && authError.status === 401) {
+    if (
+      (authResolution.status === 'error' || authResolution.status === 'host_binding_unavailable') &&
+      authError.status === 401
+    ) {
       const response = NextResponse.json(
         { error: t('api.errors.serviceUnavailable', 'Service temporarily unavailable') },
         { status: 503, headers: { 'retry-after': '2' } },

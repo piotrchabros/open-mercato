@@ -9,6 +9,7 @@ import { conflictsWithHostBinding } from '@open-mercato/shared/lib/auth/server'
 import {
   registerHostBindingResolver,
   resolveHostBinding,
+  resolveHostBindingOutcome,
   hasHostBindingResolver,
   type HostBinding,
 } from '@open-mercato/shared/lib/auth/hostBindingStore'
@@ -93,10 +94,26 @@ describe('host binding store', () => {
     expect(resolver).not.toHaveBeenCalled()
   })
 
-  it('fails open to null when the resolver throws', async () => {
-    // A database blip must not lock every operator out of the admin panel. The
-    // security property comes from the denials built on a PRESENT binding,
-    // never from a binding appearing.
+  it('reports a resolver failure as unavailable, not as unbound (task 3.6)', async () => {
+    // The distinction is the whole point. Collapsing a failure into "unbound"
+    // would hand the operator their cookie-selected organization under someone
+    // else's branded domain - exactly what the binding exists to prevent.
+    registerHostBindingResolver(async () => {
+      throw new Error('db down')
+    })
+    await expect(resolveHostBindingOutcome('crm.acme.com')).resolves.toEqual({ kind: 'unavailable' })
+  })
+
+  it('distinguishes unbound from bound in the outcome form', async () => {
+    registerHostBindingResolver(async (host) => (host === 'crm.acme.com' ? BOUND : null))
+    await expect(resolveHostBindingOutcome('crm.acme.com')).resolves.toEqual({ kind: 'bound', binding: BOUND })
+    await expect(resolveHostBindingOutcome('app.openmercato.com')).resolves.toEqual({ kind: 'unbound' })
+    await expect(resolveHostBindingOutcome(null)).resolves.toEqual({ kind: 'unbound' })
+  })
+
+  it('the legacy null-collapsing wrapper still hides a failure', async () => {
+    // Kept for callers that genuinely cannot fail closed; documented as such so
+    // nobody reaches for it on a new security-relevant path.
     registerHostBindingResolver(async () => {
       throw new Error('db down')
     })

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { OpenApiMethodDoc, OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { userLoginSchema } from '@open-mercato/core/modules/auth/data/validators'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { resolveHostBindingOutcome } from '@open-mercato/shared/lib/auth/hostBindingStore'
 import { AuthService } from '@open-mercato/core/modules/auth/services/authService'
 import { signJwt } from '@open-mercato/shared/lib/auth/jwt'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
@@ -114,6 +115,28 @@ export async function POST(req: Request) {
     // through to the uniform invalid-credentials path; tenant-selection
     // guidance is delivered out-of-band via the activation/login link.
     user = users.length === 1 ? users[0] : null
+  }
+
+  // #4271: on a hostname bound to an organization, only that organization's
+  // tenant may sign in. Login is otherwise host-agnostic, so without this a
+  // tenant-A user could authenticate on tenant B's branded domain and hold a
+  // first-party session there — every subsequent request would be denied by the
+  // host-scope clamp, which is a confusing way to discover you are on the wrong
+  // domain.
+  //
+  // Discards the user rather than returning early, so the constant-time
+  // password verification below still runs and the response is byte-identical
+  // to any other failed login. Returning a distinct error here would turn the
+  // bound host into an oracle for which tenants exist on it (issue #2242).
+  const hostBindingOutcome = await resolveHostBindingOutcome(req.headers.get('host'))
+  if (hostBindingOutcome.kind === 'unavailable') {
+    return NextResponse.json(
+      { ok: false, error: translate('auth.login.errors.temporarilyUnavailable', 'Service temporarily unavailable') },
+      { status: 503, headers: { 'retry-after': '2' } },
+    )
+  }
+  if (hostBindingOutcome.kind === 'bound' && user && String(user.tenantId) !== hostBindingOutcome.binding.tenantId) {
+    user = null
   }
   // Always verify the password — verifyPassword runs a constant-time bcrypt
   // comparison even when the user is missing or has no hash — so unknown-email,

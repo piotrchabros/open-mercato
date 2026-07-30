@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers.js'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { verifyJwt } from './jwt'
-import { resolveHostBinding, type HostBinding } from './hostBindingStore'
+import { resolveHostBindingOutcome, type HostBinding, type HostBindingOutcome } from './hostBindingStore'
 import { getSharedApiKeyAuthCache } from './apiKeyAuthCache'
 
 const TENANT_COOKIE_NAME = 'om_selected_tenant'
@@ -39,7 +39,17 @@ type CookieOverride = { applied: boolean; value: string | null }
 // for an organization/tenant scope the bound hostname does not serve. Distinct
 // from 'invalid' so callers answer 403 rather than clearing session cookies —
 // the session is fine, the scope selection is not.
-type AuthResolutionStatus = 'authenticated' | 'missing' | 'invalid' | 'error' | 'host_scope_conflict'
+// 'host_binding_unavailable' means we could not determine which organization
+// this hostname serves. Deliberately NOT collapsed into "unbound": proceeding
+// would hand the operator their cookie-selected organization under someone
+// else's branded domain. Retryable, so it maps to 503 like 'error'.
+type AuthResolutionStatus =
+  | 'authenticated'
+  | 'missing'
+  | 'invalid'
+  | 'error'
+  | 'host_scope_conflict'
+  | 'host_binding_unavailable'
 type AuthResolution = {
   auth: AuthContext
   status: AuthResolutionStatus
@@ -230,8 +240,8 @@ function applySuperAdminScope(
  * Resolves the host binding for an incoming request. Returns null whenever the
  * feature is off, no resolver is registered, or the hostname is unbound.
  */
-async function hostBindingFor(rawHost: string | null | undefined): Promise<HostBinding | null> {
-  return resolveHostBinding(rawHost ?? null)
+async function hostBindingFor(rawHost: string | null | undefined): Promise<HostBindingOutcome> {
+  return resolveHostBindingOutcome(rawHost ?? null)
 }
 
 /**
@@ -396,8 +406,14 @@ export async function resolveAuthFromCookiesDetailed(): Promise<AuthResolution> 
     if (!canonicalAuth) return { auth: null, status: 'invalid' }
     const tenantCookie = cookieStore.get(TENANT_COOKIE_NAME)?.value
     const orgCookie = cookieStore.get(ORGANIZATION_COOKIE_NAME)?.value
-    const hostBinding = await hostBindingFor(requestHost)
-    const scoped = applySuperAdminScope(canonicalAuth, tenantCookie, orgCookie, hostBinding)
+    const outcome = await hostBindingFor(requestHost)
+    if (outcome.kind === 'unavailable') return { auth: null, status: 'host_binding_unavailable' }
+    const scoped = applySuperAdminScope(
+      canonicalAuth,
+      tenantCookie,
+      orgCookie,
+      outcome.kind === 'bound' ? outcome.binding : null,
+    )
     if (!scoped.ok) return { auth: null, status: 'host_scope_conflict' }
     return { auth: scoped.auth, status: 'authenticated' }
   } catch (err) {
@@ -437,8 +453,14 @@ export async function resolveAuthFromRequestDetailed(req: Request): Promise<Auth
       if (payload) {
         const canonicalAuth = await resolveCanonicalInteractiveAuthContext(payload)
         if (canonicalAuth) {
-          const hostBinding = await hostBindingFor(req.headers.get('host'))
-          const scoped = applySuperAdminScope(canonicalAuth, tenantCookie, orgCookie, hostBinding)
+          const outcome = await hostBindingFor(req.headers.get('host'))
+          if (outcome.kind === 'unavailable') return { auth: null, status: 'host_binding_unavailable' }
+          const scoped = applySuperAdminScope(
+            canonicalAuth,
+            tenantCookie,
+            orgCookie,
+            outcome.kind === 'bound' ? outcome.binding : null,
+          )
           if (!scoped.ok) return { auth: null, status: 'host_scope_conflict' }
           return { auth: scoped.auth, status: 'authenticated' }
         }
@@ -464,8 +486,14 @@ export async function resolveAuthFromRequestDetailed(req: Request): Promise<Auth
   if (!apiAuth) {
     return { auth: null, status: resolveUnauthenticatedStatus() }
   }
-  const apiHostBinding = await hostBindingFor(req.headers.get('host'))
-  const scopedApiAuth = applySuperAdminScope(apiAuth, tenantCookie, orgCookie, apiHostBinding)
+  const apiOutcome = await hostBindingFor(req.headers.get('host'))
+  if (apiOutcome.kind === 'unavailable') return { auth: null, status: 'host_binding_unavailable' }
+  const scopedApiAuth = applySuperAdminScope(
+    apiAuth,
+    tenantCookie,
+    orgCookie,
+    apiOutcome.kind === 'bound' ? apiOutcome.binding : null,
+  )
   if (!scopedApiAuth.ok) return { auth: null, status: 'host_scope_conflict' }
   return { auth: scopedApiAuth.auth, status: 'authenticated' }
 }
