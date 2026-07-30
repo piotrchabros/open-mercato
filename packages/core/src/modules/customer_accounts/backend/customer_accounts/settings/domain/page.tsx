@@ -62,7 +62,7 @@ export default function CustomerDomainSettingsPage() {
   const selectedOrgId = urlOrgId ?? defaultOrgId
 
   const [mappings, setMappings] = React.useState<DomainMappingRow[]>([])
-  const [config, setConfig] = React.useState<DomainConfig>({ cnameTarget: null, aRecordTarget: null })
+  const [config, setConfig] = React.useState<DomainConfig>({ cnameTarget: null, aRecordTarget: null, canRegisterBackend: false })
   const [loadState, setLoadState] = React.useState<LoadState>(STATE_LOADING)
   const [reloadToken, setReloadToken] = React.useState(0)
   const [registerOpen, setRegisterOpen] = React.useState(false)
@@ -124,7 +124,7 @@ export default function CustomerDomainSettingsPage() {
     if (!orgsLoaded) return
     if (!selectedOrgId) {
       setMappings([])
-      setConfig({ cnameTarget: null, aRecordTarget: null })
+      setConfig({ cnameTarget: null, aRecordTarget: null, canRegisterBackend: false })
       setLoadState(STATE_LOADED)
       return
     }
@@ -141,7 +141,7 @@ export default function CustomerDomainSettingsPage() {
           return
         }
         setMappings(Array.isArray(call.result.domainMappings) ? call.result.domainMappings : [])
-        setConfig(call.result.config ?? { cnameTarget: null, aRecordTarget: null })
+        setConfig(call.result.config ?? { cnameTarget: null, aRecordTarget: null, canRegisterBackend: false })
         setLoadState(STATE_LOADED)
       } catch {
         if (!cancelled) setLoadState(STATE_ERROR)
@@ -198,7 +198,7 @@ export default function CustomerDomainSettingsPage() {
   }, [])
 
   const handleSubmitRegister = React.useCallback(
-    async (hostname: string) => {
+    async (hostname: string, target: 'portal' | 'backend') => {
       if (!selectedOrgId) {
         throw new Error(t('customer_accounts.domainMapping.error.load', 'Could not load custom-domain configuration'))
       }
@@ -208,6 +208,7 @@ export default function CustomerDomainSettingsPage() {
           const body: Record<string, unknown> = {
             hostname,
             organizationId: selectedOrgId,
+            target,
           }
           if (registerMode === 'change' && replaceTargetId) {
             body.replacesDomainId = replaceTargetId
@@ -410,6 +411,7 @@ export default function CustomerDomainSettingsPage() {
         mode={registerMode}
         currentHostname={replaceTargetHostname}
         onSubmit={handleSubmitRegister}
+        canRegisterBackend={config.canRegisterBackend ?? false}
       />
 
       {ConfirmDialogElement}

@@ -86,6 +86,15 @@ export async function GET(req: Request) {
     config: {
       cnameTarget: process.env.CUSTOM_DOMAIN_CNAME_TARGET ?? null,
       aRecordTarget: process.env.CUSTOM_DOMAIN_A_RECORD_TARGET ?? null,
+      // Whether this operator may offer a backend target at all (#4271). Both
+      // gates are re-checked on POST — this only decides what the UI shows, so
+      // it can never be the thing that authorises the registration.
+      canRegisterBackend:
+        backendCustomDomainsUsable() &&
+        (await rbac.userHasAllFeatures(auth.sub, [BACKEND_FEATURE], {
+          tenantId: auth.tenantId,
+          organizationId: auth.orgId,
+        })),
     },
   })
 }

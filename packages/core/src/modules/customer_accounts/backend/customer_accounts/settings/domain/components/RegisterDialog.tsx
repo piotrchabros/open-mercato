@@ -21,7 +21,13 @@ export type RegisterDialogProps = {
   onOpenChange: (next: boolean) => void
   mode: 'register' | 'change'
   currentHostname?: string | null
-  onSubmit: (hostname: string) => Promise<void>
+  onSubmit: (hostname: string, target: 'portal' | 'backend') => Promise<void>
+  /**
+   * Whether to offer the backend target (#4271). Comes from the API, which
+   * checks both the deployment flag and the caller's ACL feature — and
+   * re-checks both on POST, so this only decides what is rendered.
+   */
+  canRegisterBackend?: boolean
   initialError?: string | null
 }
 
@@ -33,10 +39,12 @@ export function RegisterDialog({
   mode,
   currentHostname,
   onSubmit,
+  canRegisterBackend = false,
   initialError,
 }: RegisterDialogProps) {
   const t = useT()
   const [hostname, setHostname] = React.useState('')
+  const [target, setTarget] = React.useState<'portal' | 'backend'>('portal')
   const [error, setError] = React.useState<string | null>(initialError ?? null)
   const [submitting, setSubmitting] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement>(null)
@@ -44,6 +52,7 @@ export function RegisterDialog({
   React.useEffect(() => {
     if (!open) {
       setHostname('')
+      setTarget('portal')
       setError(null)
       setSubmitting(false)
       return
@@ -79,7 +88,7 @@ export function RegisterDialog({
       setSubmitting(true)
       setError(null)
       try {
-        await onSubmit(hostname.trim())
+        await onSubmit(hostname.trim(), target)
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Submission failed'
         setError(message)
@@ -87,7 +96,7 @@ export function RegisterDialog({
         setSubmitting(false)
       }
     },
-    [hostname, onSubmit, validate],
+    [hostname, target, onSubmit, validate],
   )
 
   const handleKeyDown = React.useCallback(
@@ -151,6 +160,34 @@ export function RegisterDialog({
               </p>
             ) : null}
           </div>
+          {canRegisterBackend ? (
+            <div className="space-y-2">
+              <Label htmlFor="custom-domain-target">
+                {t('customer_accounts.domainMapping.target.label', 'What this domain serves')}
+              </Label>
+              <select
+                id="custom-domain-target"
+                className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+                value={target}
+                onChange={(event) => setTarget(event.target.value === 'backend' ? 'backend' : 'portal')}
+                disabled={submitting}
+              >
+                <option value="portal">
+                  {t('customer_accounts.domainMapping.target.portal', 'Customer portal (storefront)')}
+                </option>
+                <option value="backend">
+                  {t('customer_accounts.domainMapping.target.backend', 'Admin panel (backend)')}
+                </option>
+              </select>
+              <p className="text-muted-foreground text-sm">
+                {t(
+                  'customer_accounts.domainMapping.target.hint',
+                  'An admin domain pins the organization for everyone signing in on it. Each organization can have one active admin domain.',
+                )}
+              </p>
+            </div>
+          ) : null}
+
           <DialogFooter className="items-center">
             <span className="hidden text-xs text-muted-foreground sm:inline-flex sm:items-center sm:gap-1">
               <KbdShortcut keys={['⌘', 'Enter']} />

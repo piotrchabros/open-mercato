@@ -19,6 +19,8 @@ export type DomainMappingRow = {
 }
 
 export type DomainConfig = {
+  /** Whether this operator may register a backend (admin) domain (#4271). */
+  canRegisterBackend?: boolean
   cnameTarget: string | null
   aRecordTarget: string | null
 }
