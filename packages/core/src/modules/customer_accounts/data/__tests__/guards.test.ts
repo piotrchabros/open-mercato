@@ -533,3 +533,42 @@ describe('guards registry', () => {
     expect(uniquePriority).toBeLessThan(limitPriority)
   })
 })
+
+describe('orgLimit guard counts per target (#4271)', () => {
+  const guard = () => guardById('customer_accounts.domain_mapping.org-limit')
+
+  it('does not let portal domains consume the backend allowance', () => {
+    // An org with one portal and one backend domain previously hit the cap of
+    // two and lost the ability to swap either, because the limit counted both
+    // targets together. The cap exists per target: one active plus one pending
+    // replacement.
+    records.push(
+      { id: 'p1', hostname: 'shop.acme.com', tenantId: TENANT_A, organizationId: ORG_A, status: 'active', target: 'portal' },
+      { id: 'b1', hostname: 'old-crm.acme.com', tenantId: TENANT_A, organizationId: ORG_A, status: 'active', target: 'backend' },
+      { id: 'b2', hostname: 'new-crm.acme.com', tenantId: TENANT_A, organizationId: ORG_A, status: 'pending', target: 'backend' },
+    )
+    return expect(
+      guard().validate(
+        makeInput({
+          operation: 'create',
+          mutationPayload: { hostname: 'crm.acme.com', organizationId: ORG_A, target: 'backend' },
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: false })
+  })
+
+  it('still allows a portal registration when only backend domains exist', () => {
+    records.push(
+      { id: 'b1', hostname: 'crm.acme.com', tenantId: TENANT_A, organizationId: ORG_A, status: 'active', target: 'backend' },
+      { id: 'b2', hostname: 'crm2.acme.com', tenantId: TENANT_A, organizationId: ORG_A, status: 'pending', target: 'backend' },
+    )
+    return expect(
+      guard().validate(
+        makeInput({
+          operation: 'create',
+          mutationPayload: { hostname: 'shop.acme.com', organizationId: ORG_A },
+        }),
+      ),
+    ).resolves.toMatchObject({ ok: true })
+  })
+})

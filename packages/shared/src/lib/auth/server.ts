@@ -148,47 +148,32 @@ function isSuperAdminAuth(auth: AuthContext | null | undefined): boolean {
 type ScopedAuthResult = { ok: true; auth: AuthContext } | { ok: false }
 
 /**
- * Rejects a request whose requested scope conflicts with the organization its
- * hostname is bound to (#4271).
+ * Whether a request must be REFUSED because of the organization its hostname is
+ * bound to (#4271).
  *
- * Deliberately DENY-ONLY. It never rewrites `orgId` to the bound organization,
- * because this layer cannot check whether the caller may access that org —
- * doing so would GRANT scope off the back of a client-controlled Host header.
- * The positive binding, with the access check, belongs to
- * `resolveOrganizationScopeForRequest`. Narrowing is always safe; widening is
- * never done here.
+ * The bar is deliberately narrow: only a session belonging to a DIFFERENT
+ * TENANT. A scope-selection cookie that disagrees with the binding is not a
+ * refusal — it is discarded, see `applySuperAdminScope`.
  *
- * Denies rather than silently clamping, matching the `selectionRejected`
- * precedent in directory/utils/organizationScope.ts: an operator who believes
- * they are looking at tenant X while being served tenant Y is a data-integrity
- * hazard on writes.
+ * That asymmetry is the point. Ignoring a cookie NARROWS scope, and narrowing is
+ * always safe: the hostname is authoritative and the scope resolver still checks
+ * that the caller may access the bound organization. Ignoring a foreign tenant
+ * would GRANT scope — a tenant-B session would be served tenant A's organization
+ * purely for having arrived on tenant A's hostname. Login is host-agnostic, so
+ * that is reachable by authenticating on someone else's branded domain.
+ *
+ * Never rewrites `orgId` either; this layer has no RBAC access. The positive
+ * binding, with the access check, belongs to `resolveOrganizationScopeForRequest`.
  */
 // Exported for direct unit testing: this predicate is the whole security
 // property of the host binding, and it is worth asserting as a matrix rather
 // than only through the DB-dependent resolvers.
 export function conflictsWithHostBinding(
   auth: NonNullable<AuthContext>,
-  tenantOverride: CookieOverride,
-  orgOverride: CookieOverride,
   hostBinding: HostBinding | null,
 ): boolean {
   if (!hostBinding) return false
-
-  // A session belonging to another tenant has no business on this hostname,
-  // super-admin or not. Login is host-agnostic, so this is reachable by simply
-  // authenticating on someone else's branded domain.
-  if (auth.tenantId && auth.tenantId !== hostBinding.tenantId) return true
-
-  // Overrides below are only ever applied for super-admins; for anyone else
-  // `applied` is irrelevant because the cookie is not honored.
-  if (isSuperAdminAuth(auth)) {
-    if (tenantOverride.applied && tenantOverride.value !== hostBinding.tenantId) return true
-    // value === null covers both a concrete-org mismatch and the `__all__`
-    // sentinel. "All organizations" is a widening, which a bound host forbids.
-    if (orgOverride.applied && orgOverride.value !== hostBinding.organizationId) return true
-  }
-
-  return false
+  return Boolean(auth.tenantId && auth.tenantId !== hostBinding.tenantId)
 }
 
 function applySuperAdminScope(
@@ -202,7 +187,7 @@ function applySuperAdminScope(
   const tenantOverride = resolveTenantOverride(tenantCookie)
   const orgOverride = resolveOrganizationOverride(orgCookie)
 
-  if (conflictsWithHostBinding(auth, tenantOverride, orgOverride, hostBinding)) {
+  if (conflictsWithHostBinding(auth, hostBinding)) {
     return { ok: false }
   }
 
@@ -212,6 +197,17 @@ function applySuperAdminScope(
   const withBinding: AuthContext = hostBinding ? { ...auth, hostBinding } : auth
 
   if (!isSuperAdminAuth(withBinding)) return { ok: true, auth: withBinding }
+
+  // On a bound host the hostname decides the scope, so the selection cookies
+  // are simply DISCARDED rather than refused. Applying them would let a stale
+  // cookie from another domain override the binding; refusing outright would
+  // make ordinary navigation between branded domains error out.
+  //
+  // Safe because discarding only ever narrows: the scope resolver still
+  // enforces that the caller may actually access the bound organization, and a
+  // foreign-tenant session was already refused above.
+  if (hostBinding) return { ok: true, auth: withBinding }
+
   if (!tenantOverride.applied && !orgOverride.applied) return { ok: true, auth: withBinding }
 
   type MutableAuthContext = Exclude<AuthContext, null> & {

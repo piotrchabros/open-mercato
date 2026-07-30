@@ -323,8 +323,11 @@ Issue [#4271](https://github.com/open-mercato/open-mercato/issues/4271). Spec:
 
 - With `BACKEND_CUSTOM_DOMAINS_ENABLED` on, a request arriving on a hostname bound to an
   organization can no longer select a different organization via `om_selected_org` /
-  `om_selected_tenant`; a conflicting selection answers **403**. Zero effect when the flag is off
-  or when no backend mapping exists.
+  `om_selected_tenant`. A conflicting selection is **silently discarded** — the hostname wins, and
+  the scope resolver still enforces that the caller may access that organization. A session
+  belonging to a **different tenant** is refused with **403**, since serving it the host's
+  organization would grant scope rather than narrow it. Zero effect when the flag is off or when
+  no backend mapping exists.
 - Cookie `Secure` is derived from `COOKIE_SECURE` / the request scheme instead of
   `NODE_ENV === 'production'`, and now defaults **on**. A deployment serving the admin app over
   plain http without setting `COOKIE_SECURE=false` will find session cookies rejected — which is

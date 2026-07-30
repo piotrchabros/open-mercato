@@ -21,60 +21,38 @@ const ORG_B = 'org-b'
 
 const BOUND: HostBinding = { hostname: 'crm.acme.com', tenantId: TENANT_A, organizationId: ORG_A }
 
-const NO_COOKIE = { applied: false, value: null }
-const cookie = (value: string | null) => ({ applied: true, value })
-
 const member = { sub: 'u1', tenantId: TENANT_A, orgId: ORG_A }
 const superAdmin = { ...member, isSuperAdmin: true }
 const foreignMember = { sub: 'u2', tenantId: TENANT_B, orgId: ORG_B }
 
 describe('conflictsWithHostBinding', () => {
-  it('never conflicts when the host is unbound', () => {
-    // The overwhelming majority of deployments. Every combination must pass.
-    expect(conflictsWithHostBinding(superAdmin, cookie(TENANT_B), cookie(ORG_B), null)).toBe(false)
-    expect(conflictsWithHostBinding(foreignMember, NO_COOKIE, NO_COOKIE, null)).toBe(false)
+  it('never refuses when the host is unbound', () => {
+    expect(conflictsWithHostBinding(superAdmin, null)).toBe(false)
+    expect(conflictsWithHostBinding(foreignMember, null)).toBe(false)
   })
 
-  it('allows a member of the bound tenant with no overrides', () => {
-    expect(conflictsWithHostBinding(member, NO_COOKIE, NO_COOKIE, BOUND)).toBe(false)
+  it('allows a member of the bound tenant', () => {
+    expect(conflictsWithHostBinding(member, BOUND)).toBe(false)
   })
 
-  it('denies a session belonging to another tenant', () => {
-    // Login is host-agnostic, so a tenant-B user can authenticate on tenant A's
-    // branded domain and receive a first-party session there.
-    expect(conflictsWithHostBinding(foreignMember, NO_COOKIE, NO_COOKIE, BOUND)).toBe(true)
+  it('refuses a session belonging to another tenant', () => {
+    // The one case that cannot be silently re-scoped: serving tenant A's
+    // organization to a tenant-B session would GRANT scope, not narrow it.
+    // Login is host-agnostic, so this is reachable by authenticating on
+    // someone else's branded domain.
+    expect(conflictsWithHostBinding(foreignMember, BOUND)).toBe(true)
   })
 
-  it('denies a super-admin whose tenant cookie points elsewhere', () => {
-    expect(conflictsWithHostBinding(superAdmin, cookie(TENANT_B), NO_COOKIE, BOUND)).toBe(true)
-  })
-
-  it('denies a super-admin whose org cookie points at another organization', () => {
-    expect(conflictsWithHostBinding(superAdmin, NO_COOKIE, cookie(ORG_B), BOUND)).toBe(true)
-  })
-
-  it('denies the all-organizations selection on a bound host', () => {
-    // `__all__` normalizes to value:null, i.e. a widening - which is exactly
-    // what a bound host exists to prevent.
-    expect(conflictsWithHostBinding(superAdmin, NO_COOKIE, cookie(null), BOUND)).toBe(true)
-  })
-
-  it('allows a super-admin whose cookies agree with the binding', () => {
-    expect(conflictsWithHostBinding(superAdmin, cookie(TENANT_A), cookie(ORG_A), BOUND)).toBe(false)
-  })
-
-  it('ignores scope cookies for a non-super-admin, since they are never honored', () => {
-    // A plain member's cookies do not drive applySuperAdminScope, so they must
-    // not be able to lock themselves out either.
-    expect(conflictsWithHostBinding(member, cookie(TENANT_B), cookie(ORG_B), BOUND)).toBe(false)
+  it('does NOT refuse a super-admin whose scope cookies disagree with the binding', () => {
+    // Decision Q2: cookies are discarded, not refused. Discarding narrows -
+    // the hostname is authoritative and the scope resolver still checks that
+    // the caller may access the bound organization. Refusing would make
+    // ordinary navigation between branded domains error out on a stale cookie.
+    expect(conflictsWithHostBinding(superAdmin, BOUND)).toBe(false)
   })
 
   it('allows a session with no tenant rather than inventing one', () => {
-    // A null tenant cannot be compared; the positive binding and its access
-    // check belong to the organization-scope resolver, not here.
-    expect(conflictsWithHostBinding({ sub: 'u3', tenantId: null, orgId: null }, NO_COOKIE, NO_COOKIE, BOUND)).toBe(
-      false,
-    )
+    expect(conflictsWithHostBinding({ sub: 'u3', tenantId: null, orgId: null }, BOUND)).toBe(false)
   })
 })
 

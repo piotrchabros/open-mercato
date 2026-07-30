@@ -14,6 +14,11 @@ function readHostnameField(payload: Record<string, unknown> | null | undefined):
   return typeof raw === 'string' ? raw : null
 }
 
+function readTargetField(payload: Record<string, unknown> | null | undefined): 'portal' | 'backend' {
+  if (!payload || typeof payload !== 'object') return 'portal'
+  return (payload as Record<string, unknown>).target === 'backend' ? 'backend' : 'portal'
+}
+
 function readOrgIdField(payload: Record<string, unknown> | null | undefined): string | null {
   if (!payload || typeof payload !== 'object') return null
   const raw = (payload as Record<string, unknown>).organizationId ?? (payload as Record<string, unknown>).organization_id
@@ -109,12 +114,18 @@ const orgLimitGuard: MutationGuard = {
       return { ok: true }
     }
 
+    // Counted per TARGET, not per organization (#4271). The cap exists to allow
+    // one active domain plus one pending replacement for a zero-downtime swap.
+    // Counting portal and backend rows together would let an organization with
+    // one of each exhaust the cap and lose the ability to swap either.
+    const requestedTarget = readTargetField(input.mutationPayload)
     const existing = await service.findByOrganization(orgId, { tenantId: input.tenantId })
-    if (existing.length >= MAX_DOMAINS_PER_ORG) {
+    const sameTarget = existing.filter((row) => (row.target ?? 'portal') === requestedTarget)
+    if (sameTarget.length >= MAX_DOMAINS_PER_ORG) {
       return {
         ok: false,
         status: 409,
-        message: `Each organization can have at most ${MAX_DOMAINS_PER_ORG} custom domains (one active and one pending replacement). Remove an existing domain or finish the swap first.`,
+        message: `Each organization can have at most ${MAX_DOMAINS_PER_ORG} ${requestedTarget} domains (one active and one pending replacement). Remove an existing domain or finish the swap first.`,
       }
     }
     return { ok: true }
