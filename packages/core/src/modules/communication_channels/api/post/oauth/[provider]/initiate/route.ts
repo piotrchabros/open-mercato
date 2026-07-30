@@ -166,7 +166,7 @@ export async function POST(req: Request, context: RouteContext): Promise<Respons
     name: COMMUNICATION_CHANNELS_OAUTH_STATE_COOKIE_NAME,
     value: finalCookie,
     httpOnly: true,
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureCookies({ request: req }),
     sameSite: 'lax',
     path: '/',
     maxAge: Math.floor(COMMUNICATION_CHANNELS_OAUTH_STATE_TTL_MS / 1000),

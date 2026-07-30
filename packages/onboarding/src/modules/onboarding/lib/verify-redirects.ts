@@ -9,11 +9,11 @@ function clearAuthCookies(response: NextResponse) {
   response.cookies.set('om_login_tenant', '', { path: '/', maxAge: 0 })
 }
 
-function setTenantCookie(response: NextResponse, tenantId: string) {
+function setTenantCookie(response: NextResponse, tenantId: string, req?: Request) {
   response.cookies.set('om_login_tenant', tenantId, {
     httpOnly: false,
     sameSite: 'lax',
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureCookies({ request: req }),
     path: '/',
     maxAge: TENANT_COOKIE_MAX_AGE_SECONDS,
   })

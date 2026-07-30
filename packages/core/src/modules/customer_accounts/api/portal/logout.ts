@@ -32,14 +32,14 @@ export async function POST(req: Request) {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureCookies({ request: req }),
     maxAge: 0,
   })
   res.cookies.set('customer_session_token', '', {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureCookies({ request: req }),
     maxAge: 0,
   })
 

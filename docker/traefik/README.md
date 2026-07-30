@@ -166,3 +166,13 @@ What is required on the app side:
 Registering a backend hostname additionally requires the
 `customer_accounts.domain.manage_backend` ACL feature, which is deliberately separate from the
 portal-domain one.
+
+> **Registering a backend domain is not enough for outbound links.**
+> `getSecurityEmailBaseUrl` is synchronous by design (decision D6 — making the origin allowlist
+> DB-backed would inherit a 60 s staleness window with no cross-process invalidation, turning a
+> routing cache into a CSRF window). It therefore recognises a bound host only when that origin
+> is also present in `APP_ALLOWED_ORIGINS`. Until you add it there and restart, password-reset,
+> invite and session-refresh links keep pointing at the platform host — they still work, they are
+> just not branded. `urlForOrgBackend`, used by queue and CLI senders, is DB-backed and needs no
+> such step.
+

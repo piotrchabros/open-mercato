@@ -116,12 +116,12 @@ export function issueVerifiedMfaToken(auth: MfaRequestContext['auth'], methods: 
   })
 }
 
-export function setAuthCookie(response: NextResponse, token: string): void {
+export function setAuthCookie(response: NextResponse, token: string, req?: Request): void {
   response.cookies.set('auth_token', token, {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureCookies({ request: req }),
     maxAge: 60 * 60 * 8,
   })
 }

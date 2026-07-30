@@ -79,7 +79,7 @@ slice is user-visible, and it is deliberately not shippable without the first.
 | D3 | Where is the host binding enforced? | Two load-bearing layers: `applySuperAdminScope` (`shared/lib/auth/server.ts:127-158`) and `resolveOrganizationScopeForRequest` (`directory/utils/organizationScope.ts:441-467`), the latter **before** the cache key is built at `:472`. |
 | D4 | Is the feature on by default? | **No.** `BACKEND_CUSTOM_DOMAINS_ENABLED` defaults off and hard-fails at boot if enabled without a trusted-proxy assertion. |
 | D5 | Which outbound links become org-aware? | `getSecurityEmailBaseUrl` (request-scoped, one function) + a new `urlForOrgBackend` for ~6 queue/CLI senders. OpenAPI `servers` becomes **relative**. Attachments client components are out of scope. |
-| D6 | Origin allowlist | **Not** made DB-backed. `assertAllowedAppOrigin` stays synchronous; callers pass a pre-resolved allowed host. Only `status:'active'` mappings are ever allowlisted. |
+| D6 | Origin allowlist | **Not** made DB-backed. `assertAllowedAppOrigin` stays synchronous; callers pass a pre-resolved allowed host. Only `status:'active'` mappings are ever allowlisted. **Consequence, documented in UPGRADE_NOTES and the Traefik README:** a hostname registered through the self-service admin UI must ALSO be added to `APP_ALLOWED_ORIGINS` before request-scoped outbound links follow it. Queue/CLI senders use the DB-backed `urlForOrgBackend` and are unaffected. |
 
 ## Open Questions (escalated to the maintainer on #4271)
 

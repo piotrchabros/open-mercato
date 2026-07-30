@@ -59,7 +59,7 @@ function redirectWithFlash(
     name: COMMUNICATION_CHANNELS_OAUTH_STATE_COOKIE_NAME,
     value: '',
     httpOnly: true,
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureCookies({ request: req }),
     sameSite: 'lax',
     path: '/',
     maxAge: 0,

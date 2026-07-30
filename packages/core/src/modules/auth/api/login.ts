@@ -5,6 +5,7 @@ import type { OpenApiMethodDoc, OpenApiRouteDoc } from '@open-mercato/shared/lib
 import { userLoginSchema } from '@open-mercato/core/modules/auth/data/validators'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { resolveHostBindingOutcome } from '@open-mercato/shared/lib/auth/hostBindingStore'
+import { readRequestHost } from '@open-mercato/shared/lib/auth/server'
 import { AuthService } from '@open-mercato/core/modules/auth/services/authService'
 import { signJwt } from '@open-mercato/shared/lib/auth/jwt'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
@@ -129,7 +130,10 @@ export async function POST(req: Request) {
   // password verification below still runs and the response is byte-identical
   // to any other failed login. Returning a distinct error here would turn the
   // bound host into an oracle for which tenants exist on it (issue #2242).
-  const hostBindingOutcome = await resolveHostBindingOutcome(req.headers.get('host'))
+  // Same helper the scope clamp uses. These MUST agree: if login bound to one
+  // host and applySuperAdminScope to another, a session could be minted on a
+  // domain whose organization the clamp then rejects on every request.
+  const hostBindingOutcome = await resolveHostBindingOutcome(readRequestHost(req))
   if (hostBindingOutcome.kind === 'unavailable') {
     return NextResponse.json(
       { ok: false, error: translate('auth.login.errors.temporarilyUnavailable', 'Service temporarily unavailable') },
@@ -233,12 +237,12 @@ export async function POST(req: Request) {
     : undefined
 
   const res = NextResponse.json(interceptedBody, { status: interceptedResponse.statusCode })
-  res.cookies.set('auth_token', authTokenForCookie, { httpOnly: true, path: '/', sameSite: 'lax', secure: shouldUseSecureCookies(), maxAge: accessTokenMaxAgeSeconds })
+  res.cookies.set('auth_token', authTokenForCookie, { httpOnly: true, path: '/', sameSite: 'lax', secure: shouldUseSecureCookies({ request: req }), maxAge: accessTokenMaxAgeSeconds })
   if (remember && refreshTokenForCookie) {
     const expiresAt = new Date(Date.now() + rememberMeDays * 24 * 60 * 60 * 1000)
-    res.cookies.set('session_token', refreshTokenForCookie, { httpOnly: true, path: '/', sameSite: 'lax', secure: shouldUseSecureCookies(), expires: expiresAt })
+    res.cookies.set('session_token', refreshTokenForCookie, { httpOnly: true, path: '/', sameSite: 'lax', secure: shouldUseSecureCookies({ request: req }), expires: expiresAt })
   } else if (!remember && authTokenForCookie === token) {
-    res.cookies.set('session_token', sessionRefreshToken, { httpOnly: true, path: '/', sameSite: 'lax', secure: shouldUseSecureCookies(), maxAge: accessTokenMaxAgeSeconds })
+    res.cookies.set('session_token', sessionRefreshToken, { httpOnly: true, path: '/', sameSite: 'lax', secure: shouldUseSecureCookies({ request: req }), maxAge: accessTokenMaxAgeSeconds })
   }
   return res
 }

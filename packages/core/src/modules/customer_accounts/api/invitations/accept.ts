@@ -79,14 +79,14 @@ export async function POST(req: Request) {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureCookies({ request: req }),
     maxAge: 60 * 60 * 8,
   })
   res.cookies.set('customer_session_token', rawToken, {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureCookies({ request: req }),
     maxAge: 60 * 60 * 24 * 30,
   })
 

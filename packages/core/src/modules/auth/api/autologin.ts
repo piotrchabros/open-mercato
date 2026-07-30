@@ -79,7 +79,7 @@ export async function GET(req: Request) {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureCookies({ request: req }),
     maxAge: accessTokenMaxAgeSeconds,
   })
   return res

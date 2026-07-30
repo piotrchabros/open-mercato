@@ -125,3 +125,22 @@ describe('host binding store', () => {
     await expect(resolveHostBinding('crm.acme.com')).resolves.toEqual(BOUND)
   })
 })
+
+describe('readRequestHost', () => {
+  it('prefers x-forwarded-host over host, so login and the scope clamp agree', async () => {
+    // The two used to disagree: login read `host`, the clamp read
+    // `x-forwarded-host`. Behind a proxy that rewrites one but not the other,
+    // a session could be minted on a domain the clamp then rejects.
+    const { readRequestHost } = await import('@open-mercato/shared/lib/auth/server')
+    const req = new Request('https://internal.invalid/x', {
+      headers: { host: 'internal.invalid', 'x-forwarded-host': 'crm.acme.com' },
+    })
+    expect(readRequestHost(req)).toBe('crm.acme.com')
+  })
+
+  it('falls back to host when no forwarded header is present', async () => {
+    const { readRequestHost } = await import('@open-mercato/shared/lib/auth/server')
+    const req = new Request('https://crm.acme.com/x', { headers: { host: 'crm.acme.com' } })
+    expect(readRequestHost(req)).toBe('crm.acme.com')
+  })
+})

@@ -868,3 +868,9 @@ explicitly. Conversely, if you run a production-shaped stack with `NODE_ENV=deve
 bundled `docker-compose.fullapp.yml` does — your session cookies were previously being sent
 without `Secure`, and now are not.
 
+5. Add each registered backend hostname to `APP_ALLOWED_ORIGINS` and restart. `getSecurityEmailBaseUrl`
+   is synchronous by design and reads that static allowlist, so until the hostname appears there,
+   password-reset / invite / session-refresh links keep pointing at the platform host. They work;
+   they are just not branded. Queue and CLI senders go through `urlForOrgBackend`, which is
+   DB-backed and needs no manual step.
+

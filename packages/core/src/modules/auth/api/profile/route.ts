@@ -189,7 +189,7 @@ export async function PUT(req: Request) {
       httpOnly: true,
       path: '/',
       sameSite: 'lax',
-      secure: shouldUseSecureCookies(),
+      secure: shouldUseSecureCookies({ request: req }),
       maxAge: 60 * 60 * 8,
     })
     return res

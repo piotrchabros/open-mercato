@@ -256,7 +256,7 @@ async function hostBindingFor(rawHost: string | null | undefined): Promise<HostB
  * which is exactly what TRUSTED_PROXY_CIDRS asserts and what
  * BACKEND_CUSTOM_DOMAINS_ENABLED refuses to start without.
  */
-function readRequestHost(req: Request): string | null {
+export function readRequestHost(req: Request): string | null {
   return req.headers.get('x-forwarded-host') ?? req.headers.get('host')
 }
 

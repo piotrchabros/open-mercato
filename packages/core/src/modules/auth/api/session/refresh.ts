@@ -43,19 +43,19 @@ function buildStaffJwtClaims({ user, roles, session }: RefreshedSession) {
   }
 }
 
-function clearStaffAuthCookies(response: NextResponse) {
+function clearStaffAuthCookies(response: NextResponse, req?: Request) {
   response.cookies.set('auth_token', '', {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureCookies({ request: req }),
     maxAge: 0,
   })
   response.cookies.set('session_token', '', {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureCookies({ request: req }),
     maxAge: 0,
   })
   return response
@@ -81,7 +81,7 @@ export async function GET(req: Request) {
   }
   const jwt = signJwt(buildStaffJwtClaims(ctx))
   const res = buildSafeRedirectResponse(req, redirectTo)
-  res.cookies.set('auth_token', jwt, { httpOnly: true, path: '/', sameSite: 'lax', secure: shouldUseSecureCookies(), maxAge: 60 * 60 * 8 })
+  res.cookies.set('auth_token', jwt, { httpOnly: true, path: '/', sameSite: 'lax', secure: shouldUseSecureCookies({ request: req }), maxAge: 60 * 60 * 8 })
   return res
 }
 
@@ -141,7 +141,7 @@ export async function POST(req: Request) {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
-    secure: shouldUseSecureCookies(),
+    secure: shouldUseSecureCookies({ request: req }),
     maxAge: 60 * 60 * 8,
   })
 

@@ -393,3 +393,40 @@ describe('POST /api/auth/login on a hostname bound to an organization', () => {
     expect(res.headers.get('retry-after')).toBe('2')
   })
 })
+
+describe('POST /api/auth/login cookie Secure flag', () => {
+  function loginOver(origin: string): Request {
+    const form = new URLSearchParams()
+    form.set('email', 'user@example.com')
+    form.set('password', 'secret')
+    return new Request(`${origin}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    })
+  }
+
+  test('omits Secure over plain http so local development keeps its session', async () => {
+    // Regression guard: shouldUseSecureCookies only reaches its scheme branch
+    // when a request is actually passed in. It previously was not, which made
+    // every cookie Secure and silently broke `yarn dev` on http://localhost.
+    delete process.env.COOKIE_SECURE
+    const res = await POST(loginOver('http://localhost:3000'))
+    const setCookie = res.headers.get('set-cookie') ?? ''
+    expect(setCookie).toContain('auth_token=')
+    expect(setCookie.toLowerCase()).not.toContain('secure')
+  })
+
+  test('sets Secure over https', async () => {
+    delete process.env.COOKIE_SECURE
+    const res = await POST(loginOver('https://app.example.com'))
+    expect((res.headers.get('set-cookie') ?? '').toLowerCase()).toContain('secure')
+  })
+
+  test('an explicit COOKIE_SECURE overrides the scheme', async () => {
+    process.env.COOKIE_SECURE = 'true'
+    const res = await POST(loginOver('http://localhost:3000'))
+    expect((res.headers.get('set-cookie') ?? '').toLowerCase()).toContain('secure')
+    delete process.env.COOKIE_SECURE
+  })
+})
