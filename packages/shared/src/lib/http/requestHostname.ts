@@ -14,6 +14,7 @@
 // behavioral gain — returning the raw host and letting each call site normalize
 // preserves existing behavior with the least code moved.
 
+import { parseBooleanWithDefault } from '../boolean'
 import { secretEqual } from './secretCompare'
 
 const FORCE_HOST_HEADER = 'x-force-host'
@@ -26,8 +27,17 @@ export type HeaderReader = {
 }
 
 function readForcedHost(req: HeaderReader): string | null {
-  // Test-only override. Honored only when `NODE_ENV === 'test'` AND
-  // `x-force-host-secret` matches `FORCE_HOST_SECRET` (constant-time compare).
+  // Test-only override, behind THREE independent gates. All must hold.
+  //
+  // `NODE_ENV` alone is not a trustworthy production discriminator in this
+  // repo: docker-compose.fullapp.yml and the Dockerfile both set
+  // `NODE_ENV: development` in the production-shaped stack, so several
+  // `NODE_ENV === 'production'` branches are already inert there. One env
+  // drift to `test` would otherwise turn this test hook into a hostname
+  // spoofing primitive — which matters much more once request Host determines
+  // backend organization scope (#4271). `OM_ALLOW_FORCED_HOST` must therefore
+  // be opted into explicitly, and defaults to false.
+  if (!parseBooleanWithDefault(process.env.OM_ALLOW_FORCED_HOST, false)) return null
   if (process.env.NODE_ENV !== 'test') return null
   const expected = process.env.FORCE_HOST_SECRET
   if (!expected) return null
