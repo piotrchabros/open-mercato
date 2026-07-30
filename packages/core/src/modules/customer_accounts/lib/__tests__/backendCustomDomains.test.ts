@@ -90,3 +90,27 @@ describe('backendCustomDomainsUsable', () => {
     ).toBe(true)
   })
 })
+
+describe('WebAuthn relying-party guard (task 5.1)', () => {
+  const enabled = { BACKEND_CUSTOM_DOMAINS_ENABLED: '1', TRUSTED_PROXY_CIDRS: '10.0.0.0/8' }
+
+  it('refuses to run with a pinned rpId', () => {
+    // A shared relying-party id would let a passkey registered for one
+    // organization authenticate on another organization's domain.
+    expect(() =>
+      assertBackendCustomDomainsConfig({ ...enabled, OM_SECURITY_WEBAUTHN_RP_ID: 'example.com' } as NodeJS.ProcessEnv),
+    ).toThrow(/relying-party/i)
+  })
+
+  it('treats a blank rpId as unset', () => {
+    expect(() =>
+      assertBackendCustomDomainsConfig({ ...enabled, OM_SECURITY_WEBAUTHN_RP_ID: '  ' } as NodeJS.ProcessEnv),
+    ).not.toThrow()
+  })
+
+  it('does not care about the rpId when the feature is off', () => {
+    expect(() =>
+      assertBackendCustomDomainsConfig({ OM_SECURITY_WEBAUTHN_RP_ID: 'example.com' } as NodeJS.ProcessEnv),
+    ).not.toThrow()
+  })
+})

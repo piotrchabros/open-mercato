@@ -60,6 +60,21 @@ export function assertBackendCustomDomainsConfig(env: NodeJS.ProcessEnv = proces
         'The forced-host override would let any caller holding FORCE_HOST_SECRET select another organization.',
     )
   }
+
+  // WebAuthn credentials are scoped to the rpId they were registered under, so
+  // a passkey enrolled on one organization's domain will not work on another.
+  // The tempting fix is to pin rpId to a shared parent so one passkey works
+  // everywhere — which makes every tenant host a valid relying party for every
+  // other tenant's passkey. Per-host enrolment is the cost of per-host domains.
+  const pinnedRpId = env.OM_SECURITY_WEBAUTHN_RP_ID?.trim()
+  if (pinnedRpId) {
+    throw new BackendCustomDomainsMisconfigured(
+      'OM_SECURITY_WEBAUTHN_RP_ID must not be pinned while BACKEND_CUSTOM_DOMAINS_ENABLED is on. ' +
+        'A shared relying-party id would let a passkey registered for one organization authenticate ' +
+        'on another organization\'s domain. Leave it unset so the rpId is derived per request host, ' +
+        'and enrol passkeys per domain.',
+    )
+  }
 }
 
 /**

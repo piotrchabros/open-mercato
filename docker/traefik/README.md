@@ -145,3 +145,24 @@ right values at start-up without surfacing them in the repository.
 For non-Docker deployments (Kubernetes, bare metal Traefik, etc.), use
 `dynamic.example.yml` as a starting point and inject secrets via your
 orchestrator's templating mechanism.
+
+## Per-organization backend domains (#4271)
+
+This overlay is the only supported way to serve the **admin app** on an organization's own
+hostname. The catch-all router already matches any host and the ForwardAuth gate already
+consults `/api/customer_accounts/domain-check`, which is target-agnostic — both portal and
+backend hostnames are eligible for a certificate. No Traefik-side change is required.
+
+What is required on the app side:
+
+| Variable | Why |
+|---|---|
+| `BACKEND_CUSTOM_DOMAINS_ENABLED=true` | Off by default. |
+| `TRUSTED_PROXY_CIDRS` | The app refuses to start without it. The request `Host` decides which organization an operator acts on, so it is only trustworthy behind a proxy that overwrites it — which is what this overlay does. Running the app on its published port with no proxy in front makes `Host` client-controlled. |
+| `PLATFORM_DOMAINS` | Must list the platform host, or the proxy treats it as a custom domain and issues a resolve lookup on every request. |
+| `OM_SECURITY_WEBAUTHN_RP_ID` | Must stay **unset**. Pinning it to a shared parent domain would make every tenant host a valid relying party for every other tenant's passkey. |
+| `OM_ALLOW_FORCED_HOST` | Must stay off. It is mutually exclusive with this feature and the app refuses to start with both. |
+
+Registering a backend hostname additionally requires the
+`customer_accounts.domain.manage_backend` ACL feature, which is deliberately separate from the
+portal-domain one.

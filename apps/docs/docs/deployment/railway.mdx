@@ -281,6 +281,14 @@ yarn mercato deploy railway --env staging
 
 ## Domains
 
+:::note Per-organization backend domains
+Serving the admin app on a per-organization hostname (issue #4271) is supported on
+**self-hosted Docker Compose with the Traefik overlay only**. Railway registers a single
+domain per service, so a Railway deployment can serve one hostname for the backend. The
+feature is off by default and refuses to start without `TRUSTED_PROXY_CIDRS`.
+:::
+
+
 Without `--domain`, the CLI creates a Railway `*.up.railway.app` domain.
 
 For a custom domain:

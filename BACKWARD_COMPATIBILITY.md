@@ -301,3 +301,36 @@ Files in `apps/mercato/.mercato/generated/` are produced by the CLI generators. 
 | Polling cadence | `pollIntervalSeconds` flips 60 → 1800 only when `pushStatus='active'` is persisted. Non-push channels unchanged. | ✓ Behavior-preserving for existing channels |
 
 **Migration path for existing tenants**: no action required. Push is opt-in per channel — until an operator explicitly registers (via connect flow or `POST /push/register`), Gmail channels keep polling on the Spec B baseline. The new ACL feature `communication_channels.channel.push.manage` must be granted via `yarn mercato auth sync-role-acls` post-deploy for the "Re-register push" button to appear.
+
+## Per-Organization Backend Custom Domains (2026-07-30)
+
+Issue [#4271](https://github.com/open-mercato/open-mercato/issues/4271). Spec:
+[`.ai/specs/2026-07-30-organization-backend-custom-domains.md`](.ai/specs/2026-07-30-organization-backend-custom-domains.md).
+
+| Change | Category | Classification |
+|---|---|---|
+| `domain_mappings.target` column | §8 Database Schema | ✅ Additive — NOT NULL with `DEFAULT 'portal'`, no backfill needed |
+| `domain_mappings_backend_active_org_unique` partial index | §8 Database Schema | ✅ Additive — only constrains `target='backend'` rows, which cannot exist before this release |
+| `target` on the `domain-resolve` / `domain-resolve/all` responses | §7 API Routes | ✅ Additive optional response field |
+| `target` on the admin `domain-mappings` create payload | §7 API Routes | ✅ Additive optional request field, defaults to `portal` |
+| `customer_accounts.domain.manage_backend` | §10 ACL Feature IDs | ✅ Additive — new ID. Requires `setup.ts` grant + `yarn mercato auth sync-role-acls` post-deploy |
+| `AuthContext.hostBinding` | §2 Types | ✅ Additive optional field. Server-derived only; never read from a JWT claim |
+| `host_scope_conflict` / `host_binding_unavailable` auth statuses | §2 Types | ✅ Additive union members. Consumers that do not know them already fall through to a deny |
+| `resolveActiveByOrg(orgId, target?)` | §3 Signatures | ✅ Additive optional parameter, defaults to `'portal'` so existing callers are unchanged |
+| `BACKEND_CUSTOM_DOMAINS_ENABLED`, `TRUSTED_PROXY_CIDRS`, `OM_ALLOW_FORCED_HOST`, `COOKIE_SECURE` | Env vars | ✅ Additive — all optional with defaults |
+
+**Two behavior changes that are not additive, both opt-in:**
+
+- With `BACKEND_CUSTOM_DOMAINS_ENABLED` on, a request arriving on a hostname bound to an
+  organization can no longer select a different organization via `om_selected_org` /
+  `om_selected_tenant`; a conflicting selection answers **403**. Zero effect when the flag is off
+  or when no backend mapping exists.
+- Cookie `Secure` is derived from `COOKIE_SECURE` / the request scheme instead of
+  `NODE_ENV === 'production'`, and now defaults **on**. A deployment serving the admin app over
+  plain http without setting `COOKIE_SECURE=false` will find session cookies rejected — which is
+  the intended signal, since that deployment was previously sending session tokens in the clear.
+
+**Rollback.** The `target` column is additive with a default, so reverting the code while leaving
+the column in place is safe: pre-change code ignores it and backend-target rows simply stop
+routing. Dropping the column requires deleting `target='backend'` rows first. Forward-preferred.
+

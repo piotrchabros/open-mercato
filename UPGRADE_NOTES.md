@@ -843,3 +843,28 @@ When opening a PR that bumps a dependency across a major boundary, add an entry 
 the same PR. The `auto-upgrade-...` skill for the window picks up entries from this file;
 keep the headings stable (exactly `#### \`<package>\` \`^<from>\` → \`^<to>\``) so the
 skill can parse them.
+
+## Per-organization backend custom domains (2026-07-30)
+
+Opt-in, off by default. Nothing to do unless you want it.
+
+**If you enable it** (`BACKEND_CUSTOM_DOMAINS_ENABLED=true`):
+
+1. Set `TRUSTED_PROXY_CIDRS` — the app refuses to start without it. Host-derived organization
+   scope is only sound behind a proxy that overwrites the `Host` header, and the base Docker
+   stack publishes the app directly with the Traefik overlay left opt-in.
+2. Leave `OM_SECURITY_WEBAUTHN_RP_ID` unset. Pinning it to a shared parent domain so one passkey
+   works everywhere would make every tenant host a valid relying party for every other tenant's
+   passkey. Passkeys are enrolled per domain.
+3. Grant the new `customer_accounts.domain.manage_backend` ACL feature and run
+   `yarn mercato auth sync-role-acls`.
+4. Supported on self-hosted Docker Compose with the Traefik overlay only. Railway registers one
+   domain per service; the AWS playbook defers custom-domain ingress.
+
+**Applies to everyone:** cookie `Secure` no longer derives from `NODE_ENV`. It now follows
+`COOKIE_SECURE`, else the request scheme, else defaults on. If you serve the app over plain http
+in an environment that previously set `NODE_ENV=production`, set `COOKIE_SECURE=false`
+explicitly. Conversely, if you run a production-shaped stack with `NODE_ENV=development` — the
+bundled `docker-compose.fullapp.yml` does — your session cookies were previously being sent
+without `Secure`, and now are not.
+
