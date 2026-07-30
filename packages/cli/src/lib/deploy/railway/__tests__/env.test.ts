@@ -1,5 +1,6 @@
 import {
   computeRailwayVariables,
+  derivePlatformDomain,
   generateProtectedSecrets,
   parseEnvFile,
 } from '../env'
@@ -51,5 +52,42 @@ SINGLE='x'
       CUSTOM_SETTING: 'enabled',
     })
     expect(variables.RAILWAY_API_TOKEN).toBeUndefined()
+  })
+
+  it('injects PLATFORM_DOMAINS from the provisioned domain hostname', () => {
+    const variables = computeRailwayVariables({
+      env: {},
+      role: 'app',
+      workerEnabled: false,
+      appUrl: 'https://mercato-production.up.railway.app',
+      protectedSecrets: {
+        AUTH_SECRET: 'auth',
+        JWT_SECRET: 'jwt',
+        TENANT_DATA_ENCRYPTION_FALLBACK_KEY: 'encryption',
+      },
+    })
+    expect(variables.PLATFORM_DOMAINS).toBe('mercato-production.up.railway.app')
+  })
+
+  it('preserves an operator-supplied PLATFORM_DOMAINS value', () => {
+    const variables = computeRailwayVariables({
+      env: { PLATFORM_DOMAINS: 'custom.example.com,localhost' },
+      role: 'app',
+      workerEnabled: false,
+      appUrl: 'https://mercato-production.up.railway.app',
+      protectedSecrets: {
+        AUTH_SECRET: 'auth',
+        JWT_SECRET: 'jwt',
+        TENANT_DATA_ENCRYPTION_FALLBACK_KEY: 'encryption',
+      },
+    })
+    expect(variables.PLATFORM_DOMAINS).toBe('custom.example.com,localhost')
+  })
+
+  it('derives a lowercase, scheme-free hostname from a domain URL', () => {
+    expect(derivePlatformDomain('https://Mercato-Prod.up.railway.app')).toBe(
+      'mercato-prod.up.railway.app',
+    )
+    expect(derivePlatformDomain('https://example.com:3000/path')).toBe('example.com')
   })
 })

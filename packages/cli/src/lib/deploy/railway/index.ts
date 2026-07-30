@@ -5,6 +5,7 @@ import { stdin as input, stdout as output } from 'node:process'
 import { satisfies } from 'semver'
 import {
   computeRailwayVariables,
+  derivePlatformDomain,
   formatVariablePlan,
   generateProtectedSecrets,
   parseEnvFile,
@@ -1402,7 +1403,12 @@ export async function runRailwayDeploy(
     environmentState.domainId = domain.id
     environmentState.appUrl = domain.url
     persistState(statePath, state)
-    const finalAppVariables = { ...appVariables, APP_URL: domain.url, NEXT_PUBLIC_APP_URL: domain.url }
+    const finalAppVariables = {
+      ...appVariables,
+      APP_URL: domain.url,
+      NEXT_PUBLIC_APP_URL: domain.url,
+      ...(appVariables.PLATFORM_DOMAINS ? {} : { PLATFORM_DOMAINS: derivePlatformDomain(domain.url) }),
+    }
     await upsertVariables({
       client,
       projectId,

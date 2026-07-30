@@ -45,6 +45,22 @@ export function generateProtectedSecrets(existing: Record<string, string>): Reco
   }
 }
 
+/**
+ * Extract a lowercase, scheme-free, port-free hostname from a provisioned
+ * domain URL, matching the format `platformDomains()` expects
+ * (`packages/core/src/modules/customer_accounts/lib/platformDomains.ts`).
+ */
+export function derivePlatformDomain(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase()
+  } catch {
+    return url
+      .replace(/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//, '')
+      .split(/[/:]/)[0]
+      .toLowerCase()
+  }
+}
+
 export function computeRailwayVariables(input: {
   env: Record<string, string>
   role: RailwayServiceRole
@@ -74,6 +90,9 @@ export function computeRailwayVariables(input: {
   if (input.appUrl) {
     variables.APP_URL = input.appUrl
     variables.NEXT_PUBLIC_APP_URL = input.appUrl
+    if (!variables.PLATFORM_DOMAINS) {
+      variables.PLATFORM_DOMAINS = derivePlatformDomain(input.appUrl)
+    }
   }
 
   delete variables.RAILWAY_API_TOKEN

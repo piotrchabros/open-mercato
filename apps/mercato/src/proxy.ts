@@ -7,24 +7,7 @@ import {
   type CustomDomainRouter,
 } from './lib/customDomainResolver'
 import { tryNormalizeHostname } from '@open-mercato/core/modules/customer_accounts/lib/hostname'
-import { secretEqual } from '@open-mercato/core/modules/customer_accounts/lib/secretCompare'
-
-const FORCE_HOST_HEADER = 'x-force-host'
-const FORCE_HOST_SECRET_HEADER = 'x-force-host-secret'
-
-function readForcedHost(req: NextRequest): string | null {
-  if (process.env.NODE_ENV !== 'test') return null
-  const expected = process.env.FORCE_HOST_SECRET
-  if (!expected) return null
-  if (!secretEqual(req.headers.get(FORCE_HOST_SECRET_HEADER), expected)) return null
-  return req.headers.get(FORCE_HOST_HEADER)
-}
-
-function pickHostname(req: NextRequest): string | null {
-  const forced = readForcedHost(req)
-  if (forced) return forced
-  return req.headers.get('host')
-}
+import { resolveRequestHostname } from '@open-mercato/shared/lib/http/requestHostname'
 
 function buildRewrittenPath(orgSlug: string, originalPathname: string): string {
   const trimmed = originalPathname.startsWith('/') ? originalPathname : `/${originalPathname}`
@@ -54,7 +37,7 @@ export async function proxy(req: NextRequest) {
   // logged and ignored — per-request fetches keep working with an empty cache.
   void ensureWarmUp().catch(() => {})
 
-  const rawHost = pickHostname(req)
+  const rawHost = resolveRequestHostname(req)
   const normalizedHost = rawHost ? tryNormalizeHostname(rawHost) : null
   const platform = !normalizedHost || isPlatformHost(normalizedHost)
   const pathname = req.nextUrl.pathname

@@ -18,7 +18,7 @@
 
 import { tryNormalizeHostname } from '@open-mercato/core/modules/customer_accounts/lib/hostname'
 import { platformDomains } from '@open-mercato/core/modules/customer_accounts/lib/platformDomains'
-import { secretEqual } from '@open-mercato/core/modules/customer_accounts/lib/secretCompare'
+import { resolveRequestHostname } from '@open-mercato/shared/lib/http/requestHostname'
 import { Organization } from '@open-mercato/core/modules/directory/data/entities'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { AppContainer } from '@open-mercato/shared/lib/di/container'
@@ -36,18 +36,6 @@ export type ResolvedTenantContext = {
   tenantId: string
   organizationId: string | null
   hostname: string | null
-}
-
-function readForcedHost(req: Request): string | null {
-  // Test-only override. The middleware honors `X-Force-Host` only when
-  // `NODE_ENV === 'test'` AND `X-Force-Host-Secret` matches; we mirror the
-  // same check here so request-scoped helpers behave the same way under tests.
-  if (process.env.NODE_ENV !== 'test') return null
-  const expected = process.env.FORCE_HOST_SECRET
-  if (!expected) return null
-  if (!secretEqual(req.headers.get('x-force-host-secret'), expected)) return null
-  const host = req.headers.get('x-force-host')
-  return host && host.length > 0 ? host : null
 }
 
 async function resolveTenantFromOrganization(
@@ -87,7 +75,7 @@ export async function resolveTenantContext(
   bodyTenantId: string | null | undefined,
   options?: { container?: AppContainer; organizationId?: string | null },
 ): Promise<ResolvedTenantContext> {
-  const rawHost = readForcedHost(req) ?? req.headers.get('host')
+  const rawHost = resolveRequestHostname(req)
   const hostname = rawHost ? tryNormalizeHostname(rawHost) : null
   const isPlatform = hostname ? platformDomains().includes(hostname) : true
   const bodyOrganizationId = options?.organizationId ?? null

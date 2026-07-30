@@ -291,6 +291,8 @@ yarn mercato deploy railway --domain commerce.example.com
 
 The command prints the required DNS records and waits up to five minutes for verification. DNS propagation can take longer; `--no-wait-domain` prints the records and completes without waiting. Re-run the deploy after DNS is ready to confirm the domain and app URL.
 
+Once the domain is provisioned, the deployer sets `PLATFORM_DOMAINS` to that domain's hostname (lowercase, no scheme or port) in addition to `APP_URL` and `NEXT_PUBLIC_APP_URL`. `PLATFORM_DOMAINS` tells the app which hosts are its own platform domains rather than tenant custom domains (see `isPlatformHost`); without it, the app's own hostname would be misrouted through the custom-domain resolver. If your `.env`/`.env.production` file already sets `PLATFORM_DOMAINS`, the deployer preserves your value instead of overwriting it — add the provisioned domain (or your custom domain from `--domain`) to that list yourself in this case.
+
 ## Persistent storage
 
 Persistent storage is opt-in:
