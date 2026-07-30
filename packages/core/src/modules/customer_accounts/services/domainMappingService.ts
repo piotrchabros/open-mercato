@@ -5,6 +5,7 @@ import { EntityManager } from '@mikro-orm/postgresql'
 import {
   DomainMapping,
   type DomainStatus,
+  type DomainTarget,
 } from '@open-mercato/core/modules/customer_accounts/data/entities'
 import { Organization } from '@open-mercato/core/modules/directory/data/entities'
 import { emitCustomerAccountsEvent } from '@open-mercato/core/modules/customer_accounts/events'
@@ -28,6 +29,7 @@ export type ResolveResult = {
   organizationId: string
   orgSlug: string | null
   status: DomainStatus
+  target: DomainTarget
 }
 
 export type DnsDiagnostics = {
@@ -167,7 +169,14 @@ export class DomainMappingService {
     const cacheKey = `${RESOLVE_KEY_PREFIX}:${hostname}`
     if (this.cache) {
       const cached = (await this.cache.get(cacheKey)) as ResolveResult | null | undefined
-      if (cached !== undefined && cached !== null) return cached
+      // Entries written before `target` existed (#4271) have no such field.
+      // Those are all portal mappings by definition, and defaulting rather than
+      // discarding avoids a cold-cache stampede on the deploy that introduces
+      // this. Without it the proxy would read `undefined` and could route a
+      // portal host down the backend branch for up to one TTL.
+      if (cached !== undefined && cached !== null) {
+        return cached.target ? cached : { ...cached, target: 'portal' }
+      }
     }
 
     const result = await this.lookupResolveResult(hostname)
@@ -180,7 +189,19 @@ export class DomainMappingService {
     return result
   }
 
-  async isAllowedForTls(input: string): Promise<{ organizationId: string; status: DomainStatus } | null> {
+  /**
+   * Deliberately target-AGNOSTIC: both portal and backend hostnames need a
+   * certificate, so Traefik's ForwardAuth gate must say yes to either. Do not
+   * "tighten" this to portal-only — that would break TLS issuance for every
+   * backend domain. The target is returned for diagnostics only.
+   *
+   * Note this accepts `verified` as well as `active`, because the TLS handshake
+   * has to succeed before a mapping can be activated. That is why it must not
+   * be reused as an origin allowlist, where only `active` is acceptable.
+   */
+  async isAllowedForTls(
+    input: string,
+  ): Promise<{ organizationId: string; status: DomainStatus; target: DomainTarget } | null> {
     const hostname = tryNormalizeHostname(input)
     if (!hostname) return null
     if (platformDomains().includes(hostname)) return null
@@ -189,11 +210,23 @@ export class DomainMappingService {
       status: { $in: ['active', 'verified'] },
     } as never)
     if (!row) return null
-    return { organizationId: row.organizationId, status: row.status }
+    return { organizationId: row.organizationId, status: row.status, target: row.target }
   }
 
-  async resolveActiveByOrg(organizationId: string): Promise<{ hostname: string; status: DomainStatus } | null> {
-    const cacheKey = `${ACTIVE_BY_ORG_KEY_PREFIX}:${organizationId}`
+  /**
+   * The organization's active hostname for a given app.
+   *
+   * MUST stay target-filtered: an unfiltered lookup would hand a backend
+   * hostname to a portal email builder (or the reverse) as soon as an
+   * organization has both. Defaults to `portal` so existing callers — the
+   * customer signup/verify links in `customerUrl.ts` — keep their meaning
+   * without a signature change at the call site.
+   */
+  async resolveActiveByOrg(
+    organizationId: string,
+    target: DomainTarget = 'portal',
+  ): Promise<{ hostname: string; status: DomainStatus } | null> {
+    const cacheKey = `${ACTIVE_BY_ORG_KEY_PREFIX}:${target}:${organizationId}`
     if (this.cache) {
       const cached = (await this.cache.get(cacheKey)) as { hostname: string; status: DomainStatus } | null | undefined
       if (cached !== undefined && cached !== null) return cached
@@ -202,6 +235,7 @@ export class DomainMappingService {
     const row = await this.em.findOne(DomainMapping, {
       organizationId,
       status: 'active',
+      target,
     } as never)
     const result = row ? { hostname: row.hostname, status: row.status } : null
 
@@ -228,6 +262,7 @@ export class DomainMappingService {
       organizationId: row.organizationId,
       orgSlug: slugByOrg.get(row.organizationId) ?? null,
       status: row.status,
+      target: row.target,
     }))
   }
 
@@ -473,6 +508,7 @@ export class DomainMappingService {
       organizationId: row.organizationId,
       orgSlug: org?.slug ?? null,
       status: row.status,
+      target: row.target,
     }
   }
 

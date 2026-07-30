@@ -4,6 +4,7 @@ import { DomainMappingService } from '@open-mercato/core/modules/customer_accoun
 import {
   DomainMapping,
   type DomainStatus,
+  type DomainTarget,
 } from '@open-mercato/core/modules/customer_accounts/data/entities'
 import { Organization } from '@open-mercato/core/modules/directory/data/entities'
 
@@ -32,6 +33,7 @@ type Row = {
   tenantId: string
   organizationId: string
   status: DomainStatus
+  target: DomainTarget
   provider: string
   tlsRetryCount: number
   verifiedAt: Date | null
@@ -153,6 +155,7 @@ function createFakeEm(seed: { domains?: Row[]; orgs?: OrgRow[] } = {}): FakeEm {
       tenantId: data.tenantId ?? '',
       organizationId: data.organizationId ?? '',
       status: data.status ?? 'pending',
+      target: data.target ?? 'portal',
       provider: data.provider ?? 'traefik',
       tlsRetryCount: data.tlsRetryCount ?? 0,
       verifiedAt: data.verifiedAt ?? null,
@@ -201,6 +204,7 @@ function seedDomain(overrides: Partial<Row> = {}): Row {
     tenantId: overrides.tenantId ?? TENANT_A,
     organizationId: overrides.organizationId ?? ORG_A,
     status: overrides.status ?? 'pending',
+    target: overrides.target ?? 'portal',
     provider: overrides.provider ?? 'traefik',
     tlsRetryCount: overrides.tlsRetryCount ?? 0,
     verifiedAt: overrides.verifiedAt ?? null,
@@ -618,7 +622,7 @@ describe('DomainMappingService.isAllowedForTls', () => {
     const service = new DomainMappingService(em as unknown as EntityManager)
 
     const result = await service.isAllowedForTls('shop.example.com')
-    expect(result).toEqual({ organizationId: ORG_A, status: 'active' })
+    expect(result).toEqual({ organizationId: ORG_A, status: 'active', target: 'portal' })
   })
 
   it('returns verified rows (C2 fix: pre-activation TLS handshake must succeed)', async () => {
@@ -627,7 +631,7 @@ describe('DomainMappingService.isAllowedForTls', () => {
     const service = new DomainMappingService(em as unknown as EntityManager)
 
     const result = await service.isAllowedForTls('shop.example.com')
-    expect(result).toEqual({ organizationId: ORG_A, status: 'verified' })
+    expect(result).toEqual({ organizationId: ORG_A, status: 'verified', target: 'portal' })
   })
 
   it('returns null for pending mappings', async () => {
@@ -689,6 +693,7 @@ describe('DomainMappingService.resolveByHostname', () => {
       organizationId: ORG_A,
       orgSlug: 'acme',
       status: 'active',
+      target: 'portal',
     })
   })
 
@@ -781,5 +786,78 @@ describe('DomainMappingService.findByOrganization', () => {
     const service = new DomainMappingService(em as unknown as EntityManager)
     const result = await service.findByOrganization(ORG_A)
     expect(result).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// target isolation (#4271)
+// ---------------------------------------------------------------------------
+
+describe('DomainMappingService target isolation', () => {
+  it('resolveActiveByOrg defaults to the portal host and never returns a backend one', async () => {
+    const em = createFakeEm({
+      domains: [
+        seedDomain({ hostname: 'crm.acme.com', organizationId: ORG_A, status: 'active', target: 'backend' }),
+        seedDomain({ hostname: 'shop.acme.com', organizationId: ORG_A, status: 'active', target: 'portal' }),
+      ],
+    })
+    const service = new DomainMappingService(em as unknown as EntityManager)
+
+    // No explicit target: existing portal callers (customerUrl.ts) must keep
+    // resolving the storefront host even once a backend host exists.
+    await expect(service.resolveActiveByOrg(ORG_A)).resolves.toEqual({
+      hostname: 'shop.acme.com',
+      status: 'active',
+    })
+  })
+
+  it('resolveActiveByOrg returns the backend host only when asked for it', async () => {
+    const em = createFakeEm({
+      domains: [
+        seedDomain({ hostname: 'shop.acme.com', organizationId: ORG_A, status: 'active', target: 'portal' }),
+        seedDomain({ hostname: 'crm.acme.com', organizationId: ORG_A, status: 'active', target: 'backend' }),
+      ],
+    })
+    const service = new DomainMappingService(em as unknown as EntityManager)
+
+    await expect(service.resolveActiveByOrg(ORG_A, 'backend')).resolves.toEqual({
+      hostname: 'crm.acme.com',
+      status: 'active',
+    })
+  })
+
+  it('resolveActiveByOrg returns null for a target the org has not mapped', async () => {
+    const em = createFakeEm({
+      domains: [seedDomain({ hostname: 'shop.acme.com', organizationId: ORG_A, status: 'active', target: 'portal' })],
+    })
+    const service = new DomainMappingService(em as unknown as EntityManager)
+
+    // Must be null, not the portal host: a backend link falling back to the
+    // storefront domain would send an admin to the customer portal.
+    await expect(service.resolveActiveByOrg(ORG_A, 'backend')).resolves.toBeNull()
+  })
+
+  it('resolveByHostname surfaces the target so the proxy can branch on it', async () => {
+    const em = createFakeEm({
+      domains: [seedDomain({ hostname: 'crm.acme.com', status: 'active', target: 'backend' })],
+      orgs: [{ id: ORG_A, slug: 'acme' }],
+    })
+    const service = new DomainMappingService(em as unknown as EntityManager)
+
+    const resolved = await service.resolveByHostname('crm.acme.com')
+    expect(resolved).toMatchObject({ hostname: 'crm.acme.com', target: 'backend' })
+  })
+
+  it('isAllowedForTls stays target-agnostic so backend hosts still get certificates', async () => {
+    const em = createFakeEm({
+      domains: [seedDomain({ hostname: 'crm.acme.com', status: 'verified', target: 'backend' })],
+    })
+    const service = new DomainMappingService(em as unknown as EntityManager)
+
+    await expect(service.isAllowedForTls('crm.acme.com')).resolves.toEqual({
+      organizationId: ORG_A,
+      status: 'verified',
+      target: 'backend',
+    })
   })
 })

@@ -3,7 +3,20 @@ import { Check, Entity, Enum, Index, ManyToOne, PrimaryKey, Property, Unique } f
 export type DomainProvider = 'traefik'
 export type DomainStatus = 'pending' | 'verified' | 'active' | 'dns_failed' | 'tls_failed'
 
+/**
+ * Which app a mapped hostname serves.
+ *
+ * `portal` is the customer-facing storefront/portal — the only target before
+ * #4271, hence the default that keeps every pre-existing row correct.
+ * `backend` serves the admin app scoped to the mapping's organization.
+ *
+ * The hostname unique index spans both targets: one hostname, one mapping,
+ * whichever app it serves.
+ */
+export type DomainTarget = 'portal' | 'backend'
+
 export const DOMAIN_PROVIDERS: readonly DomainProvider[] = ['traefik'] as const
+export const DOMAIN_TARGETS: readonly DomainTarget[] = ['portal', 'backend'] as const
 export const DOMAIN_STATUSES: readonly DomainStatus[] = [
   'pending',
   'verified',
@@ -335,6 +348,17 @@ export class CustomerUserInvitation {
   expression:
     `create index "domain_mappings_pending_tls_idx" on "domain_mappings" ("status", "updated_at") where "status" in ('verified', 'tls_failed')`,
 })
+// One active backend host per organization. Without this, resolveActiveByOrg's
+// findOne would return an arbitrary row when several exist, making "which host
+// does this org's admin panel live on" non-deterministic — and admin links
+// would silently point somewhere else after a second mapping is added.
+// Partial, because portal mappings deliberately allow two per org (one active
+// plus one pending replacement, for zero-downtime swaps).
+@Unique({
+  name: 'domain_mappings_backend_active_org_unique',
+  expression:
+    `create unique index "domain_mappings_backend_active_org_unique" on "domain_mappings" ("organization_id") where "target" = 'backend' and "status" = 'active'`,
+})
 @Check({
   name: 'domain_mappings_hostname_normalized_chk',
   expression: `"hostname" = lower("hostname") and "hostname" not like '%.'`,
@@ -360,6 +384,11 @@ export class DomainMapping {
 
   @Enum({ items: () => DOMAIN_STATUSES as unknown as string[], type: 'text', name: 'status' })
   status: DomainStatus = 'pending'
+
+  // Defaults to 'portal' so every row created before #4271 keeps its meaning
+  // and no backfill is required.
+  @Enum({ items: () => DOMAIN_TARGETS as unknown as string[], type: 'text', name: 'target', default: 'portal' })
+  target: DomainTarget = 'portal'
 
   @Property({ name: 'verified_at', type: Date, nullable: true })
   verifiedAt?: Date | null
