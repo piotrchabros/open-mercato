@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers.js'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { verifyJwt } from './jwt'
+import { resolveHostBinding, type HostBinding } from './hostBindingStore'
 import { getSharedApiKeyAuthCache } from './apiKeyAuthCache'
 
 const TENANT_COOKIE_NAME = 'om_selected_tenant'
@@ -19,6 +20,12 @@ export type AuthContext = {
   userId?: string
   keyId?: string
   keyName?: string
+  /**
+   * Set when the request arrived on a hostname bound to an organization
+   * (#4271). Server-derived only — never read from a JWT claim, never settable
+   * by application code. Downstream scope resolution clamps to it.
+   */
+  hostBinding?: HostBinding | null
   [k: string]: unknown
 } | null
 
@@ -28,7 +35,11 @@ type CookieOverride = { applied: boolean; value: string | null }
 // NOT because the token is genuinely invalid. Callers MUST NOT clear the user's
 // session cookies for 'error'; doing so would log everyone out at once during a
 // shared infrastructure blip (issue #4176).
-type AuthResolutionStatus = 'authenticated' | 'missing' | 'invalid' | 'error'
+// 'host_scope_conflict' means the caller is genuinely authenticated but asked
+// for an organization/tenant scope the bound hostname does not serve. Distinct
+// from 'invalid' so callers answer 403 rather than clearing session cookies —
+// the session is fine, the scope selection is not.
+type AuthResolutionStatus = 'authenticated' | 'missing' | 'invalid' | 'error' | 'host_scope_conflict'
 type AuthResolution = {
   auth: AuthContext
   status: AuthResolutionStatus
@@ -124,29 +135,87 @@ function isSuperAdminAuth(auth: AuthContext | null | undefined): boolean {
   return (auth as Record<string, unknown>).isSuperAdmin === true
 }
 
+type ScopedAuthResult = { ok: true; auth: AuthContext } | { ok: false }
+
+/**
+ * Rejects a request whose requested scope conflicts with the organization its
+ * hostname is bound to (#4271).
+ *
+ * Deliberately DENY-ONLY. It never rewrites `orgId` to the bound organization,
+ * because this layer cannot check whether the caller may access that org —
+ * doing so would GRANT scope off the back of a client-controlled Host header.
+ * The positive binding, with the access check, belongs to
+ * `resolveOrganizationScopeForRequest`. Narrowing is always safe; widening is
+ * never done here.
+ *
+ * Denies rather than silently clamping, matching the `selectionRejected`
+ * precedent in directory/utils/organizationScope.ts: an operator who believes
+ * they are looking at tenant X while being served tenant Y is a data-integrity
+ * hazard on writes.
+ */
+// Exported for direct unit testing: this predicate is the whole security
+// property of the host binding, and it is worth asserting as a matrix rather
+// than only through the DB-dependent resolvers.
+export function conflictsWithHostBinding(
+  auth: NonNullable<AuthContext>,
+  tenantOverride: CookieOverride,
+  orgOverride: CookieOverride,
+  hostBinding: HostBinding | null,
+): boolean {
+  if (!hostBinding) return false
+
+  // A session belonging to another tenant has no business on this hostname,
+  // super-admin or not. Login is host-agnostic, so this is reachable by simply
+  // authenticating on someone else's branded domain.
+  if (auth.tenantId && auth.tenantId !== hostBinding.tenantId) return true
+
+  // Overrides below are only ever applied for super-admins; for anyone else
+  // `applied` is irrelevant because the cookie is not honored.
+  if (isSuperAdminAuth(auth)) {
+    if (tenantOverride.applied && tenantOverride.value !== hostBinding.tenantId) return true
+    // value === null covers both a concrete-org mismatch and the `__all__`
+    // sentinel. "All organizations" is a widening, which a bound host forbids.
+    if (orgOverride.applied && orgOverride.value !== hostBinding.organizationId) return true
+  }
+
+  return false
+}
+
 function applySuperAdminScope(
   auth: AuthContext,
   tenantCookie: string | undefined,
-  orgCookie: string | undefined
-): AuthContext {
-  if (!auth || !isSuperAdminAuth(auth)) return auth
+  orgCookie: string | undefined,
+  hostBinding: HostBinding | null = null,
+): ScopedAuthResult {
+  if (!auth) return { ok: true, auth }
 
   const tenantOverride = resolveTenantOverride(tenantCookie)
   const orgOverride = resolveOrganizationOverride(orgCookie)
-  if (!tenantOverride.applied && !orgOverride.applied) return auth
+
+  if (conflictsWithHostBinding(auth, tenantOverride, orgOverride, hostBinding)) {
+    return { ok: false }
+  }
+
+  // Stamp the binding so downstream consumers — including the ~2100 sites that
+  // read auth.orgId directly without going through the scope resolver — can see
+  // that this request is host-constrained.
+  const withBinding: AuthContext = hostBinding ? { ...auth, hostBinding } : auth
+
+  if (!isSuperAdminAuth(withBinding)) return { ok: true, auth: withBinding }
+  if (!tenantOverride.applied && !orgOverride.applied) return { ok: true, auth: withBinding }
 
   type MutableAuthContext = Exclude<AuthContext, null> & {
     actorTenantId?: string | null
     actorOrgId?: string | null
   }
-  const baseAuth = auth as Exclude<AuthContext, null>
+  const baseAuth = withBinding as Exclude<AuthContext, null>
   const next: MutableAuthContext = { ...baseAuth }
   if (tenantOverride.applied) {
-    if (!('actorTenantId' in next)) next.actorTenantId = auth?.tenantId ?? null
+    if (!('actorTenantId' in next)) next.actorTenantId = baseAuth.tenantId ?? null
     next.tenantId = tenantOverride.value
   }
   if (orgOverride.applied) {
-    if (!('actorOrgId' in next)) next.actorOrgId = auth?.orgId ?? null
+    if (!('actorOrgId' in next)) next.actorOrgId = baseAuth.orgId ?? null
     next.orgId = orgOverride.value
   }
   next.isSuperAdmin = true
@@ -154,7 +223,30 @@ function applySuperAdminScope(
   if (!existingRoles.some((role) => typeof role === 'string' && role.trim().toLowerCase() === SUPERADMIN_ROLE)) {
     next.roles = [...existingRoles, 'superadmin']
   }
-  return next
+  return { ok: true, auth: next }
+}
+
+/**
+ * Resolves the host binding for an incoming request. Returns null whenever the
+ * feature is off, no resolver is registered, or the hostname is unbound.
+ */
+async function hostBindingFor(rawHost: string | null | undefined): Promise<HostBinding | null> {
+  return resolveHostBinding(rawHost ?? null)
+}
+
+/**
+ * Host for the server-component path, which has no Request object.
+ * Returns null outside a request scope (build-time render, tests) so the
+ * binding simply does not apply.
+ */
+async function readIncomingHost(): Promise<string | null> {
+  try {
+    const { headers } = await import('next/headers.js')
+    const store = await headers()
+    return store.get('x-forwarded-host') ?? store.get('host')
+  } catch {
+    return null
+  }
 }
 
 async function resolveApiKeyAuth(secret: string): Promise<AuthContext> {
@@ -291,6 +383,9 @@ async function resolveCanonicalInteractiveAuthContext(auth: AuthContext): Promis
 
 export async function resolveAuthFromCookiesDetailed(): Promise<AuthResolution> {
   const cookieStore = await cookies()
+  // Server components have no Request; the Host arrives through next/headers,
+  // the same channel the cookies above come from.
+  const requestHost = await readIncomingHost()
   const token = cookieStore.get('auth_token')?.value
   if (!token) return { auth: null, status: 'missing' }
   try {
@@ -301,10 +396,10 @@ export async function resolveAuthFromCookiesDetailed(): Promise<AuthResolution> 
     if (!canonicalAuth) return { auth: null, status: 'invalid' }
     const tenantCookie = cookieStore.get(TENANT_COOKIE_NAME)?.value
     const orgCookie = cookieStore.get(ORGANIZATION_COOKIE_NAME)?.value
-    return {
-      auth: applySuperAdminScope(canonicalAuth, tenantCookie, orgCookie),
-      status: 'authenticated',
-    }
+    const hostBinding = await hostBindingFor(requestHost)
+    const scoped = applySuperAdminScope(canonicalAuth, tenantCookie, orgCookie, hostBinding)
+    if (!scoped.ok) return { auth: null, status: 'host_scope_conflict' }
+    return { auth: scoped.auth, status: 'authenticated' }
   } catch (err) {
     if (err instanceof AuthResolutionUnavailableError) return { auth: null, status: 'error' }
     return { auth: null, status: 'invalid' }
@@ -342,10 +437,10 @@ export async function resolveAuthFromRequestDetailed(req: Request): Promise<Auth
       if (payload) {
         const canonicalAuth = await resolveCanonicalInteractiveAuthContext(payload)
         if (canonicalAuth) {
-          return {
-            auth: applySuperAdminScope(canonicalAuth, tenantCookie, orgCookie),
-            status: 'authenticated',
-          }
+          const hostBinding = await hostBindingFor(req.headers.get('host'))
+          const scoped = applySuperAdminScope(canonicalAuth, tenantCookie, orgCookie, hostBinding)
+          if (!scoped.ok) return { auth: null, status: 'host_scope_conflict' }
+          return { auth: scoped.auth, status: 'authenticated' }
         }
         hadInvalidInteractiveToken = true
       }
@@ -369,10 +464,10 @@ export async function resolveAuthFromRequestDetailed(req: Request): Promise<Auth
   if (!apiAuth) {
     return { auth: null, status: resolveUnauthenticatedStatus() }
   }
-  return {
-    auth: applySuperAdminScope(apiAuth, tenantCookie, orgCookie),
-    status: 'authenticated',
-  }
+  const apiHostBinding = await hostBindingFor(req.headers.get('host'))
+  const scopedApiAuth = applySuperAdminScope(apiAuth, tenantCookie, orgCookie, apiHostBinding)
+  if (!scopedApiAuth.ok) return { auth: null, status: 'host_scope_conflict' }
+  return { auth: scopedApiAuth.auth, status: 'authenticated' }
 }
 
 export async function getAuthFromRequest(req: Request): Promise<AuthContext> {

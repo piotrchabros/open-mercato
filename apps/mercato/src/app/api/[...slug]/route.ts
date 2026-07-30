@@ -382,6 +382,29 @@ async function handleRequest(
     // return 401 — that would force-log-out every active user at once during a
     // shared infrastructure blip (issue #4176). Return a retryable 503 instead
     // and leave the cookies intact so the session survives once the DB recovers.
+    // The session is valid; the requested organization/tenant scope is not one
+    // this hostname serves (#4271). Answer 403 rather than 401: apiFetch turns
+    // any 401 into a session-refresh redirect, and since the refresh would
+    // succeed and land back on the same host, that is an infinite reload.
+    if (authResolution.status === 'host_scope_conflict' && authError.status === 401) {
+      const response = NextResponse.json(
+        {
+          error: t(
+            'api.errors.organizationHostMismatch',
+            'This organization is not available on this domain. Switch domains to change organization.',
+          ),
+        },
+        { status: 403 },
+      )
+      await emitLifecycleEvent(applicationLifecycleEvents.requestAuthorizationDenied, {
+        ...receivedPayload,
+        status: response.status,
+        userId: auth?.sub ?? null,
+        tenantId: auth?.tenantId ?? null,
+        durationMs: Date.now() - startedAt,
+      })
+      return response
+    }
     if (authResolution.status === 'error' && authError.status === 401) {
       const response = NextResponse.json(
         { error: t('api.errors.serviceUnavailable', 'Service temporarily unavailable') },

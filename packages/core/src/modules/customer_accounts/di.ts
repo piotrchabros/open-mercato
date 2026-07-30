@@ -7,6 +7,31 @@ import { CustomerTokenService } from '@open-mercato/core/modules/customer_accoun
 import { CustomerRbacService } from '@open-mercato/core/modules/customer_accounts/services/customerRbacService'
 import { CustomerInvitationService } from '@open-mercato/core/modules/customer_accounts/services/customerInvitationService'
 import { DomainMappingService } from '@open-mercato/core/modules/customer_accounts/services/domainMappingService'
+import { registerHostBindingResolver } from '@open-mercato/shared/lib/auth/hostBindingStore'
+import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
+import { backendCustomDomainsUsable } from '@open-mercato/core/modules/customer_accounts/lib/backendCustomDomains'
+
+// `packages/shared` cannot import this module, so the host -> organization
+// binding is registered INTO the shared auth layer here (#4271). Module-scope
+// on purpose: the auth path runs outside any request container, and this store
+// is idempotent.
+//
+// Returns null unless the feature is enabled AND the hostname resolves to an
+// ACTIVE backend-target mapping. A portal mapping never binds the admin scope.
+registerHostBindingResolver(async (hostname) => {
+  if (!backendCustomDomainsUsable()) return null
+  const container = await createRequestContainer()
+  if (!container.hasRegistration('domainMappingService')) return null
+  const service = container.resolve('domainMappingService') as DomainMappingService
+  const resolved = await service.resolveByHostname(hostname)
+  if (!resolved || resolved.status !== 'active') return null
+  if ((resolved.target ?? 'portal') !== 'backend') return null
+  return {
+    hostname: resolved.hostname,
+    tenantId: resolved.tenantId,
+    organizationId: resolved.organizationId,
+  }
+})
 
 type DomainCacheService = {
   get: (key: string, options?: unknown) => Promise<unknown>
