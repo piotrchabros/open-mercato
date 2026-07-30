@@ -1,0 +1,162 @@
+---
+title: Per-organization backend domains
+description: Serve the admin panel on each organization's own hostname from a single instance.
+---
+
+# Per-organization backend domains
+
+Give each organization its own hostname for the **admin panel** — `crm.bespokesoft.pl`,
+`crm.staffinit.com`, `crm.bluebee.marketing` — all served by one instance. Operators sign in on
+their own branded domain and land directly in that organization.
+
+This extends the customer-portal custom-domain subsystem rather than duplicating it, so DNS
+verification, on-demand TLS and the admin UI are the ones you already know.
+
+:::warning Supported on self-hosted Docker Compose with the Traefik overlay only
+Railway registers a single domain per service, and the AWS playbook defers custom-domain ingress.
+The feature is off by default and **refuses to start** when enabled without a trusted-proxy
+declaration.
+:::
+
+## What the hostname actually decides
+
+Not just branding. On a bound host the hostname — not the organization switcher — determines which
+organization an operator acts on:
+
+- A stale `om_selected_org` cookie pointing at another organization is **discarded**. The hostname
+  wins.
+- A session belonging to a **different tenant** is refused with 403. Serving it the host's
+  organization would hand over data it has no claim to.
+- The organization switcher renders as a fixed indicator instead of a picker, and the
+  "all organizations" option disappears.
+
+The hostname can only ever *narrow* what a session already grants. It never grants access: a
+user without permission on the bound organization gets an empty scope, not a fallback to their own.
+
+## 1. Apply the migration
+
+The `target` column on `domain_mappings` is what separates a portal domain from a backend one.
+
+```bash
+yarn db:migrate
+```
+
+## 2. Configure the environment
+
+```bash
+# Required
+BACKEND_CUSTOM_DOMAINS_ENABLED=true
+TRUSTED_PROXY_CIDRS=10.0.0.0/8
+
+# The platform's own host(s) — comma-separated, hostname only
+PLATFORM_DOMAINS=openmercato.example
+
+# Where operators point their CNAME
+CUSTOM_DOMAIN_CNAME_TARGET=portal.openmercato.example
+
+# Secrets for the resolution + TLS-gate endpoints: openssl rand -hex 32
+DOMAIN_CHECK_SECRET=…
+DOMAIN_RESOLVE_SECRET=…
+INTERNAL_APP_ORIGIN=http://127.0.0.1:3000
+
+# So outbound email links follow the branded host — see the caveat below
+APP_ALLOWED_ORIGINS=https://crm.bespokesoft.pl,https://crm.staffinit.com
+```
+
+`TRUSTED_PROXY_CIDRS` is not optional. The request `Host` header decides the organization, and it
+is only trustworthy behind a proxy that overwrites it. The base compose file publishes the app
+directly on its port, where any client can send whatever `Host` it likes — so the app refuses to
+boot with the feature on and no proxy declared.
+
+### Two variables that must stay unset
+
+| Variable | Why the app refuses to start |
+|---|---|
+| `OM_SECURITY_WEBAUTHN_RP_ID` | Pinning the relying-party id to a shared parent domain so one passkey works everywhere makes **every** tenant host a valid relying party for **every** other tenant's passkey. Leave it unset; the id is derived per host and passkeys are enrolled per domain. |
+| `OM_ALLOW_FORCED_HOST` | The test-only `x-force-host` override lets any caller holding `FORCE_HOST_SECRET` name an arbitrary hostname — which becomes an organization-selection bypass once the hostname decides scope. |
+
+## 3. Start Traefik
+
+The overlay is opt-in; the base compose file does not load it.
+
+```bash
+docker compose -f docker-compose.fullapp.yml -f docker-compose.fullapp.traefik.yml up -d
+```
+
+No Traefik-side change is needed for backend domains. Its catch-all router already matches any
+hostname, and the ForwardAuth gate that authorises certificate issuance is target-agnostic — both
+portal and backend hostnames are eligible.
+
+## 4. Grant the permission
+
+Registering a backend domain sits behind its own ACL feature, separate from the portal one:
+it decides which organization operators act on, which is a higher privilege than pointing a
+storefront at a hostname.
+
+```
+customer_accounts.domain.manage_backend
+```
+
+Grant it, then sync:
+
+```bash
+yarn mercato auth sync-role-acls
+```
+
+The domain settings page itself still requires `customer_accounts.domain.manage`.
+
+## 5. Register the domain
+
+Go to **`/backend/customer_accounts/settings/domain`**, pick the organization, and register the
+hostname. Choose **“Admin panel (backend)”** in the target selector.
+
+The selector only appears when the feature flag is on *and* you hold
+`customer_accounts.domain.manage_backend`. If you cannot see it, one of those two is missing — both
+are re-checked server-side, so the selector's absence is a symptom, not the cause.
+
+## 6. Point DNS and verify
+
+Create a CNAME from your hostname to whatever `CUSTOM_DOMAIN_CNAME_TARGET` holds, then run the
+verification step in the panel. Verification is a real DNS lookup, not a TXT record.
+
+The mapping moves `pending → verified → active`, and TLS is issued automatically. **Only an
+`active` mapping binds the organization** — until then the hostname resolves to nothing and the
+admin panel is not served there.
+
+## Limits and consequences
+
+**One active backend domain per organization.** Enforced by a database constraint. An organization
+can still hold a second row while swapping domains with no downtime.
+
+The per-organization cap of two domains is counted **per target**, so a portal domain and a backend
+domain do not compete for the same slots.
+
+**Passkeys are per domain.** A passkey registered on one hostname does not work on another — that
+is how WebAuthn works, and the alternative is the cross-tenant hole described above. Users with a
+passkey arriving on a new domain enrol a new one; recovery codes cover the gap.
+
+**Sessions are per domain.** Cookies are host-only, so signing in on `crm.staffinit.com` does not
+sign you in on the platform host. That is intentional isolation, not a bug.
+
+**Email links need the host in `APP_ALLOWED_ORIGINS`.** Request-scoped senders — password reset,
+invitations, session refresh — resolve their base URL synchronously and read that static
+allowlist, so a hostname registered through the panel keeps producing platform-host links until you
+add it there and restart. The links work; they are just not branded. Queue and CLI senders resolve
+from the database and need no such step.
+
+## Verifying it works
+
+```bash
+# The platform host is unaffected
+curl -I https://openmercato.example/backend
+
+# The branded host serves the admin app, not the portal
+curl -I https://crm.staffinit.com/backend
+
+# A portal host refuses admin routes outright
+curl -I https://shop.acme.com/backend   # 404
+```
+
+Signing in on `crm.staffinit.com` should land in the Staffinit organization with the switcher
+showing it as fixed. If you still see a switcher with several organizations, the mapping is not
+`active` yet.

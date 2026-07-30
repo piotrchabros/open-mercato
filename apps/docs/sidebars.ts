@@ -67,7 +67,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Deployment",
-      items: ["deployment/railway"],
+      items: ["deployment/railway", "deployment/backend-custom-domains"],
     },
     {
       type: "category",
