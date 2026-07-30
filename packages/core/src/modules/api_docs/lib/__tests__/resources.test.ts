@@ -39,3 +39,24 @@ describe('resolveApiDocsBaseUrl', () => {
     expect(resolveApiDocsBaseUrl()).toBe('https://example.com/api')
   })
 })
+
+describe('resolveApiDocsBaseUrl without an configured app URL (#4271)', () => {
+  const ORIGINAL = { ...process.env }
+  afterEach(() => { process.env = { ...ORIGINAL } })
+
+  it('falls back to a relative base rather than a platform-host absolute URL', () => {
+    // An absolute URL built from APP_URL points at the platform host, so docs
+    // served on an organization's own domain would offer a "try it" base
+    // pointing elsewhere. Relative is correct on every host by construction.
+    delete process.env.NEXT_PUBLIC_API_BASE_URL
+    delete process.env.NEXT_PUBLIC_APP_URL
+    delete process.env.APP_URL
+    expect(resolveApiDocsBaseUrl()).toBe('/api')
+  })
+
+  it('still honours an explicit configured base', () => {
+    delete process.env.NEXT_PUBLIC_API_BASE_URL
+    process.env.APP_URL = 'https://app.example.com'
+    expect(resolveApiDocsBaseUrl()).toBe('https://app.example.com/api')
+  })
+})

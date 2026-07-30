@@ -13,6 +13,7 @@ import { resolveAttachmentAbsolutePath } from '../../attachments/lib/storage'
 import { generateAuthToken, hashAuthToken } from '../../auth/lib/tokenHash'
 import type { MessageEmailAttachment } from './attachments'
 import { createLogger } from '@open-mercato/shared/lib/logger'
+import { urlForOrgBackend } from '@open-mercato/core/modules/customer_accounts/lib/backendUrl'
 
 const logger = createLogger('messages').child({ component: 'email-sender' })
 
@@ -171,9 +172,15 @@ export async function sendMessageEmailToRecipient(params: {
 }): Promise<void> {
   const { em, message, recipientUserId, recipientEmail, sender, objects, attachments } = params
   const token = await createMessageAccessToken(em, message.id, recipientUserId)
+  // Runs in the messages email queue worker, so there is no request Host to
+  // derive the organization from — hence the orgId lookup (#4271). Falls back
+  // to APP_URL when the organization has no backend domain.
+  const organizationId = (message as { organizationId?: string | null }).organizationId ?? null
   const appUrl = resolveAppUrl()
-  const viewUrl = appUrl ? `${appUrl}/messages/view/${token}` : null
-  if (!appUrl) {
+  const viewUrl = appUrl || organizationId
+    ? await urlForOrgBackend(organizationId, `/messages/view/${token}`)
+    : null
+  if (!viewUrl) {
     logDebug('APP_URL missing - email link omitted', { messageId: message.id })
   }
   const copy = await buildEmailCopy(message.sentAt ?? new Date())

@@ -248,3 +248,38 @@ describe('toAbsoluteUrl', () => {
     expect(toAbsoluteUrl(req, '/reset/token123')).toBe('https://app.example.com/reset/token123')
   })
 })
+
+describe('getSecurityEmailBaseUrl host awareness (#4271)', () => {
+  const BASE_ENV = {
+    APP_URL: 'https://app.example.com',
+    APP_ALLOWED_ORIGINS: 'https://crm.acme.com',
+  } as unknown as NodeJS.ProcessEnv
+
+  function req(origin: string): Request {
+    return new Request(`${origin}/api/auth/session/refresh`, { headers: { host: new URL(origin).host } })
+  }
+
+  it('keeps returning APP_URL when the feature is off', () => {
+    // Byte-identical behavior for every deployment without backend custom
+    // domains, including operators who allowlisted a staging origin.
+    expect(getSecurityEmailBaseUrl(req('https://crm.acme.com'), BASE_ENV)).toBe('https://app.example.com')
+  })
+
+  it('returns the request origin when it is allowlisted and the feature is on', () => {
+    // This is what stops a session refresh on a branded domain bouncing the
+    // operator back to the platform host.
+    const env = { ...BASE_ENV, BACKEND_CUSTOM_DOMAINS_ENABLED: '1' } as unknown as NodeJS.ProcessEnv
+    expect(getSecurityEmailBaseUrl(req('https://crm.acme.com'), env)).toBe('https://crm.acme.com')
+  })
+
+  it('still returns APP_URL for a request on the platform host', () => {
+    const env = { ...BASE_ENV, BACKEND_CUSTOM_DOMAINS_ENABLED: '1' } as unknown as NodeJS.ProcessEnv
+    expect(getSecurityEmailBaseUrl(req('https://app.example.com'), env)).toBe('https://app.example.com')
+  })
+
+  it('rejects a non-allowlisted origin instead of echoing it back', () => {
+    // A spoofed Host must never become an email link target.
+    const env = { ...BASE_ENV, BACKEND_CUSTOM_DOMAINS_ENABLED: '1' } as unknown as NodeJS.ProcessEnv
+    expect(() => getSecurityEmailBaseUrl(req('https://evil.example'), env)).toThrow()
+  })
+})

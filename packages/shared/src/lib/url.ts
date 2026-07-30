@@ -1,4 +1,5 @@
 import { createLogger } from './logger'
+import { parseBooleanWithDefault } from './boolean'
 
 const logger = createLogger('shared').child({ component: 'origin-check' })
 
@@ -249,6 +250,26 @@ export function toAbsoluteUrl(req: Request, path: string): string {
   return new URL(path, getAppBaseUrl(req)).toString()
 }
 
+/**
+ * The origin this request actually arrived on, but only when it is explicitly
+ * allowlisted (#4271).
+ *
+ * Never trusts a header on its own: the value must already appear in
+ * APP_URL / NEXT_PUBLIC_APP_URL / APP_ALLOWED_ORIGINS, so an operator has
+ * declared it. A spoofed Host cannot reach this — `assertAllowedAppOrigin`
+ * throws on such a request before we get here.
+ */
+function readAllowlistedRequestOrigin(input: RequestInput, env: EnvLike): string | null {
+  const allowedOrigins = readAllowedOrigins(env)
+  if (allowedOrigins.size === 0) return null
+  const { urlOrigin, headerOrigins } = readRequestOriginCandidates(input)
+  for (const origin of headerOrigins) {
+    if (allowedOrigins.has(origin)) return origin
+  }
+  if (urlOrigin && allowedOrigins.has(urlOrigin)) return urlOrigin
+  return null
+}
+
 export function getSecurityEmailBaseUrl(input?: RequestInput, env: EnvLike = process.env): string {
   const configuredAppUrl = normalizeBaseUrl(env.APP_URL)
   if (!configuredAppUrl) {
@@ -259,6 +280,19 @@ export function getSecurityEmailBaseUrl(input?: RequestInput, env: EnvLike = pro
   }
 
   assertAllowedAppOrigin(input, env)
+
+  // #4271: this function used to discard the request host and always return
+  // APP_URL, which is why a session refresh on an organization's own domain
+  // bounced the operator back to the platform host mid-session.
+  //
+  // Gated on the feature flag so every deployment without backend custom
+  // domains keeps byte-identical behavior — operators who added a staging
+  // origin to APP_ALLOWED_ORIGINS do not suddenly get emails linking there.
+  if (parseBooleanWithDefault(env.BACKEND_CUSTOM_DOMAINS_ENABLED, false)) {
+    const requestOrigin = readAllowlistedRequestOrigin(input, env)
+    if (requestOrigin) return requestOrigin
+  }
+
   return configuredAppUrl
 }
 

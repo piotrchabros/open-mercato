@@ -60,10 +60,14 @@ export function resolveApiDocsBaseUrl(): string {
     return apiOverride
   }
 
-  const appBase =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.APP_URL ||
-    'http://localhost:3000'
+  const appBase = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL
+  if (appBase) return appendApiSegment(appBase)
 
-  return appendApiSegment(appBase)
+  // Relative by default (#4271). An absolute URL built from APP_URL points at
+  // the platform host, so the docs on an organization's own domain would offer
+  // a "try it" base pointing somewhere else. A relative base is correct on
+  // every host by construction, and unlike the org-aware URL helpers it needs
+  // no request context — which matters because this is also called from
+  // build-time and static render paths that have none.
+  return '/api'
 }
