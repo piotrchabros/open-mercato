@@ -1,0 +1,8 @@
+{
+  "runtimefloor": {
+    "secretAllow": [
+      "apps/mercato/.env.example",
+      "packages/create-app/template/.env.example"
+    ]
+  }
+}
