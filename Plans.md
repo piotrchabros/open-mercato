@@ -126,6 +126,25 @@ Not observed ≠ absent. These are unverified, not established as false:
 
 ## Phase 3: Backend-scoped domains + host-bound org clamp (the feature)
 
+> **3.4 design finding (2026-07-30), read before starting.** `applySuperAdminScope` lives in
+> `packages/shared/src/lib/auth/server.ts`, which **cannot import** `customer_accounts`'s
+> `domainMappingService` — `shared → core` is a forbidden dependency direction. The host→organization
+> binding must therefore be *injected into* shared through a dependency-inversion seam (the structural
+> -type-from-container pattern `customer_accounts/lib/resolveTenantContext.ts:22` already uses), not
+> resolved inside it. That makes Q1 (`hostBinding` as a first-class `AuthContext` field vs per-layer
+> patching) a blocking design decision rather than a preference.
+>
+> Second constraint: `applySuperAdminScope` returns an `AuthContext`, so it cannot itself produce the
+> 403 that Q2 calls for. The denial has to travel as a new `AuthResolutionStatus`
+> (`server.ts:31`, currently `'authenticated' | 'missing' | 'invalid' | 'error'`) that the three call
+> sites (`:305`, `:346`, `:373`) and their consumers map to a response. That is an additive change to
+> a type returned by two exported functions — check consumers before widening it.
+>
+> `resolveAuthFromCookiesDetailed()` takes no arguments but already reads `next/headers` for cookies
+> (`:302-303`), so it can read the Host the same way; the request-path resolver already holds the
+> `Request`. Plumbing is therefore tractable — the dependency direction is the real work.
+
+
 | Task | 内容 | DoD | Depends | Status |
 |------|------|-----|---------|--------|
 | 3.1 | `[lane:gate][tdd:required]` Additive `target: 'portal' \| 'backend'` NOT NULL DEFAULT `'portal'` on `DomainMapping` (`customer_accounts/data/entities.ts:319`). Make `resolveByHostname` (`:162`), `isAllowedForTls` (`:183`) and `resolveActiveByOrg` (`:195`) target-aware. Add the partial unique `(organization_id) WHERE target='backend' AND status='active'` — `resolveActiveByOrg` currently does `findOne` with **no uniqueness guarantee**, so without this it can return a backend host to a portal email builder | Migration + `migrations/.snapshot-open-mercato.json` updated via `yarn db:generate` (unrelated generator output deleted per `AGENTS.md:241`); existing rows backfilled to `'portal'`; `yarn db:generate` re-reports no changes for the module; unit tests assert a portal query never returns a backend row and vice versa; `yarn db:migrate` **not** run | 1.1 | cc:完了 [05e3bbf1e] |
