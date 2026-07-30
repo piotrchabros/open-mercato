@@ -17,8 +17,12 @@ import {
   type ResolveResult,
 } from '@open-mercato/core/modules/customer_accounts/services/domainMappingService'
 import { DomainMapping } from '@open-mercato/core/modules/customer_accounts/data/entities'
+import { backendCustomDomainsUsable } from '@open-mercato/core/modules/customer_accounts/lib/backendCustomDomains'
 
 const FEATURE = 'customer_accounts.domain.manage'
+// A backend domain decides which organization an operator acts on, so it is a
+// strictly higher privilege than pointing a storefront at a hostname (#4271).
+const BACKEND_FEATURE = 'customer_accounts.domain.manage_backend'
 
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: [FEATURE] },
@@ -107,6 +111,24 @@ export async function POST(req: Request) {
     )
   }
 
+  const requestedTarget = parsed.data.target ?? 'portal'
+  if (requestedTarget === 'backend') {
+    // Two independent gates. The flag alone is a deployment-level switch; the
+    // feature alone would let any portal-domain manager silently redirect the
+    // admin panel of an organization they administer.
+    if (!backendCustomDomainsUsable()) {
+      return NextResponse.json(
+        { ok: false, error: 'Backend custom domains are not enabled on this deployment' },
+        { status: 400 },
+      )
+    }
+    const backendAllowed = await rbac.userHasAllFeatures(auth.sub, [BACKEND_FEATURE], {
+      tenantId: auth.tenantId,
+      organizationId: auth.orgId,
+    })
+    if (!backendAllowed) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
+  }
+
   const guardResult = await validateCrudMutationGuard(container, {
     tenantId: auth.tenantId,
     organizationId: parsed.data.organizationId,
@@ -134,6 +156,7 @@ export async function POST(req: Request) {
       organizationId: parsed.data.organizationId,
       tenantId: auth.tenantId,
       replacesDomainId: parsed.data.replacesDomainId,
+      target: requestedTarget,
     })
   } catch (err: unknown) {
     if (isUniqueViolation(err)) {

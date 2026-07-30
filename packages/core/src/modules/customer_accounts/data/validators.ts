@@ -147,6 +147,7 @@ export const hostnameSchema = z
   })
 
 export const registerDomainSchema = z.object({
+  target: z.enum(['portal', 'backend']).optional(),
   hostname: hostnameSchema,
   organizationId: z.string().uuid(),
   replacesDomainId: z.string().uuid().optional(),

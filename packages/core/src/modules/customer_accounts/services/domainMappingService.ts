@@ -50,6 +50,7 @@ export type RegisterInput = {
   organizationId: string
   tenantId: string
   replacesDomainId?: string
+  target?: DomainTarget
 }
 
 type CacheService = {
@@ -320,6 +321,7 @@ export class DomainMappingService {
       replacesDomain: replacesDomain ?? null,
       provider: 'traefik',
       status: 'pending',
+      target: input.target ?? 'portal',
       tlsRetryCount: 0,
       createdAt: new Date(),
     } as never)
