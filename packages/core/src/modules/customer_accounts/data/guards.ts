@@ -1,6 +1,8 @@
+import type { EntityManager } from '@mikro-orm/postgresql'
 import type { MutationGuard } from '@open-mercato/shared/lib/crud/mutation-guard-registry'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { tryNormalizeHostname } from '@open-mercato/core/modules/customer_accounts/lib/hostname'
+import { DomainMapping } from '@open-mercato/core/modules/customer_accounts/data/entities'
 import type { DomainMappingService } from '@open-mercato/core/modules/customer_accounts/services/domainMappingService'
 
 const DOMAIN_MAPPING_ENTITY = 'customer_accounts.domain_mapping'
@@ -57,14 +59,19 @@ const hostnameUniqueGuard: MutationGuard = {
     if (!hostname) return { ok: true }
 
     const container = await createRequestContainer()
-    let service: DomainMappingService | null = null
+    let em: EntityManager | null = null
     try {
-      service = container.resolve('domainMappingService') as DomainMappingService
+      em = container.resolve('em') as EntityManager
     } catch {
       return { ok: true }
     }
 
-    const existing = await service.resolveByHostname(hostname)
+    // Status-agnostic lookup: unlike DomainMappingService#resolveByHostname
+    // (which only matches status: 'active' for routing hot-path lookups),
+    // this guard must catch collisions with mappings in ANY status —
+    // otherwise a pending/verified/dns_failed/tls_failed row would sail
+    // through this guard and hit the DB's global unique index as a bare 500.
+    const existing = await em.findOne(DomainMapping, { hostname })
     if (!existing) return { ok: true }
 
     // Intentionally tenant-agnostic message: do not disclose whether the

@@ -27,8 +27,13 @@ type MockDomainService = {
   findById: jest.Mock
 }
 
+type MockEntityManager = {
+  findOne: jest.Mock
+}
+
 const records: DomainRecord[] = []
 let mockService: MockDomainService
+let mockEm: MockEntityManager
 
 function resetMockService() {
   records.length = 0
@@ -55,12 +60,27 @@ function resetMockService() {
       return found
     }),
   }
+  // Status-agnostic stand-in for the entity manager the hostname-unique
+  // guard resolves directly (bypassing the active-only
+  // DomainMappingService#resolveByHostname) to catch collisions with
+  // mappings in ANY status.
+  mockEm = {
+    findOne: jest.fn(async (_entity: unknown, where: { hostname: string }) => {
+      const found = records.find((r) => r.hostname === where.hostname)
+      return found ?? null
+    }),
+  }
 }
+
+jest.mock('@open-mercato/core/modules/customer_accounts/data/entities', () => ({
+  DomainMapping: class DomainMapping {},
+}))
 
 jest.mock('@open-mercato/shared/lib/di/container', () => ({
   createRequestContainer: jest.fn(async () => ({
     resolve: (name: string) => {
       if (name === 'domainMappingService') return mockService
+      if (name === 'em') return mockEm
       throw new Error(`unknown service: ${name}`)
     },
   })),
@@ -248,11 +268,13 @@ describe('hostnameUnique guard', () => {
     expect(result).toMatchObject({ ok: false, status: 409 })
   })
 
-  it('does NOT block when only a non-active mapping (verified/pending) holds the hostname', async () => {
-    // Only active mappings should be considered "in use" by the unique guard's
-    // resolveByHostname call (which is active-only). A verified mapping by
-    // another tenant should not block — the unique constraint is enforced at
-    // the DB level for full uniqueness anyway.
+  it('blocks cross-tenant when a non-active mapping (verified) holds the hostname', async () => {
+    // The guard performs a status-agnostic lookup (not the active-only
+    // DomainMappingService#resolveByHostname), because the DB unique index
+    // on `hostname` rejects duplicates in ANY status — a mapping stuck in
+    // pending/verified/dns_failed/tls_failed still occupies the hostname
+    // and must be caught here with the deliberate 409, not surfaced as an
+    // opaque insert failure.
     records.push({
       id: 'verified-by-other',
       hostname: 'shop.example.com',
@@ -268,7 +290,34 @@ describe('hostnameUnique guard', () => {
         mutationPayload: { hostname: 'shop.example.com', organizationId: ORG_A },
       }),
     )
-    expect(result.ok).toBe(true)
+    expect(result).toMatchObject({ ok: false, status: 409 })
+    expect(result.message).toMatch(/not available/i)
+  })
+
+  it('blocks cross-tenant when a dns_failed mapping holds the hostname', async () => {
+    // A hostname stuck in dns_failed (e.g. the claimant never finished DNS
+    // verification) is still invisible to the active-only resolveByHostname
+    // path, so this guard must independently detect it to avoid the DB
+    // unique index rejecting the insert as an unhandled 500.
+    records.push({
+      id: 'dns-failed-by-other',
+      hostname: 'shop.example.com',
+      tenantId: TENANT_B,
+      organizationId: ORG_B,
+      status: 'dns_failed',
+    })
+
+    const result = await guard().validate(
+      makeInput({
+        operation: 'create',
+        tenantId: TENANT_A,
+        mutationPayload: { hostname: 'shop.example.com', organizationId: ORG_A },
+      }),
+    )
+    expect(result).toMatchObject({ ok: false, status: 409 })
+    // Same tenant-agnostic message as the active-status collision case —
+    // must not disclose the incumbent's status or tenant.
+    expect(result.message).toMatch(/not available/i)
   })
 })
 
