@@ -245,6 +245,22 @@ async function hostBindingFor(rawHost: string | null | undefined): Promise<HostB
 }
 
 /**
+ * Host of the incoming request, for binding purposes.
+ *
+ * Prefers `x-forwarded-host`, matching the server-component path below. The two
+ * MUST agree: a page render and the API calls it makes have to bind to the same
+ * organization, or a page would render for one org and its data calls resolve
+ * against another.
+ *
+ * Trusting a forwarded header is only sound behind a proxy that overwrites it,
+ * which is exactly what TRUSTED_PROXY_CIDRS asserts and what
+ * BACKEND_CUSTOM_DOMAINS_ENABLED refuses to start without.
+ */
+function readRequestHost(req: Request): string | null {
+  return req.headers.get('x-forwarded-host') ?? req.headers.get('host')
+}
+
+/**
  * Host for the server-component path, which has no Request object.
  * Returns null outside a request scope (build-time render, tests) so the
  * binding simply does not apply.
@@ -453,7 +469,7 @@ export async function resolveAuthFromRequestDetailed(req: Request): Promise<Auth
       if (payload) {
         const canonicalAuth = await resolveCanonicalInteractiveAuthContext(payload)
         if (canonicalAuth) {
-          const outcome = await hostBindingFor(req.headers.get('host'))
+          const outcome = await hostBindingFor(readRequestHost(req))
           if (outcome.kind === 'unavailable') return { auth: null, status: 'host_binding_unavailable' }
           const scoped = applySuperAdminScope(
             canonicalAuth,
@@ -486,7 +502,7 @@ export async function resolveAuthFromRequestDetailed(req: Request): Promise<Auth
   if (!apiAuth) {
     return { auth: null, status: resolveUnauthenticatedStatus() }
   }
-  const apiOutcome = await hostBindingFor(req.headers.get('host'))
+  const apiOutcome = await hostBindingFor(readRequestHost(req))
   if (apiOutcome.kind === 'unavailable') return { auth: null, status: 'host_binding_unavailable' }
   const scopedApiAuth = applySuperAdminScope(
     apiAuth,
