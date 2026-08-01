@@ -6,12 +6,19 @@ import { Organization } from '@open-mercato/core/modules/directory/data/entities
 import { computeHierarchyForOrganizations, type ComputedHierarchy } from '@open-mercato/core/modules/directory/lib/hierarchy'
 import { isAllOrganizationsSelection } from '@open-mercato/core/modules/directory/constants'
 import {
+  buildOrgScopeTenantCacheTag,
   getSelectedOrganizationFromRequest,
   getSelectedTenantFromRequest,
   resolveOrganizationScope,
 } from '@open-mercato/core/modules/directory/utils/organizationScope'
+import { runWithCacheTenant, type CacheStrategy } from '@open-mercato/cache'
 import type { OpenApiMethodDoc, OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
-import { directoryTag, directoryErrorSchema, organizationSwitcherResponseSchema } from '../openapi'
+import {
+  directoryTag,
+  directoryErrorSchema,
+  directoryIdSchema,
+  organizationSwitcherResponseSchema,
+} from '../openapi'
 import { Tenant } from '@open-mercato/core/modules/directory/data/entities'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import type { RbacService } from '@open-mercato/core/modules/auth/services/rbacService'
@@ -19,6 +26,21 @@ import type { FilterQuery } from '@mikro-orm/core'
 import { createLogger } from '@open-mercato/shared/lib/logger'
 
 const logger = createLogger('directory').child({ component: 'organization-switcher' })
+const ORGANIZATION_SWITCHER_CACHE_TTL_MS = 60_000
+const organizationSwitcherCachePayloadSchema = organizationSwitcherResponseSchema.or(
+  organizationSwitcherResponseSchema.pick({
+    items: true,
+    selectedId: true,
+    canManage: true,
+  }),
+)
+
+function buildSelectionCacheKeyPart(rawSelected: string | null): string | null {
+  if (isAllOrganizationsSelection(rawSelected)) return 'mode:all'
+  if (rawSelected === null) return 'mode:none'
+  const parsedOrganizationId = directoryIdSchema.safeParse(rawSelected)
+  return parsedOrganizationId.success ? `org:${parsedOrganizationId.data.toLowerCase()}` : null
+}
 
 type OrganizationMenuNode = {
   id: string
@@ -174,6 +196,61 @@ export async function GET(req: NextRequest) {
       })
     }
 
+    const rawSelected = getSelectedOrganizationFromRequest(req)
+    const requestedAll = isAllOrganizationsSelection(rawSelected)
+    const selectedKeyPart = buildSelectionCacheKeyPart(rawSelected)
+    const cacheKey = selectedKeyPart
+      ? `org-switcher:v1:${auth.sub}:${tenantId}:${selectedKeyPart}`
+      : null
+    let cache: CacheStrategy | null = null
+    if (!actorIsSuperAdmin && cacheKey) {
+      try {
+        cache = container.resolve<CacheStrategy>('cache')
+      } catch {
+        cache = null
+      }
+    }
+
+    const hostBinding = (auth as { hostBinding?: { organizationId: string } | null }).hostBinding ?? null
+
+    const logAccess = async (payload: { items: unknown[]; selectedId: string | null }) => {
+      await logCrudAccess({
+        container,
+        auth,
+        request: req,
+        items: payload.items,
+        idField: 'id',
+        resourceKind: 'directory.organization_switcher',
+        organizationId: payload.selectedId,
+        tenantId,
+        query: Object.fromEntries(url.searchParams.entries()),
+      })
+    }
+
+    if (cache && cacheKey) {
+      const activeCache = cache
+      try {
+        const cached = await runWithCacheTenant(tenantId, () => activeCache.get(cacheKey))
+        const parsedCached = organizationSwitcherCachePayloadSchema.safeParse(cached)
+        if (parsedCached.success) {
+          const cachedPayload = 'canViewAllOrganizations' in parsedCached.data
+            ? {
+                ...parsedCached.data,
+                ...applyHostBoundSwitcherView({
+                  hostBinding,
+                  canViewAllOrganizations: parsedCached.data.canViewAllOrganizations,
+                  tenants: parsedCached.data.tenants,
+                }),
+              }
+            : parsedCached.data
+          await logAccess(cachedPayload)
+          return NextResponse.json(cachedPayload)
+        }
+      } catch (err) {
+        logger.warn('Failed to read organization switcher cache', { err })
+      }
+    }
+
     const scopedOrgId = actorTenantId && actorTenantId === tenantId ? auth.orgId ?? null : null
     const acl = await rbac.loadAcl(auth.sub, { tenantId, organizationId: scopedOrgId })
     const aclIsSuperAdmin = acl?.isSuperAdmin === true
@@ -196,9 +273,7 @@ export async function GET(req: NextRequest) {
       { orderBy: { name: 'ASC' } },
     )
     const hierarchy = computeHierarchyForOrganizations(orgEntities, tenantId)
-    const rawSelected = getSelectedOrganizationFromRequest(req)
     let hasSelectionCookie = rawSelected !== null
-    const requestedAll = isAllOrganizationsSelection(rawSelected)
     const scope = await resolveOrganizationScope({
       em,
       rbac,
@@ -226,41 +301,56 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Cached host-agnostic: `cacheKey` has no host component, so every read path
+    // must re-apply `applyHostBoundSwitcherView` rather than trust the stored shape.
     const showMenu = menuData.nodes.length > 0 || hasManageFeature || effectiveIsSuperAdmin
-    if (!showMenu) {
-      return NextResponse.json({ items: [], selectedId: null, canManage: false })
+    const response = showMenu
+      ? {
+          items: menuData.nodes,
+          selectedId,
+          canManage: !!hasManageFeature,
+          canViewAllOrganizations: accessible === null,
+          tenantId,
+          tenants: tenantRecords,
+          isSuperAdmin: effectiveIsSuperAdmin,
+        }
+      : {
+          items: [],
+          selectedId: null,
+          canManage: false,
+        }
+
+    if (cache && cacheKey) {
+      const activeCache = cache
+      try {
+        await runWithCacheTenant(tenantId, () =>
+          activeCache.set(cacheKey, response, {
+            ttl: ORGANIZATION_SWITCHER_CACHE_TTL_MS,
+            tags: [
+              buildOrgScopeTenantCacheTag(tenantId),
+              `rbac:user:${auth.sub}`,
+            ],
+          }),
+        )
+      } catch (err) {
+        logger.warn('Failed to write organization switcher cache', { err })
+      }
     }
 
-    const hostBoundView = applyHostBoundSwitcherView({
-      hostBinding: (auth as { hostBinding?: { organizationId: string } | null }).hostBinding ?? null,
-      canViewAllOrganizations: accessible === null,
-      tenants: tenantRecords,
-    })
+    const payload = showMenu
+      ? {
+          ...response,
+          ...applyHostBoundSwitcherView({
+            hostBinding,
+            canViewAllOrganizations: accessible === null,
+            tenants: tenantRecords,
+          }),
+        }
+      : response
 
-    const response = {
-      items: menuData.nodes,
-      selectedId,
-      canManage: !!hasManageFeature,
-      canViewAllOrganizations: hostBoundView.canViewAllOrganizations,
-      tenantId,
-      tenants: hostBoundView.tenants,
-      isSuperAdmin: effectiveIsSuperAdmin,
-      hostBoundOrganizationId: hostBoundView.hostBoundOrganizationId,
-    }
+    await logAccess(payload)
 
-    await logCrudAccess({
-      container,
-      auth,
-      request: req,
-      items: response.items,
-      idField: 'id',
-      resourceKind: 'directory.organization_switcher',
-      organizationId: response.selectedId,
-      tenantId,
-      query: Object.fromEntries(url.searchParams.entries()),
-    })
-
-    return NextResponse.json(response)
+    return NextResponse.json(payload)
   } catch (err) {
     logger.error('Failed to build organization switcher payload', { err })
     return NextResponse.json({ items: [], selectedId: null, canManage: false, tenantId: null, tenants: [], isSuperAdmin: false }, { status: 500 })
