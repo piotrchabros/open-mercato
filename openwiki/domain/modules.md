@@ -249,6 +249,20 @@ Default roles: Portal Admin (`portal.*`), Buyer, Viewer. Feature convention: `po
 - Error messages never confirm email existence
 - Rate limiting: dual (per-email + per-IP)
 
+### Custom Domain Lifecycle
+
+The `customer_accounts` module owns the `DomainMapping` entity (`data/entities.ts`), which resolves a hostname to `(tenantId, organizationId, orgSlug)` for both the customer portal and the admin panel. A `target: 'portal' | 'backend'` discriminator (added in #4271) separates the two: portal mappings rewrite the request to `/{orgSlug}/portal`, while backend mappings pass through unrewritten so `/backend` resolves normally.
+
+- **Status lifecycle:** `pending` → `verified` → `active`, with `dns_failed` and `tls_failed` failure states. Only `active` mappings bind or route.
+- **DNS verification:** CNAME-first, then A-record fallback, then reverse-resolve over HTTPS (handles apex and Cloudflare-proxied domains).
+- **TLS:** Traefik on-demand ACME (TLS-ALPN-01), gated by the app's `domain-check` endpoint (`ForwardAuth`).
+- **Cache:** In-process stale-while-revalidate host cache (`apps/mercato/src/lib/customDomainCache.ts`), warmed on startup via `domain-resolve/all`.
+- **Proxy:** `apps/mercato/src/proxy.ts` — platform host passes through; portal-target host rewrites to `/{orgSlug}/portal`; backend-target host passes through (when `backendCustomDomainsUsable()`); wrong-target path returns 404. The matcher excludes `/api/*` — API routes resolve the host themselves via `resolveRequestHostname`.
+- **ACL:** `customer_accounts.domain.manage` (portal) and `customer_accounts.domain.manage_backend` (admin, #4271) — the latter is a higher privilege because a backend domain decides which organization an operator acts on.
+- **Hostname uniqueness:** A global `UNIQUE` on `hostname` spans both targets (one hostname, one mapping). A partial unique index enforces one active backend domain per organization.
+
+See [architecture/overview.md → Host Binding Org-Scope Clamp](../architecture/overview.md#host-binding-org-scope-clamp) for how a backend-target mapping authoritatively narrows organization scope, and [operations/runbook.md → Per-Organization Backend Domains](../operations/runbook.md#per-organization-backend-domains) for deployment.
+
 ## Messages Module
 
 **Path:** `packages/core/src/modules/messages/`

@@ -175,6 +175,11 @@ Key env vars (see `apps/mercato/.env.example` for the full list):
 | `SELF_SERVICE_ONBOARDING_ENABLED` | Self-service tenant signup | `false` |
 | `DEMO_MODE` | Demo mode (affects seeding) | `true` |
 | `OM_LOG_LEVEL` | Logging level | — |
+| `BACKEND_CUSTOM_DOMAINS_ENABLED` | Serve the admin app on per-organization hostnames (#4271); off by default, hard-fails at boot without `TRUSTED_PROXY_CIDRS` | `false` |
+| `TRUSTED_PROXY_CIDRS` | Comma-separated CIDRs of reverse proxies allowed to set the `Host` header; required when backend custom domains are on | — |
+| `OM_ALLOW_FORCED_HOST` | Test-only `x-force-host` override; mutually exclusive with `BACKEND_CUSTOM_DOMAINS_ENABLED` | `false` |
+| `COOKIE_SECURE` | `Secure` attribute on session cookies; decoupled from `NODE_ENV` because the fullapp stack runs `development` | `true` |
+| `APP_ALLOWED_ORIGINS` | Comma-separated extra allowed origins; a backend domain must be listed here before request-scoped email links follow it | — |
 
 ### AI Model Overrides
 
@@ -228,9 +233,44 @@ Config: `railway.toml`
 yarn docker:up    # docker-compose.fullapp.yml
 ```
 
+### Traefik Overlay (Custom Domains)
+
+The base compose files do not include a reverse proxy. The opt-in Traefik overlay (`docker-compose.fullapp.traefik.yml`) terminates TLS for the platform domain and any verified custom hostname, gating certificate issuance through the app's `domain-check` endpoint via ForwardAuth. Use it when you need per-organization custom domains (portal or backend):
+
+```bash
+docker compose -f docker-compose.fullapp.yml -f docker-compose.fullapp.traefik.yml up -d
+```
+
+For dev, layer the dev overlay so ACME defaults to Let's Encrypt staging:
+
+```bash
+docker compose -f docker-compose.fullapp.dev.yml \
+  -f docker-compose.fullapp.traefik.yml \
+  -f docker-compose.fullapp.traefik.dev.yml up --build
+```
+
+Required Traefik env vars: `ACME_EMAIL`, `DOMAIN_CHECK_SECRET`, `DOMAIN_RESOLVE_SECRET`, `PLATFORM_PRIMARY_HOST`. See [`docker/traefik/README.md`](../../docker/traefik/README.md) for the full request flow and when to use the bundled Traefik vs an external proxy.
+
 ### VPS
 
 See [deployment guide](https://docs.openmercato.com/installation/vps).
+
+### Per-Organization Backend Domains
+
+Supported on self-hosted Docker Compose with the Traefik overlay only (Railway registers one domain per service; AWS defers custom-domain ingress). The feature is off by default and **refuses to start** when enabled without a trusted-proxy declaration.
+
+Each organization can bind its own hostname for the admin panel — `crm.staffinit.com` → organization "Staffinit" — on the same instance. This extends the existing portal custom-domain `DomainMapping` subsystem with a `target: 'portal' | 'backend'` discriminator rather than building a parallel one. On a bound host the hostname — not the organization switcher — determines which organization an operator acts on: a stale `om_selected_org` cookie is discarded, and a foreign-tenant session is refused with 403.
+
+Setup steps (full guide: [`apps/docs/docs/deployment/backend-custom-domains.mdx`](../../apps/docs/docs/deployment/backend-custom-domains.mdx)):
+
+1. `yarn db:migrate` — adds the `target` column to `domain_mappings`
+2. Set `BACKEND_CUSTOM_DOMAINS_ENABLED=true` and `TRUSTED_PROXY_CIDRS` (and list the host in `APP_ALLOWED_ORIGINS` so email links follow it)
+3. Start the Traefik overlay — no Traefik-side change is needed for backend domains
+4. Grant `customer_accounts.domain.manage_backend` and run `yarn mercato auth sync-role-acls`
+5. Register the domain at `/backend/customer_accounts/settings/domain`, choosing "Admin panel (backend)" as the target
+6. Point DNS (CNAME to `CUSTOM_DOMAIN_CNAME_TARGET`) and verify — only an `active` mapping binds the organization
+
+**One active backend domain per organization** (DB-enforced). Passkeys and sessions are per domain (host-only cookies). See [architecture/overview.md → Host Binding Org-Scope Clamp](../architecture/overview.md#host-binding-org-scope-clamp) for the authorization mechanism.
 
 ### Dev Container
 
