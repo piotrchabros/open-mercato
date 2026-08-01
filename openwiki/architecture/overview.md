@@ -145,8 +145,18 @@ Two-level tenancy model enforced on every business entity:
 
 - **Tenant selection:** `enforceTenantSelection()` — superadmins can operate cross-tenant
 - **Organization scope:** Resolved from cookies + RBAC, cached with tag-based invalidation
+- **Host binding org-scope clamp:** On a per-organization backend domain (#4271), the request `Host` authoritatively narrows organization scope — see below
 - **Trusted scope in events:** Comes from `emit(..., options)` or queued job options — never from payload fields
 - **AI Code Mode:** `ctx tenant/org scope` enforced on `api.request()` calls (see `scope-injection.ts` in ai-assistant)
+
+### Host Binding Org-Scope Clamp
+
+When `BACKEND_CUSTOM_DOMAINS_ENABLED` is on and a hostname resolves to an active `backend`-target `DomainMapping`, the hostname — not the `om_selected_org` / `om_selected_tenant` cookies — determines which organization an operator acts on. The cookies are client-set (`OrganizationSwitcher.tsx` writes `document.cookie`) and consumed by `applySuperAdminScope` before any scope resolver runs, so the clamp must be applied at two load-bearing layers:
+
+1. **`applySuperAdminScope`** (`packages/shared/src/lib/auth/server.ts`) — applies the host binding at all three auth call sites (cookie, token, API-key paths) before the cookie override is written to `auth.tenantId` / `auth.orgId`. A conflicting scope cookie is silently discarded (it narrows scope); a session belonging to a different tenant is refused with 403 (serving it the host's org would grant scope). The `AuthContext` gains a first-class `hostBinding` field so every consumer — including the ~102 request-less scope calls — can assert it.
+2. **`resolveOrganizationScopeForRequest`** (`packages/core/src/modules/directory/utils/organizationScope.ts`) — forces the mapping's org/tenant into `effectiveTenantId` and `normalizedSelectedId` before the cache key is built, and adds the bound org as an explicit cache-key component so a poisoned entry cannot be shared between a platform-host and a bound-host request. `__all__` on a bound host is a hard 4xx.
+
+The binding is registered into `packages/shared` at bootstrap by `customer_accounts/di.ts` (shared cannot import the module where `DomainMapping` lives). The host may only ever **narrow** the scope a session already grants, never widen it — a user without permission on the bound organization gets an empty scope, not a fallback. The feature is gated by `BACKEND_CUSTOM_DOMAINS_ENABLED` (default off) and hard-fails at boot without `TRUSTED_PROXY_CIDRS`, because the base compose stack exposes the app directly on its port where any client can forge a `Host` header. See [operations/runbook.md → Per-Organization Backend Domains](../operations/runbook.md#per-organization-backend-domains) for deployment.
 
 ### Recent Hardening (from git history)
 
