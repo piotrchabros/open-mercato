@@ -278,3 +278,67 @@ export default async function handler(job) { /* ... */ }
 ```bash
 yarn mercato <module> worker <queue-name> --concurrency=5
 ```
+
+## Scheduled Jobs
+
+Database-managed scheduling for recurring and delayed jobs, provided by the [`@open-mercato/scheduler`](https://github.com/open-mercato/open-mercato/tree/main/packages/scheduler) package (`packages/scheduler/`). It follows the standard module conventions and is enabled in `apps/mercato/src/modules.ts`.
+
+### Dual-Strategy Runtime
+
+The scheduler selects its runtime based on `QUEUE_STRATEGY` (resolved in `di.ts`), mirroring the [event bus](#event-bus) and [queue](#background-workers) strategy split:
+
+```mermaid
+flowchart TD
+    DB[(ScheduledJob rows)] --> Subscriber[ScheduledJobSubscriber]
+    Subscriber -->|QUEUE_STRATEGY=async| Bull[BullMQSchedulerService]
+    Subscriber -->|QUEUE_STRATEGY=local| Local[LocalSchedulerService]
+    Bull -->|repeatable jobs| Redis[(Redis)]
+    Local -->|polling| File[(.mercato/queue/)]
+    Bull --> Queue[Target queue worker]
+    Local --> Queue
+    Queue -->|fires job| Cmd[target_command or target_queue]
+```
+
+- **`QUEUE_STRATEGY=async` (production):** `BullMQSchedulerService` reconciles DB schedules into BullMQ repeatable jobs. A `ScheduledJobSubscriber` (MikroORM `EventSubscriber`) syncs any DB change (via commands, direct ORM, or admin UI) to BullMQ on flush. A cold-start sync (`syncAll()`) runs once per process via `setImmediate` to reconcile on boot.
+- **`QUEUE_STRATEGY=local` (development):** `LocalSchedulerService` uses simple polling — no Redis required. The subscriber and BullMQ sync are skipped entirely.
+
+### Schedule Model
+
+Each `ScheduledJob` row stores the full scheduling contract in the database (`scheduled_jobs` table):
+
+| Field | Values | Purpose |
+|-------|--------|---------|
+| `scheduleType` | `cron` \| `interval` | How the next run is computed |
+| `scheduleValue` | cron expression or interval string | The schedule itself |
+| `timezone` | IANA tz (default `UTC`) | Timezone for cron evaluation |
+| `targetType` | `queue` \| `command` | What the job dispatches |
+| `targetQueue` / `targetCommand` | queue name / command id | The dispatch target |
+| `targetPayload` | JSONB | Payload passed to the target |
+| `requireFeature` | feature id (optional) | RBAC gate evaluated at fire time |
+| `scopeType` | `system` \| `organization` \| `tenant` | Who owns the schedule |
+| `sourceType` | `user` \| `module` | Whether a user created it or a module registered it |
+| `isEnabled` | boolean | Soft enable/disable without deletion |
+
+Next-run computation: `nextRunCalculator` (`calculateNextRun` / `calculateNextRunForWrite` / `recalculateNextRun`) delegates to `cronParser` (built on the `cron-parser` library) or `intervalParser` depending on `scheduleType`.
+
+### Lifecycle Events
+
+The scheduler emits its own typed events (declared in `events.ts` via `createModuleEvents`):
+
+- `scheduler.job.started`
+- `scheduler.job.completed`
+- `scheduler.job.failed`
+- `scheduler.job.skipped`
+
+### Programmatic Registration
+
+Modules register their own schedules (sourceType `module`) through `SchedulerService.register(registration: ScheduleRegistration)` — an upsert by `id`. This is how module-defined recurring jobs are seeded alongside user-created schedules from the admin UI (sourceType `user`).
+
+### Guardrails
+
+- **Active schedule limit:** `enforceTenantActiveScheduleLimit` caps enabled schedules per tenant at 100 by default (`OM_SCHEDULER_MAX_ACTIVE_SCHEDULES_PER_TENANT`). Exceeding it raises `422` with a structured error.
+- **Scope consistency:** `SchedulerService.validateScope` and `validateTarget` enforce that `scopeType`/`organizationId`/`tenantId` and `targetType`/`targetQueue`/`targetCommand` are internally consistent before a write.
+- **Command pattern:** Schedule CRUD (`commands/jobs.ts`) goes through the shared command registry with undo/redo snapshots (`ScheduleSnapshot`) and organization scope enforcement (`ensureOrganizationScope`), consistent with the [command pattern](#command-pattern-write-operations) used across the codebase.
+- **Feature gating:** `requireFeature` on a schedule is checked at fire time so disabled features never enqueue work.
+
+Reference: `packages/scheduler/src/modules/scheduler/` — `di.ts`, `services/`, `lib/`, `commands/jobs.ts`, `data/entities.ts`.

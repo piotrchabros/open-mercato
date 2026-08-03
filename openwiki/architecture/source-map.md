@@ -81,6 +81,16 @@ Tenant-scoped caching:
 - `CACHE_MEMORY_MAX_ENTRIES` env (default 50000)
 - Cache invalidation fires post-commit (after `withAtomicFlush`)
 
+### `packages/scheduler/` — `@open-mercato/scheduler`
+Database-managed scheduled jobs with admin UI. A standalone module package (not under `packages/core/`), enabled in `apps/mercato/src/modules.ts` via `{ id: 'scheduler', from: '@open-mercato/scheduler' }`. It depends on `@open-mercato/queue` and `@open-mercato/shared` and follows the standard module conventions (entities, events, acl, di, setup, commands, migrations, integration tests). See [workflows/key-workflows.md](../workflows/key-workflows.md) → Scheduled Jobs for the dual-strategy runtime model.
+- `src/modules/scheduler/data/entities.ts` — `ScheduledJob` entity (cron/interval, queue/command targets, scope, next-run tracking)
+- `src/modules/scheduler/services/` — `SchedulerService` (register/upsert), `BullMQSchedulerService`, `LocalSchedulerService`
+- `src/modules/scheduler/lib/` — `cronParser`, `intervalParser`, `nextRunCalculator`, `activeScheduleLimits`, `scheduledJobSubscriber`, `queueTargetPayload`
+- `src/modules/scheduler/commands/jobs.ts` — command-pattern CRUD with undo/redo snapshots and organization scope enforcement
+
+### `packages/eslint-plugin-ds/` — `@open-mercato/eslint-plugin-ds`
+Private structural ESLint plugin enforcing the Open Mercato design system. Six rules, all at `warn` during rollout: `require-empty-state`, `require-page-wrapper`, `no-raw-table`, `require-loading-state`, `require-status-badge`, `no-hardcoded-status-colors`. Wired by `eslint.ds.config.mjs` and invoked via `yarn lint:ds` against `packages/core/src/modules`, `packages/enterprise/src/modules`, and `packages/ui/src/backend`. Severity escalates per-rule to `error` once the corresponding design-system health metric allows it.
+
 ### `packages/cli/` — `@open-mercato/cli`
 Code generators and CLI tooling:
 - `yarn generate` → AST-based module discovery → ~20 generated registries

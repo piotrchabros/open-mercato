@@ -30,7 +30,9 @@ This wiki is a practical map for engineers and AI agents working in this reposit
 | **Events** | `packages/events/` | Event bus (ephemeral + persistent), DOM Event Bridge (SSE), cross-process PG LISTEN/NOTIFY. |
 | **Queue** | `packages/queue/` | Background job workers (local file-based or BullMQ/Redis). |
 | **Cache** | `packages/cache/` | Tenant-scoped cache (memory, SQLite, Redis) with tag-based invalidation. |
+| **Scheduler** | `packages/scheduler/` | Database-managed scheduled jobs (cron/interval) with admin UI; BullMQ or local polling strategy. |
 | **CLI** | `packages/cli/` | Generators (`yarn generate`), migrations, module scaffolding, build tooling. |
+| **DS Lint** | `packages/eslint-plugin-ds/` | Structural ESLint rules enforcing the design system (empty states, page wrappers, raw tables, loading states, status badges, hardcoded status colors). |
 | **Integrations** | `packages/gateway-stripe/`, `channel-gmail/`, `channel-imap/`, `storage-s3/`, `sync-akeneo/`, `checkout/`, `webhooks/` | Provider packages for payments, email, storage, PIM sync, and webhooks. |
 | **Enterprise** | `packages/enterprise/` | Commercial proprietary modules — **no external PRs accepted**. |
 | **Onboarding** | `packages/onboarding/` | Setup wizards, tenant provisioning hooks. |
@@ -107,7 +109,6 @@ Runner selection: if Docker compose is running, use `node scripts/docker-exec.mj
 | Area | Source anchor | Reason deferred |
 |------|--------------|-----------------|
 | Enterprise modules | `packages/enterprise/` | Commercial/proprietary — not documented here; see `packages/enterprise/README.md` |
-| Scheduler package | `packages/scheduler/` | Not yet inspected in detail |
 | Data sync module | `packages/core/src/modules/data_sync/` | Partially covered; full data sync workflow deferred |
 | Portal module | `packages/core/src/modules/portal/` | Portal extension documented in UI AGENTS.md; not yet synthesized |
 | Design system | `.ai/ds-rules.md`, `.ai/ui-components.md` | Large topic; deserves dedicated page in future update |
