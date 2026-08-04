@@ -126,32 +126,33 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'webhooks', from: '@open-mercato/webhooks' },
   { id: 'customer_accounts', from: '@open-mercato/core' },
   { id: 'portal', from: '@open-mercato/core' },
-  {
-    id: 'example',
-    from: '@app',
-    overrides: {
-      acl: {
-        features: { 'example.manage': null },
-      },
-      // Keep the real-bootstrap nav override probe isolated from normal app behavior. The integration
-      // runner sets OM_INTEGRATION_TEST, while development and production keep Example at the tail.
-      nav: parseBooleanWithDefault(process.env.OM_INTEGRATION_TEST, false)
-        ? { groupOrder: ['example.nav.group'] }
-        : undefined,
-      routes: {
-        api: {
-          'GET /api/example/override-probe': {
-            handler: async () => Response.json({
-              ok: true,
-              source: 'modules.ts override',
-              route: 'example.override-probe',
-            }),
-            metadata: { requireAuth: false },
-          },
-        },
-      },
-    },
-  },
+  // Example module disabled: re-enable by uncommenting this entry.
+  // {
+  //   id: 'example',
+  //   from: '@app',
+  //   overrides: {
+  //     acl: {
+  //       features: { 'example.manage': null },
+  //     },
+  //     // Keep the real-bootstrap nav override probe isolated from normal app behavior. The integration
+  //     // runner sets OM_INTEGRATION_TEST, while development and production keep Example at the tail.
+  //     nav: parseBooleanWithDefault(process.env.OM_INTEGRATION_TEST, false)
+  //       ? { groupOrder: ['example.nav.group'] }
+  //       : undefined,
+  //     routes: {
+  //       api: {
+  //         'GET /api/example/override-probe': {
+  //           handler: async () => Response.json({
+  //             ok: true,
+  //             source: 'modules.ts override',
+  //             route: 'example.override-probe',
+  //           }),
+  //           metadata: { requireAuth: false },
+  //         },
+  //       },
+  //     },
+  //   },
+  // },
   { id: 'ratelimit_probe', from: '@app' },
 ]
 
