@@ -61,6 +61,7 @@ Opt-in: `yarn install-skills --with automation`
 | `om-close-fixed-issues` | Close linked issues after merge, comment on abandoned PRs | `om-merge-buddy` | `om-auto-update-changelog` |
 | `om-auto-update-changelog` | Draft CHANGELOG.md release entry for merged PRs | after merge | — |
 | `om-auto-qa-scenarios` | Generate human QA report (P0/P1/P2 routes) for merged PRs | `om-implement-spec` | — |
+| `om-pr-autopilot` | Diagnose one open PR and dispatch the right chain of `om-*` skills to drive it to the end | — | `om-auto-continue-pr`, `om-auto-fix-pr` |
 
 ---
 
@@ -82,6 +83,7 @@ Opt-in: `yarn install-skills --with migration` — install only when needed.
 | Skill | Trigger phrase / When to use | Preceded by | Followed by |
 |-------|------------------------------|-------------|-------------|
 | `om-auto-upgrade-0.4.10-to-0.5.0` | Migrate downstream codebase from Open Mercato 0.4.10 → 0.5.0 | — | — |
+| `om-auto-upgrade-0.6.6-to-0.6.7` | Migrate downstream codebase from Open Mercato 0.6.6 → 0.6.7 | — | — |
 
 ---
 

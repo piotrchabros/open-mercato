@@ -15,6 +15,21 @@ function readPackage(relativePath: string): string {
   return fs.readFileSync(path.join(packagesRoot, relativePath), 'utf8')
 }
 
+test('standalone lessons use a tagged progressive catalog and one focused record', () => {
+  const rootInstructions = readAgentic('shared/AGENTS.md.template')
+  const index = readAgentic('shared/ai/lessons.md')
+  const evolutionSkill = readAgentic('shared/ai/skills/om-evolve-harness/SKILL.md')
+
+  assert.match(rootInstructions, /Lessons: scan `\.ai\/lessons\.md` tags/)
+  assert.match(rootInstructions, /open\/update one matching record \+ row/)
+  assert.match(index, /catalog indexes 0 focused lessons/)
+  assert.match(index, /architecture.*module-data.*umes.*backend-ui.*integration.*ai-workflow.*debugging.*testing.*framework-context.*spec-pr/s)
+  assert.match(index, /Copy `\.ai\/lessons\/_template\.md` to one focused/)
+  assert.match(index, /node scripts\/check-lessons\.mjs/)
+  assert.match(evolutionSkill, /Open only matching records/)
+  assert.match(evolutionSkill, /update one focused lesson record and its index row/)
+})
+
 test('standalone module contracts require structured runtime logging without banning script output', () => {
   const contracts = readAgentic('guides/contracts.md')
   assert.match(contracts, /createLogger\('<module>'\)/)
@@ -293,6 +308,8 @@ test('standalone review flow enforces the customers-derived module and design-sy
   assert.match(autoReview, /design-system/)
 
   const generatedPolicy = readAgentic('shared/ai/harness/generated-code-review-policy.md')
+  assert.match(generatedPolicy, /om-judge-agent-session/)
+  assert.match(generatedPolicy, /smallest harness owner/)
   assert.match(generatedPolicy, /\.ai\/review-checklist\.md/)
   assert.match(generatedPolicy, /module elements/)
   assert.match(generatedPolicy, /design-system/)
@@ -472,6 +489,16 @@ test('residual owner guidance binds implementation, provider, debugging, and bus
   )
   assert.match(implementSpec, /working app \(`working-phases`\)/)
   assert.match(implementSpec, /`integration-coverage` belongs to writing the spec/)
+  for (const decision of [
+    'spec-resolution',
+    'phase-execution-plan',
+    'interactive-confirmation',
+    'implementation-progress',
+    'stable-implementation-report',
+    'spec-reference-marker',
+  ]) {
+    assert.ok(implementSpec.includes(`\`${decision}\``), `missing implement-spec decision ${decision}`)
+  }
   assert.match(integration, /exact installed provider\/domain contract, invoke `om-framework-context`/)
   assert.match(integration, /superseded by an installed capability selects architecture \+ integration \+ framework-context/)
   assert.match(troubleshooter, /persisted create\/update\/clear\/reload defect also selects `module-data` and contracts/)
@@ -555,6 +582,9 @@ test('AI attachments, CRM lead capture, and customer renewals bind their exact p
   }
   assert.match(dataModelSkill, /staff surface showing current state, history, or evidence also adds backend UI/)
   assert.match(implementationSkill, /working app \(`working-phases`\) and report its smallest focused validation gate \(`smallest-validation`\)/)
+  assert.match(implementationSkill, /references\/spec-resolution\.md/)
+  assert.match(implementationSkill, /references\/planning-and-progress\.md/)
+  assert.match(implementationSkill, /references\/report-templates\.md/)
   assert.match(blueprints, /MUST read `\.ai\/guides\/modules\/customers\.md`, invoke `om-data-model-design`, and report `smallest-validation` for the lead record and scalar CRM link/)
   assert.match(blueprints, /explicit trusted config\/domain binding/)
   assert.match(blueprints, /never select or persist the first\/oldest active tenant or organization/)

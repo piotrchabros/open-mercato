@@ -12,6 +12,7 @@ type ContainerStub = { resolve: (name: string) => unknown }
 function makeContainer(options: {
   domainMappingService?: { resolveActiveByOrg: (orgId: string) => Promise<{ hostname: string } | null> } | 'throw'
   orgService?: { findById: (orgId: string) => Promise<{ id: string; slug: string | null } | null> } | 'throw'
+  em?: { findOne: (...args: unknown[]) => Promise<{ id: string; slug: string | null } | null> }
 }): ContainerStub {
   return {
     resolve(name: string) {
@@ -24,6 +25,10 @@ function makeContainer(options: {
         if (options.orgService === 'throw') throw new Error('orgService not registered')
         if (options.orgService === undefined) return undefined
         return options.orgService
+      }
+      if (name === 'em') {
+        if (options.em === undefined) throw new Error('em not registered')
+        return options.em
       }
       throw new Error(`unexpected resolve(${name})`)
     },
@@ -50,6 +55,16 @@ describe('urlForCustomerOrg', () => {
     expect(url).toBe('https://shop.acme.com/orders')
   })
 
+  it('does not add the org slug prefix when a custom domain is active', async () => {
+    process.env.PLATFORM_PORTAL_BASE_URL = 'https://app.openmercato.com'
+    const container = makeContainer({
+      domainMappingService: { resolveActiveByOrg: async () => ({ hostname: 'shop.example.com' }) },
+      orgService: { findById: async () => ({ id: 'org-1', slug: 'acme' }) },
+    })
+    const url = await urlForCustomerOrg('org-1', '/invite?token=raw', { container: container as never })
+    expect(url).toBe('https://shop.example.com/invite?token=raw')
+  })
+
   it('falls back to platform base + org slug when there is no active mapping', async () => {
     process.env.PLATFORM_PORTAL_BASE_URL = 'https://app.openmercato.com'
     const container = makeContainer({
@@ -58,6 +73,19 @@ describe('urlForCustomerOrg', () => {
     })
     const url = await urlForCustomerOrg('org-1', '/orders', { container: container as never })
     expect(url).toBe('https://app.openmercato.com/acme/portal/orders')
+  })
+
+  it('falls back to the EntityManager organization lookup when orgService is not registered', async () => {
+    process.env.PLATFORM_PORTAL_BASE_URL = 'https://app.openmercato.com'
+    const em = { findOne: jest.fn(async () => ({ id: 'org-1', slug: 'acme' })) }
+    const container = makeContainer({
+      domainMappingService: { resolveActiveByOrg: async () => null },
+      orgService: 'throw',
+      em,
+    })
+    const url = await urlForCustomerOrg('org-1', '/invite?token=raw', { container: container as never })
+    expect(url).toBe('https://app.openmercato.com/acme/portal/invite?token=raw')
+    expect(em.findOne).toHaveBeenCalled()
   })
 
   it('falls back to the bare platform base + path when there is neither an active mapping nor a slug', async () => {
