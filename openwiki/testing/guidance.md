@@ -138,9 +138,12 @@ yarn generate
 yarn build:packages
 yarn typecheck
 yarn lint
+yarn lint:ds    # design-system structural rules — run when touching backend admin UI
 yarn test
 yarn build:app
 ```
+
+`yarn lint:ds` runs the [`@open-mercato/eslint-plugin-ds`](https://github.com/open-mercato/open-mercato/tree/main/packages/eslint-plugin-ds) rules (via `eslint.ds.config.mjs`) against `packages/core/src/modules`, `packages/enterprise/src/modules`, and `packages/ui/src/backend`. All six rules run at `warn` during rollout. See [architecture/source-map.md](../architecture/source-map.md) for the rule list.
 
 ### Full CI-Mirroring Gate
 
