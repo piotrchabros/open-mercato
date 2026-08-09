@@ -12,7 +12,7 @@ Package-by-package reference for the Open Mercato monorepo. Use this to find whe
 
 | App | Path | What it does |
 |-----|------|-------------|
-| **Mercato** | `apps/mercato/` | Main Next.js App Router application. Contains catch-all route dispatchers (`app/api/[...slug]/route.ts`, `app/(backend)/backend/[...slug]/page.tsx`, `app/(frontend)/[...slug]/page.tsx`), module enablement (`src/modules.ts`), `.env.example`, and `next.config.ts`. User-created modules go in `src/modules/`. |
+| **Mercato** | `apps/mercato/` | Main Next.js App Router application. Contains catch-all route dispatchers (`app/api/[...slug]/route.ts`, `app/(backend)/backend/[...slug]/page.tsx`, `app/(frontend)/[...slug]/page.tsx`), module enablement (`src/modules.ts`), `.env.example`, and `next.config.ts`. User-created modules go in `src/modules/`. App-only modules: `example` (reference module, **disabled by default** — uncomment its `modules.ts` entry to re-enable), `example_customers_sync` (auto-enabled only while `example` is on), `ratelimit_probe` (lightweight rate-limit endpoint probe). |
 | **Docs** | `apps/docs/` | Docusaurus documentation site published to docs.openmercato.com. Contains framework guides, installation instructions, and user guides. |
 
 ## Core Packages

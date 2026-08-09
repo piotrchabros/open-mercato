@@ -1,7 +1,7 @@
 ---
 type: "Reference"
 title: "Domain Modules"
-description: "Major business domain modules in packages/core — sales, customers, catalog, entities, attachments, customer accounts, messages, workflows, business rules, dictionaries, directory, and configs."
+description: "Business domain modules in packages/core — sales, customers, catalog, entities, attachments, customer accounts, messages, workflows, business rules, dictionaries, directory, configs, WMS, communication channels, and a reference table of all other enabled modules."
 ---
 
 # Domain Modules
@@ -341,6 +341,155 @@ Shared configuration storage, module settings, upgrade actions, system status, a
 Version-keyed migration actions that run once per tenant/org. Tracked in `UpgradeActionRun` table. Gated by `UPGRADE_ACTIONS_ENABLED` env var. Actions are registered at boot time by modules; `configs` lazy-imports module code when actions run.
 
 Examples: `attachments.reconcile-organization` (v0.6.6), `customers.seed-interaction-statuses` (v0.6.5).
+
+## WMS Module (Warehouse Management)
+
+**Path:** `packages/core/src/modules/wms/`
+**Roadmap:** `.ai/specs/2026-04-15-wms-roadmap.md` (phases 1–5)
+**Dependencies (FK IDs only, no ORM relations):** `catalog`, `sales`, `shipping_carriers`, `customers`
+
+Warehouse topology, inventory balances, reservations, and an append-only movement ledger — the platform's first physical-execution inventory layer. Spec-first module delivered in five additive phases: core inventory, inbound/putaway, picking/packing, yard management, returns/reverse logistics.
+
+### Entities
+| Entity | Table | Role |
+|-------|-------|------|
+| `Warehouse` | `wms_warehouses` | Top-level warehouse record |
+| `WarehouseZone` | `wms_warehouse_zones` | Subdivision of a warehouse |
+| `WarehouseLocation` | `wms_warehouse_locations` | Putaway/pick bin |
+| `ProductInventoryProfile` | `wms_product_inventory_profiles` | Per-product WMS configuration |
+| `InventoryLot` | `wms_inventory_lots` | Lot/serial traceability unit |
+| `InventoryBalance` | `wms_inventory_balances` | Live on-hand quantity per warehouse/location/product |
+| `InventoryReservation` | `wms_inventory_reservations` | Soft-hold against a balance |
+| `InventoryMovement` | `wms_inventory_movements` | Append-only ledger entry driving balances |
+| `SalesOrderWarehouseAssignment` | `wms_sales_order_warehouse_assignments` | Binds a sales order to a fulfilling warehouse |
+
+All entities extend `WmsScopedEntity` (tenant + organization scoped). WMS owns physical execution only — financial/document-calculation logic stays in `sales`; shipment lifecycle stays in `sales`/`shipping_carriers`.
+
+### Append-Only Ledger Invariant
+`InventoryMovement` rows are an **append-only ledger**: every balance change is a new movement row, never an in-place update of a prior row. `InventoryBalance` is the derived live state. This is why inventory-mutation commands are registered with `isUndoable: false` — a generic per-record undo cannot safely re-derive a point-in-time balance once later reservations/movements have been layered on top.
+
+Reversal is exposed as an **explicit, auditable counter-action** in the domain instead of a generic undo verb:
+
+| Action | Counter-action |
+|--------|----------------|
+| `reserve` | `release` |
+| `allocate` | `release` (cancels allocation) |
+| `adjust(+N)` | `adjust(-N)` |
+| `receive` | `adjust` / RMA flow |
+| `move(A → B)` | `move(B → A)` |
+| `cycle count` | `cycle count` (re-recount) |
+
+The audit log still captures full before/after via `buildLog`, so reversing counter-actions are fully traceable.
+
+### Inventory Commands
+`commands/inventory-actions.ts` registers: `reserveInventory`, `releaseInventoryReservation`, `allocateInventory`, `adjustInventory`, `receiveInventory`, `moveInventory`, `cycleCountInventory`. All use `LockMode` pessimistic locking on the affected balance row and emit CRUD side effects post-commit.
+
+### Sales-Order Enrichment
+WMS binds each sales order to a fulfilling warehouse via `commands/sales-order-assignment.ts`:
+- `wms.sales-order.assign-warehouse` — creates the assignment
+- `wms.sales-order.unassign-warehouse` — removes it
+- `wms.sales-order.re-run-reservation` — re-runs reservation against the assigned warehouse (used after stock changes)
+
+### Events
+CRUD events per entity plus domain lifecycle events: `wms.inventory.received`, `.adjusted`, `.reserved`, `.released`, `.allocated`, `.moved`, `.reconciled`; and `wms.inventory.low_stock`, `.balance_drift`, `.reservation_shortfall`.
+
+### ACL Features
+`wms.view`, `wms.manage_warehouses`, `wms.manage_zones`, `wms.manage_locations`, `wms.manage_inventory`, `wms.manage_reservations`, `wms.adjust_inventory`, `wms.receive_inventory`, `wms.cycle_count`, `wms.import`.
+
+### Source References
+- `commands/inventory-actions.ts` — inventory mutation commands (undo policy header)
+- `commands/sales-order-assignment.ts` — warehouse assignment + re-run reservation
+- `commands/shared.ts` — scope helpers, `CrudIndexerConfig`, CRUD event configs
+- `data/entities.ts` — all 9 entities
+- `events.ts` — full event catalog
+- `acl.ts` — RBAC feature declarations
+- `.ai/specs/2026-04-15-wms-roadmap.md` — phased roadmap and invariants
+
+## Communication Channels Module
+
+**Path:** `packages/core/src/modules/communication_channels/`
+**Spec:** SPEC-045d — unified Communications Hub bridging external chat/email channels to the Messages inbox.
+
+Unified hub that bridges external chat and email channels (Slack, WhatsApp, Email) to the internal [Messages](#messages-module) inbox. Provider packages (`channel_gmail`, `channel_imap`, future providers) register adapters here; the hub picks them up by `providerKey`.
+
+### Adapter Contract
+Each provider implements a `ChannelAdapter` and registers it at import time in its package's `setup.ts`. The hub exposes a network-free stub adapter for tests (registered in `communication_channels/di.ts` when the test flag is set). Inbound messages land as `ExternalMessage` rows; outbound sends emit `communication_channels.message.sent` and `delivery_failed` events.
+
+### Entities
+| Entity | Table | Role |
+|-------|-------|------|
+| `CommunicationChannel` | `communication_channels` | A configured channel connection (per-user or tenant-wide) |
+| `ExternalConversation` | `external_conversations` | A threaded external conversation, assignable to an operator |
+| `ExternalMessage` | `external_messages` | Individual inbound/outbound message with channel-native payload |
+| `MessageChannelLink` | `message_channel_links` | Links an external message to an internal `messages` record |
+| `ChannelThreadMapping` | `channel_thread_mappings` | Maps external thread IDs to internal conversations |
+| `MessageReaction` | `message_reactions` | Channel-native reactions |
+| `ChannelThreadToken` | `channel_thread_tokens` | Per-thread access tokens |
+| `ChannelIngestDeadLetter` | `channel_ingest_dead_letters` | Unprocessable inbound payloads (malformed MIME, etc.) |
+
+### Events
+`communication_channels.message.received`, `.sent`, `.delivery_failed`; `communication_channels.conversation.created`, `.reassigned`; `communication_channels.contact.resolved`; `communication_channels.channel.requires_reauth`, `.disconnected`, `.deleted`, `.primary_changed`; `communication_channels.reaction.added`, `.removed`; `communication_channels.push.registered`, `.failed`, `.renewed`, `.deactivated` (Gmail push subscription lifecycle).
+
+### ACL Features
+`communication_channels.view`, `.manage`, `.react`, `.assign`, `.connect_user_channel`, `.admin`, `.channel.import_history`, `.channel.push.manage`.
+
+### Source References
+- `index.ts` — module metadata
+- `data/entities.ts` — all 8 entities
+- `events.ts` — full event catalog
+- `acl.ts` — RBAC feature declarations
+- `di.ts` — adapter registration incl. test stub
+- `extension-points.ts` — provider extension surface
+
+## Other Core Modules
+
+The remaining enabled modules in `packages/core/src/modules/` (and a few standalone packages) are smaller or single-concern. Each follows the standard [module conventions](../architecture/overview.md#module-system); the table gives the one-line responsibility and primary source anchor.
+
+| Module | Path | Responsibility |
+|--------|------|----------------|
+| `auth` | `packages/core/src/modules/auth/` | Internal staff authentication (JWT sessions, users, roles, organizations). Distinct from `customer_accounts` (portal auth). |
+| `directory` | `packages/core/src/modules/directory/` | Tenancy foundation — `tenants`, `organizations`, org-scope resolution. (See above.) |
+| `dashboards` | `packages/core/src/modules/dashboards/` | Configurable admin dashboard layouts and widgets. |
+| `perspectives` | `packages/core/src/modules/perspectives/` | Saved list views / perspectives per entity. |
+| `entities` | `packages/core/src/modules/entities/` | EAV custom-field system. (See above.) |
+| `configs` | `packages/core/src/modules/configs/` | Shared config storage, upgrade actions, system status, cache management. (See above.) |
+| `query_index` | `packages/core/src/modules/query_index/` | Query engine over encrypted/decrypted fields; status-coverage waterfall diagnostics. |
+| `audit_logs` | `packages/core/src/modules/audit_logs/` | Append-only audit trail of mutating operations. |
+| `attachments` | `packages/core/src/modules/attachments/` | File uploads, storage drivers, OCR, thumbnails. (See above.) |
+| `catalog` | `packages/core/src/modules/catalog/` | Product catalog, categories, variants, pricing. (See above.) |
+| `sales` | `packages/core/src/modules/sales/` | Quote-to-cash lifecycle. (See above.) |
+| `customers` | `packages/core/src/modules/customers/` | CRM (people, companies, deals, interactions, calendar). (See above.) |
+| `customer_accounts` | `packages/core/src/modules/customer_accounts/` | Customer portal identity, auth, custom domains. (See above.) |
+| `portal` | `packages/core/src/modules/portal/` | Customer portal frontend extension. Documented in UI `AGENTS.md`; not yet synthesized (see backlog). |
+| `wms` | `packages/core/src/modules/wms/` | Warehouse & inventory execution. (See above.) |
+| `api_keys` | `packages/core/src/modules/api_keys/` | Scoped API keys for programmatic access. |
+| `dictionaries` | `packages/core/src/modules/dictionaries/` | Organization-scoped reusable enumerations. (See above.) |
+| `currencies` | `packages/core/src/modules/currencies/` | Currency definitions and exchange rates. |
+| `planner` | `packages/core/src/modules/planner/` | Availability schedules, rulesets, and shared planning rules. |
+| `resources` | `packages/core/src/modules/resources/` | Assets/resources with scheduling policies. |
+| `staff` | `packages/core/src/modules/staff/` | Staff records and scheduling (timesheets). AGENTS.md present. |
+| `shipping_carriers` | `packages/core/src/modules/shipping_carriers/` | Carrier adapter hub: rates, shipment creation, tracking, webhooks. |
+| `notifications` | `packages/core/src/modules/notifications/` | In-app notifications with module-extensible types and actions. |
+| `progress` | `packages/core/src/modules/progress/` | Generic server-side progress tracking for long-running operations (SSE). AGENTS.md present. |
+| `translations` | `packages/core/src/modules/translations/` | Entity translation storage and locale overlay for CRUD responses. |
+| `feature_toggles` | `packages/core/src/modules/feature_toggles/` | Per-tenant feature flags consumed by modules (e.g., interaction unification). |
+| `business_rules` | `packages/core/src/modules/business_rules/` | Rules engine. (See above.) |
+| `workflows` | `packages/core/src/modules/workflows/` | Workflow engine. (See above.) |
+| `messages` | `packages/core/src/modules/messages/` | Internal messaging. (See above.) |
+| `communication_channels` | `packages/core/src/modules/communication_channels/` | External channel hub. (See above.) |
+| `inbox_ops` | `packages/core/src/modules/inbox_ops/` | Receives forwarded emails via webhook, extracts structured action proposals using an LLM, presents them for human-in-the-loop approval. |
+| `integrations` | `packages/core/src/modules/integrations/` | Integration Marketplace registry (provider cards, credentials). |
+| `data_sync` | `packages/core/src/modules/data_sync/` | Data sync hub (source/dest adapters, sync runs). AGENTS.md present; full workflow deferred (see backlog). |
+| `sync_excel` | `packages/core/src/modules/sync_excel/` | File-upload CSV import built on the data_sync hub. |
+| `payment_gateways` | `packages/core/src/modules/payment_gateways/` | Payment gateway adapter contract, registry, transaction tracking, webhook routing. Integrates with `sales` payment methods and `gateway_stripe`. |
+| `design_system` | `packages/core/src/modules/design_system/` | Live DS component gallery at `/backend/design-system` (feature-gated by `design_system.view`). |
+| `api_docs` | `packages/core/src/modules/api_docs/` | In-app API documentation browser. |
+| `scheduler` | `packages/scheduler/src/modules/scheduler/` | Database-managed scheduled jobs. See [workflows/key-workflows.md → Scheduled Jobs](../workflows/key-workflows.md#scheduled-jobs). |
+| `search` | `packages/search/src/modules/search/` | Search module (fulltext/vector/token). See [integrations/overview.md → Search Providers](../integrations/overview.md#search-providers). |
+| `events` | `packages/events/` | Event bus runtime module. See [workflows/key-workflows.md → Event Bus](../workflows/key-workflows.md#event-bus). |
+| `ai_assistant` | `packages/ai-assistant/` | AI assistant module. See [integrations/overview.md → AI Assistant](../integrations/overview.md#ai-assistant). |
+| `onboarding` | `packages/onboarding/` | Setup wizards, tenant provisioning hooks. |
+| `content` | `packages/content/` | Static content pages (privacy, terms, legal). |
 
 ## Cross-Module Coupling Patterns
 
