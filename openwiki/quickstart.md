@@ -87,7 +87,7 @@ Runner selection: if Docker compose is running, use `node scripts/docker-exec.mj
 | **Architecture** | [architecture/overview.md](architecture/overview.md) | Module system, auto-discovery, DI (Awilix), routing, database (MikroORM v7), multi-tenancy, RBAC |
 | **Source Map** | [architecture/source-map.md](architecture/source-map.md) | Package-by-package reference, apps, config files, key entrypoints |
 | **Key Workflows** | [workflows/key-workflows.md](workflows/key-workflows.md) | CRUD lifecycle, event bus, AI mutations, workflow engine, search indexing, widget injection |
-| **Domain Modules** | [domain/modules.md](domain/modules.md) | Sales, customers, catalog, entities, attachments, customer accounts, messages, workflows |
+| **Domain Modules** | [domain/modules.md](domain/modules.md) | Sales, customers, catalog, entities, attachments, customer accounts, messages, workflows, WMS, communication channels, and a reference table of all other enabled modules |
 | **Operations** | [operations/runbook.md](operations/runbook.md) | Dev workflow, Docker, DB migrations, env vars, deployment, releases |
 | **Testing** | [testing/guidance.md](testing/guidance.md) | Unit vs integration tests, Jest config, validation commands, test conventions |
 | **Integrations** | [integrations/overview.md](integrations/overview.md) | AI assistant, search providers, webhooks, provider packages, official modules |

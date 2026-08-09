@@ -55,6 +55,8 @@ The `packages/cli` code generator (`yarn generate`) scans module directories usi
 4. **`setup.ts`** (tenant init) — role features, ACL grants, seed defaults, `onTenantCreated`/`seedDefaults` hooks
 5. API routes, backend/frontend pages, events, subscribers — each auto-discovered independently
 
+The bundled **example module** (`apps/mercato/src/modules/example/`) is **disabled by default** — its `enabledModules` entry is commented out in `apps/mercato/src/modules.ts`. It demonstrates the full `moduleOverrideExamples` override surface (routes, widgets, events, workers, ACL, DI, encryption, nav) and is re-enabled by uncommenting the entry. The companion `example_customers_sync` module is pulled in conditionally only when `example` is enabled. See [architecture/source-map.md](source-map.md) → Apps for the app-only modules.
+
 ## Dependency Injection (Awilix)
 
 A per-request Awilix container is created by `createRequestContainer()` with `CLASSIC` injection mode. The construction order:
