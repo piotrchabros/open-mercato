@@ -31,6 +31,7 @@ This wiki is a practical map for engineers and AI agents working in this reposit
 | **Queue** | `packages/queue/` | Background job workers (local file-based or BullMQ/Redis). |
 | **Cache** | `packages/cache/` | Tenant-scoped cache (memory, SQLite, Redis) with tag-based invalidation. |
 | **Scheduler** | `packages/scheduler/` | Database-managed scheduled jobs (cron/interval) with admin UI; BullMQ or local polling strategy. |
+| **Telemetry** | `packages/telemetry/` | Vendor-neutral OTel/OTLP traces, metrics, error reporting; off by default (`TELEMETRY_BACKEND`); extends (not replaces) the shared logger. |
 | **CLI** | `packages/cli/` | Generators (`yarn generate`), migrations, module scaffolding, build tooling. |
 | **DS Lint** | `packages/eslint-plugin-ds/` | Structural ESLint rules enforcing the design system (empty states, page wrappers, raw tables, loading states, status badges, hardcoded status colors). |
 | **Integrations** | `packages/gateway-stripe/`, `channel-gmail/`, `channel-imap/`, `storage-s3/`, `sync-akeneo/`, `checkout/`, `webhooks/` | Provider packages for payments, email, storage, PIM sync, and webhooks. |
@@ -112,5 +113,4 @@ Runner selection: if Docker compose is running, use `node scripts/docker-exec.mj
 | Data sync module | `packages/core/src/modules/data_sync/` | Partially covered; full data sync workflow deferred |
 | Portal module | `packages/core/src/modules/portal/` | Portal extension documented in UI AGENTS.md; not yet synthesized |
 | Design system | `.ai/ds-rules.md`, `.ai/ui-components.md` | Large topic; deserves dedicated page in future update |
-| Telemetry/OTel | `.ai/specs/2026-04-29-telemetry-and-otel.md` | Spec exists; implementation not inspected |
 | POS module | `.ai/specs/SPEC-022-*` | Spec exists; implementation depth not verified |

@@ -175,6 +175,9 @@ Key env vars (see `apps/mercato/.env.example` for the full list):
 | `SELF_SERVICE_ONBOARDING_ENABLED` | Self-service tenant signup | `false` |
 | `DEMO_MODE` | Demo mode (affects seeding) | `true` |
 | `OM_LOG_LEVEL` | Logging level | — |
+| `TELEMETRY_BACKEND` | Activate vendor-neutral telemetry: `noop`/unset (off), `console`, or OTLP (`otlp`/`signoz`/`newrelic`, differing only by `OTEL_EXPORTER_OTLP_ENDPOINT`+`OTEL_EXPORTER_OTLP_HEADERS`). Shared code checks this before importing the telemetry package. | `noop` |
+| `TELEMETRY_SAMPLING_RATIO` | Trace sampling ratio 0.0–1.0 (default 1.0 dev / 0.1 prod) | — |
+| `TELEMETRY_TRUST_INBOUND_TRACE` | Continue an inbound W3C trace instead of rooting per request; also enables richer bullmq-otel spans. Default false — only set behind a trusted upstream. | `false` |
 | `BACKEND_CUSTOM_DOMAINS_ENABLED` | Serve the admin app on per-organization hostnames (#4271); off by default, hard-fails at boot without `TRUSTED_PROXY_CIDRS` | `false` |
 | `TRUSTED_PROXY_CIDRS` | Comma-separated CIDRs of reverse proxies allowed to set the `Host` header; required when backend custom domains are on | — |
 | `OM_ALLOW_FORCED_HOST` | Test-only `x-force-host` override; mutually exclusive with `BACKEND_CUSTOM_DOMAINS_ENABLED` | `false` |

@@ -88,6 +88,16 @@ Database-managed scheduled jobs with admin UI. A standalone module package (not 
 - `src/modules/scheduler/lib/` — `cronParser`, `intervalParser`, `nextRunCalculator`, `activeScheduleLimits`, `scheduledJobSubscriber`, `queueTargetPayload`
 - `src/modules/scheduler/commands/jobs.ts` — command-pattern CRUD with undo/redo snapshots and organization scope enforcement
 
+### `packages/telemetry/` — `@open-mercato/telemetry`
+Vendor-neutral spans, metrics, error reporting, and a remote sink for the canonical shared logger. **Off by default** — the runtime is loaded only when `TELEMETRY_BACKEND` resolves to a non-`noop` provider. See [domain/modules.md → Telemetry Package](../domain/modules.md#telemetry-package) for the runtime model and cross-package trace propagation.
+- `src/index.ts` — public facade: `withSpan`/`currentSpan`/`setAttributes`, `counter`/`histogram`/`gauge`, `reportError`, `captureTraceContext`/`continueTrace`, `initTelemetry`/`shutdownTelemetry`, `registerProvider`
+- `src/facade/` — tracer, meter, propagation, redaction, error funnel, shared-logger bridge
+- `src/provider/` — `noop-provider`, `console-provider`, `otlp-provider` (only file that imports `@opentelemetry/*`, dynamically), `registry`
+- `src/init.ts` — explicit-enabled one-shot bootstrap; registers the provider and the shared runtime bridge
+- `src/nextjs.ts` / `src/nextjs-config.ts` — Next.js runtime helper (build-time constants are separate) and graceful shutdown flush on `SIGTERM`/`SIGINT`
+- `src/env.ts` — `readTelemetryEnv()`; OTLP backends `signoz`/`newrelic`/`otlp` share one exporter, differing only by endpoint + headers
+- `AGENTS.md` + `README.md` — provider contract, redaction rules, and validation
+
 ### `packages/eslint-plugin-ds/` — `@open-mercato/eslint-plugin-ds`
 Private structural ESLint plugin enforcing the Open Mercato design system. Six rules, all at `warn` during rollout: `require-empty-state`, `require-page-wrapper`, `no-raw-table`, `require-loading-state`, `require-status-badge`, `no-hardcoded-status-colors`. Wired by `eslint.ds.config.mjs` and invoked via `yarn lint:ds` against `packages/core/src/modules`, `packages/enterprise/src/modules`, and `packages/ui/src/backend`. Severity escalates per-rule to `error` once the corresponding design-system health metric allows it.
 

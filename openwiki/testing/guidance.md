@@ -123,6 +123,22 @@ node scripts/docker-exec.mjs test
 | `packages/core/src/modules/customers/lib/__tests__/interactionReadModel.test.ts` | Interaction read model hydration (authors, deals, custom fields) |
 | `packages/core/src/modules/customers/lib/__tests__/interactionStatus.test.ts` | Open/terminal status semantics helper |
 
+### Telemetry (vendor-neutral OTel/OTLP)
+
+| Test | What it verifies |
+|------|-----------------|
+| `packages/telemetry/src/__tests__/default-unloaded.test.ts` | Runtime stays unloaded (no import, no hooks) when telemetry is off |
+| `packages/telemetry/src/__tests__/env.test.ts`, `env-load-order.test.ts` | Env parsing and that the env snapshot is dropped before host `.env` loads |
+| `packages/telemetry/src/__tests__/registry.test.ts` | Provider registry active/noop swap semantics |
+| `packages/telemetry/src/__tests__/run-span.test.ts`, `telemetry.test.ts` | Span lifecycle and facade behavior |
+| `packages/telemetry/src/__tests__/redact.test.ts`, `pg-pii-config.test.ts` | PII / SQL parameter redaction at the provider boundary |
+| `packages/telemetry/src/__tests__/pg-instrumentation.test.ts` | `pg` instrumentation does not leak parameters (`enhancedDatabaseReporting: false` guard) |
+| `packages/telemetry/src/__tests__/nextjs.test.ts`, `nextjs-shutdown.test.ts` | Next.js bootstrap helper + graceful shutdown flush |
+| `packages/telemetry/src/__tests__/otlp-integration.test.ts` | OTLP provider end-to-end |
+| `packages/telemetry/src/__tests__/logger-level.test.ts` | Shared-logger bridge level mapping |
+
+Run focused: `yarn workspace @open-mercato/telemetry test`.
+
 ### Module Decoupling
 
 | Test | What it verifies |
