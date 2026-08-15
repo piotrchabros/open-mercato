@@ -441,6 +441,67 @@ Each provider implements a `ChannelAdapter` and registers it at import time in i
 - `di.ts` — adapter registration incl. test stub
 - `extension-points.ts` — provider extension surface
 
+## Telemetry Package
+
+**Path:** `packages/telemetry/` — `@open-mercato/telemetry`
+**Spec:** `.ai/specs/2026-04-29-telemetry-and-otel.md`
+**AGENTS.md / README.md:** Present
+
+Vendor-neutral observability — spans, metrics, error reporting, and a remote sink for the canonical shared logger. **Off by default:** the telemetry runtime is loaded only when `TELEMETRY_BACKEND` resolves to a non-`noop` provider (`console`, `signoz`, `newrelic`, `otlp`). The three OTLP names use the same exporter and differ only by endpoint + headers, so any OTLP backend is a one-line swap with no code change.
+
+This is the canonical home for the telemetry concept; the package is referenced from [architecture/source-map.md](../architecture/source-map.md) and its env vars are listed in [operations/runbook.md → Environment Variables](../operations/runbook.md#environment-variables).
+
+### Enablement and Invariants
+
+- **Shared owns the gate:** `isTelemetryBackendEnabled()` lives in `@open-mercato/shared/lib/telemetry/runtime.ts` so hosts can decide whether to dynamically import the telemetry package without evaluating it. Unset / `noop` / unknown → absolute off.
+- **Logger extension, never replacement:** Telemetry extends `@open-mercato/shared/lib/logger` with trace correlation and one remote sink after successful init; it must never introduce another logger or `stdout`/`stderr` path.
+- **Cross-bundle state via `globalThis`:** provider, logger-bridge, and runtime-bridge state are stored on a process-global `Symbol.for` registry (`@open-mercato/shared.telemetryRuntime`), surviving HMR and bundle duplication.
+- **No PII:** never emit PII, credentials, record content, SQL parameters, request bodies, or arbitrary thrown-object properties. Redaction applies at the provider boundary and at facade call sites.
+- **Inbound trace trust is opt-in:** `traceparent` / `x-original-traceparent` are ignored at an inbound/global boundary unless `TELEMETRY_TRUST_INBOUND_TRACE=true`.
+- **Span naming:** `module.entity.action` (lowercase, dot-separated). Tenant/organization/user IDs go on span **attributes**, never metric labels (low-cardinality labels only).
+
+### Bootstrap and Runtime Flow
+
+```mermaid
+flowchart TD
+    REG[Next.js register in instrumentation.ts] -->|NEXT_RUNTIME === nodejs| GATE{isTelemetryBackendEnabled?}
+    GATE -->|unset/noop/unknown| OFF[Telemetry off: no import, no hooks]
+    GATE -->|console/otlp/signoz/newrelic| IMPORT[Dynamic import @open-mercato/telemetry/nextjs]
+    IMPORT --> INIT[initTelemetry: resolve backend, start provider]
+    INIT --> BRIDGE[registerTelemetryRuntime into shared Symbol.for]
+    BRIDGE --> LOGGER[Extend shared logger: trace correlation + remote sink]
+    BRIDGE --> QUEUE[queue tracing attaches/continues W3C context on metadata._trace]
+    SIGTERM -->|graceful flush| SHUTDOWN[shutdownTelemetry]
+    SIGINT -->|graceful flush| SHUTDOWN
+```
+
+### Cross-Package Trace Propagation
+
+- **Next.js bootstrap:** `apps/mercato/src/instrumentation.ts` `register()` calls `registerTelemetryForNextjs()`, which owns init + graceful degrade (never bubbles a rejection out of Next's `register()`) + best-effort flush on `SIGTERM`/`SIGINT`. The dynamic import is gated on `NEXT_RUNTIME === 'nodejs` because the OTEL NodeSDK is Node-only (incompatible with the edge runtime).
+- **Queue tracing:** `packages/queue/src/tracing.ts` is the cross-boundary propagation seam. `attachTraceMetadata()` captures the active trace context onto a job's `metadata._trace` (a first-class metadata channel, not user payload); `runJobInTrace()` continues the producer's trace in a `queue.<queueName>` span at dispatch. Both halves are automatic and a cheap no-op when telemetry is off, so anything that rides the queue — persistent event subscribers (the [event bus](../workflows/key-workflows.md#event-bus) enqueues) and outbound webhook delivery — becomes part of the originating request's trace for free.
+- **Events attribution:** the events bus attributes resource-usage telemetry to a module via the `moduleId` field on a subscriber (without it, telemetry falls back to guessing a module id).
+
+### Providers
+
+| Provider | `TELEMETRY_BACKEND` | Notes |
+|----------|----------------------|-------|
+| Noop | unset / `noop` / unknown | Off — no import, no hooks, no export traffic |
+| Console | `console` | Local span/metric output |
+| OTLP | `otlp` / `signoz` / `newrelic` | Same exporter; differ only by `OTEL_EXPORTER_OTLP_ENDPOINT` + `OTEL_EXPORTER_OTLP_HEADERS`. OpenTelemetry packages are optional deps imported only here, dynamically by `provider/otlp-provider.ts` |
+
+### Source References
+- `src/index.ts` — public facade exports
+- `src/init.ts` — `initTelemetry()` / `shutdownTelemetry()`, backend resolution, bridge registration
+- `src/env.ts` — `readTelemetryEnv()`, OTLP backend set
+- `src/facade/` — `tracer.ts` (`withSpan`/`currentSpan`), `meter.ts`, `propagation.ts` (`captureTraceContext`/`continueTrace`), `redact.ts`, `report-error.ts`, `logger-bridge.ts`
+- `src/provider/` — `registry.ts`, `noop-provider.ts`, `console-provider.ts`, `otlp-provider.ts`
+- `src/nextjs.ts` / `src/nextjs-config.ts` — runtime vs build-time helpers
+- `@open-mercato/shared/lib/telemetry/runtime.ts` — `isTelemetryBackendEnabled()`, `TelemetryRuntime` interface, `registerTelemetryRuntime()`
+- `apps/mercato/src/instrumentation.ts` — Next.js `register()` bootstrap
+- `packages/queue/src/tracing.ts` — `attachTraceMetadata()` / `runJobInTrace()`
+
+
+
 ## Other Core Modules
 
 The remaining enabled modules in `packages/core/src/modules/` (and a few standalone packages) are smaller or single-concern. Each follows the standard [module conventions](../architecture/overview.md#module-system); the table gives the one-line responsibility and primary source anchor.
@@ -488,6 +549,7 @@ The remaining enabled modules in `packages/core/src/modules/` (and a few standal
 | `search` | `packages/search/src/modules/search/` | Search module (fulltext/vector/token). See [integrations/overview.md → Search Providers](../integrations/overview.md#search-providers). |
 | `events` | `packages/events/` | Event bus runtime module. See [workflows/key-workflows.md → Event Bus](../workflows/key-workflows.md#event-bus). |
 | `ai_assistant` | `packages/ai-assistant/` | AI assistant module. See [integrations/overview.md → AI Assistant](../integrations/overview.md#ai-assistant). |
+| `telemetry` | `packages/telemetry/` | Vendor-neutral OTel/OTLP observability (off by default). See [Telemetry Package](#telemetry-package) above. |
 | `onboarding` | `packages/onboarding/` | Setup wizards, tenant provisioning hooks. |
 | `content` | `packages/content/` | Static content pages (privacy, terms, legal). |
 
