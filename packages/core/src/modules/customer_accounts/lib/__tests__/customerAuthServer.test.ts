@@ -32,12 +32,12 @@ jest.mock('../platformDomains', () => ({
   platformDomains: () => platformDomains(),
 }))
 
-const findActiveSessionById = jest.fn()
+const findActiveSessionForClaims = jest.fn()
 const resolveByHostname = jest.fn()
 jest.mock('@open-mercato/shared/lib/di/container', () => ({
   createRequestContainer: async () => ({
     resolve: (name: string) => {
-      if (name === 'customerSessionService') return { findActiveSessionById }
+      if (name === 'customerSessionService') return { findActiveSessionForClaims }
       if (name === 'domainMappingService') return { resolveByHostname }
       throw new Error(`unexpected resolve(${name})`)
     },
@@ -73,7 +73,7 @@ describe('getCustomerAuthForHost', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     cookieGet.mockReturnValue({ value: 'jwt-token' })
-    findActiveSessionById.mockResolvedValue({ id: 'sess-1' })
+    findActiveSessionForClaims.mockResolvedValue({ id: 'sess-1' })
     validateUserState.mockResolvedValue({ valid: true, resolvedFeatures: ['portal.view'] })
     verifyAudienceJwt.mockReturnValue(baseJwtPayload)
     platformDomains.mockReturnValue(['localhost', 'openmercato.com'])
