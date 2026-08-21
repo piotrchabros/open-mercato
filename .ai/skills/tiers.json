@@ -42,6 +42,7 @@
         "om-mockup-prototype",
         "om-implement-spec",
         "om-pre-implement-spec",
+        "om-verify-spec-claims",
         "om-smart-test",
         "om-create-agents-md",
         "om-skill-creator",

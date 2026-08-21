@@ -1,0 +1,200 @@
+name: spec-from-design
+description: >-
+  Turn a design prototype or feature brief into an implementable slice spec, with three gates that
+  catch the defects post-hoc review misses: a claims ledger (every platform claim carries a
+  file:line to the code that performs it), a core-edit ledger (every file touched outside the new
+  package is classified and justified), and a frozen-surface list covering all 14 BC surfaces.
+  Full rationale and the defect each gate caught: .ai/docs/spec-pipeline-runbook.md
+steps:
+  - id: setup
+    name: Install skills + commit the input
+    command: "corepack yarn install-skills && echo '--- skills installed. Commit the design prototype into the repo before step 2. ---'"
+
+  - id: shape
+    name: Shape the scope
+    prompt: >-
+      Task: {{task}}
+
+      Read .ai/docs/spec-pipeline-runbook.md first — it is the method for this whole workflow.
+
+      Run the om-brainstorm skill (or om-ux-shape if the input is a vague UI/UX idea). These are
+      repo-local or external skills; if the Skill tool says "Unknown skill", read
+      .agents/skills/<name>/SKILL.md or .ai/skills/<name>/SKILL.md and execute it by hand.
+
+      Commit the design prototype / input artifact into the repo NOW, under the spec's notes
+      directory. Working copies in tmp/ do not survive; a later reviewer will need to read it as a
+      fixture, not as a picture.
+
+      Surface every scope decision you cannot resolve from the input, the codebase or a sensible
+      default, and emit them as ONE CEZ:ASK block with 2-4 questions. Do not write any spec text
+      until they are answered.
+
+  - id: survey
+    name: Platform survey
+    prompt: >-
+      Run the om-gap-analysis skill (.ai/skills/om-gap-analysis/SKILL.md) to establish the
+      reuse-vs-build boundary with executable coverage verdicts rather than a hand-rolled
+      Grep/Read sweep.
+
+      Output: for every capability the feature needs, a verdict (platform provides it / partially /
+      absent) WITH the evidence path attached. This feeds the claims ledger in a later step, so
+      record file:line now while you have it.
+
+  - id: draft
+    name: Draft spec and plan
+    prompt: >-
+      Run /speckit-specify then /speckit-plan for the answered scope.
+
+      Repo specifics: there is no .specify scaffolding (no setup-plan.sh, no memory/constitution.md,
+      no templates). Derive the Constitution Check from root AGENTS.md + BACKWARD_COMPATIBILITY.md +
+      .ai/ds-rules.md. Relocate output from specs/NNN-*/ to the repo convention,
+      .ai/specs/{YYYY-MM-DD}-{kebab}.md — see .ai/specs/AGENTS.md.
+
+      On top of the numbered FR list, add numbered INVARIANTS. Each names the module that WRITES the
+      constrained column, the transaction it is written in, and the behaviour when that module is
+      absent. An FR list cannot express those and they are where the real defects hide.
+
+  - id: claims-ledger
+    name: "GATE 1 — Claims ledger"
+    prompt: >-
+      Run the om-verify-spec-claims skill against the spec and every companion artifact. It is
+      repo-local and NOT Skill-tool registered — read .ai/skills/om-verify-spec-claims/SKILL.md and
+      execute its procedure. Rationale for the gate: .ai/docs/spec-pipeline-runbook.md, Gate 1.
+
+      The skill is read-only and reports. YOU then apply the outcome: every REFUTED row is struck
+      from the spec, every OVERSTATED row is narrowed to what is actually true, and every UNCITABLE
+      row that carries a decision blocks the pipeline until it is settled or the decision is
+      withdrawn.
+
+      Report the ledger in full — including the rows that failed, not only the survivors — and say
+      explicitly whether author and verifier were the same agent. If they were, the ledger is
+      UNGATED and must be re-run in the review step by a different agent.
+
+  - id: decompose
+    name: Decompose into file-pathed tasks
+    prompt: >-
+      Run /speckit-tasks scoped to ONE slice. Every task must name a file path.
+
+      Then apply the write-path test as a detector, not a formality: for every headline requirement,
+      name the task that performs its WRITE. If no task writes it, the requirement has no mechanism
+      — say so explicitly and either add the task or cut the requirement from the slice.
+
+      Regenerate task IDs; never renumber with a regex sweep. Verify at the end that every task
+      cross-reference in every artifact still points at the task it names.
+
+  - id: core-ledger
+    name: "GATE 2 — Core-edit ledger"
+    prompt: >-
+      Build the core-edit ledger described in .ai/docs/spec-pipeline-runbook.md, Gate 2.
+
+      Enumerate EVERY file outside the new package the plan touches. Classify each as
+      (a) new file in an existing module, (b) additive DI/registry entry, (c) additive optional
+      field on a public type, (d) entity or table change, (e) function signature or behaviour change.
+
+      Rows (d) and (e) must each state why the sanctioned extension route was rejected — the
+      EntityExtension / data/extensions.ts mechanism, custom fields, or a widget injection spot —
+      and must ship as a separate upstream PR merged before the consuming PR. See
+      packages/core/AGENTS.md section Extensions ("never mutate core entities") and
+      packages/core/src/modules/communication_channels/data/extensions.ts for the shipped pattern.
+
+      Read-only access to a peer module's data has no sanctioned mechanism in this platform: adding
+      a source-owned DI read facade is a legitimate (a)+(b) core edit per
+      .ai/lessons.md → "Cross-module query precedent is not permission to copy storage coupling".
+      Record it in the ledger rather than letting it pass unremarked.
+
+  - id: review
+    name: Adversarial review — four roles
+    prompt: >-
+      Spawn FOUR review agents in parallel, each blocked from reading the others until it has
+      written its own findings. Give each the spec, the plan, the task graph and both ledgers.
+
+      DDD — invariants, derived formulas, glossary, cardinality. Hunt contradictions between
+      invariants and formulas, and metrics that are gameable.
+
+      Architect — platform claims against source. Re-run om-verify-spec-claims independently: this
+      is the non-author verification the skill requires, and it is the only control that has been
+      shown to work. Assume the ledger is incomplete; verify behaviour, not existence.
+
+      PM/UX — the committed prototype AS A FIXTURE. Read its data, not its pixels: reconcile every
+      number the spec takes from it, and find screens or states with no requirement.
+
+      Implementer — the task graph only. "Give me the file list, I am building this Monday."
+      Find requirements with no write path, unpathed work, stale cross-references, and anything
+      that would force a decision at implementation time.
+
+      Write one review register naming each finding, its severity, and its evidence. Where two
+      reviewers disagree, ADJUDICATE — do not average. One has usually gone a level deeper.
+
+  - id: remediate
+    name: Remediate once
+    prompt: >-
+      Apply the review findings ONCE.
+
+      Do not revise the same document a third time in place. If the artifact has already been
+      revised twice, freeze it and write the NEXT artifact (the phase/slice spec) instead of another
+      version of the same one.
+
+      Never leave a claim you know to be false in the shipped text, even under a warning banner.
+      Strike the sentence and leave [RETRACTED — see <review file> section N].
+
+      For any question that cannot be closed by specifying — a number that depends on data no
+      fixture contains — say so, name what would close it, and name the deliverable that produces
+      that data. Do not revise toward a fourth variant of the same error.
+
+  - id: audit
+    name: Readiness audit
+    prompt: >-
+      Run om-pre-implement-spec (.ai/skills/om-pre-implement-spec/SKILL.md — not Skill-tool
+      registered) and /speckit-analyze.
+
+      These close the internal-consistency axis: canonical-mechanism omissions (mutation-guard
+      wiring on custom write routes, encryption.ts maps with hashField for equality lookups, zod
+      validators, module paths), cross-artifact consistency and coverage. They will NOT catch a
+      wrong premise — that was Gate 1's job.
+
+      Apply every critical and major finding before continuing.
+
+  - id: freeze
+    name: "GATE 3 — Frozen-surface list"
+    prompt: >-
+      Write ONE authoritative frozen-surface file covering all 14 BACKWARD_COMPATIBILITY.md
+      surfaces: module/package IDs, event IDs, ACL feature IDs, widget spot IDs, DB tables and
+      enums, DI names, notification type IDs, AI agent/tool IDs, import paths, query-index entity
+      types and DataTable ids.
+
+      Enumerate ACL feature IDs individually — never behind a <key> wildcard. They are stored in the
+      DB and renaming one later needs a data migration.
+
+      Check every widget spot ID against the shipped host declaration in that module's
+      extension-points.ts, including its parameter regex — a plausible-looking spot name that the
+      host regex rejects is a silent failure.
+
+      State at the top: "where any other document disagrees with this file, this file wins." Add a
+      decision log recording why each choice was made. Then reconcile every other document against
+      it and fix the drift now, before the first migration.
+
+  - id: ds
+    name: Design-system review
+    prompt: >-
+      Run om-ds-guardian (.ai/skills/om-ds-guardian/SKILL.md) over every new UI composite the spec
+      introduces, BEFORE implementation locks the patterns in.
+
+      Design prototypes reliably violate the hardcoded-status-colour, arbitrary-value and
+      raw-<button> rules throughout. Map each prototype pattern to its design-system primitive in
+      the spec, so a literal port is not the path of least resistance.
+
+  - id: judge
+    name: Neutral judge pass
+    prompt: >-
+      Run om-judge-agent-session over this session for an independent read: validation evidence,
+      project guards, design-system compliance, and whether the ledgers actually hold.
+
+      This is the independent sign-off. Report its verdict verbatim, including anything it
+      contradicts in the work above.
+
+  - id: gate-check
+    name: Definition of done
+    command: "test -f .ai/docs/spec-pipeline-runbook.md && echo 'Manual check — every box must be ticked:' && sed -n '/^## Definition of done/,$p' .ai/docs/spec-pipeline-runbook.md"
+    onFail:
+      retry: remediate
+      max: 2
