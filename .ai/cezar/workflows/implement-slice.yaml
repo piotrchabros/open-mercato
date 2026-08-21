@@ -1,0 +1,165 @@
+name: implement-slice
+description: >-
+  Implement one slice of a spec with parallel implementers and four specialised critic subagents
+  (architecture · security · code-review · tests). Each critic has a quality bar that combines
+  counted findings with mechanical checks a critic cannot argue past, and each bar is a loop that
+  sends the work back until it is met — or halts when remediation starts making things worse.
+  Method: .ai/docs/spec-pipeline-runbook.md · bars: .ai/scripts/impl-gate-check.mjs
+steps:
+  - id: setup
+    name: Prepare the slice
+    command: "corepack yarn install-skills && mkdir -p .ai/analysis/impl-pipeline && rm -f .ai/analysis/impl-pipeline/HALT && echo '--- skills installed, gate state reset ---'"
+
+  - id: plan
+    name: Plan the parallel work
+    prompt: >-
+      Task: {{task}}
+
+      Read the slice's tasks in the spec named by the task above (default:
+      .ai/specs/2026-08-21-connect-phase-1-merged.md § Tasks). Read .ai/docs/spec-pipeline-runbook.md
+      for the method.
+
+      Produce a PARALLEL PLAN, and derive it from file disjointness, not from wishful grouping:
+
+      1. For every task in the slice, list the files it creates or edits.
+      2. Group tasks so that no two groups touch the same file. Tasks sharing a file are SEQUENTIAL
+         within one group — two agents editing one file is a merge conflict, not parallelism.
+      3. Order groups by dependency: entities before validators before routes before UI. A group
+         whose inputs do not exist yet is not ready, however disjoint its files are.
+      4. State the width: how many groups can run at once, and which must wait.
+
+      Write the plan to .ai/analysis/impl-pipeline/parallel-plan.md as a table:
+      group · tasks · files owned · depends on · ready now (y/n).
+
+      Do not start implementing. Report the plan and the critical path.
+
+  - id: implement
+    name: Implement — parallel subagents
+    prompt: >-
+      Execute the ready groups from .ai/analysis/impl-pipeline/parallel-plan.md by spawning ONE
+      implementer subagent PER GROUP, in parallel.
+
+      Give each subagent: its task list with file paths, the spec sections those tasks cite, the
+      files it OWNS (and the instruction that it must not edit any file outside that set), and the
+      repo rules below. When a group finishes, launch the next group whose dependencies are now met.
+
+      Non-negotiable rules — these are the mechanical bars, and a grep will find every violation:
+      - No peer-module entity imports, no raw SQL against peer tables, no resolving a peer's
+        entity-class DI registration in order to query it. Use the source-owned read facade.
+      - No cross-module ORM relations. FK-id columns plus a snapshot where the read must survive
+        the peer being absent.
+      - Every route file exports PER-METHOD `metadata` (requireAuth / requireFeatures). A top-level
+        `export const requireAuth` is a violation.
+      - Custom write routes map to a mutation-guard operation and call `runMutationGuards(...)`
+        with `{ userFeatures }` BEFORE mutating, then run `afterSuccessCallbacks`.
+      - `apiCall` / `apiCallOrThrow` / `readApiResultOrThrow` only. Raw `fetch` is a violation.
+      - `createLogger`, never `console.*`. Never log a credential.
+      - No `any`. Types via `z.infer` from validators in `data/validators.ts`.
+      - DS tokens only: no hardcoded status colours, no arbitrary Tailwind values, no `dark:`
+        override on a semantic or status token, no `window.confirm`.
+      - Every query filters on tenant_id and organization_id. Scope comes from the authenticated
+        context, never from request input.
+      - Cache resolves through DI. No module constructs a Redis or SQLite client.
+
+      Run `corepack yarn generate` after adding any auto-discovered file. Do NOT run `db:migrate`.
+
+      Report which groups completed, which files each touched, and any task you could not finish.
+
+  - id: validation-gate
+    name: "▶ bar — repo validation gate"
+    command: "corepack yarn build:packages && corepack yarn generate && corepack yarn build:packages && corepack yarn i18n:check-sync && corepack yarn i18n:check-usage && corepack yarn typecheck && corepack yarn test"
+    onFail:
+      retry: implement
+      max: 3
+
+  - id: review-round
+    name: Critics — four specialists in parallel
+    prompt: >-
+      FIRST: if .ai/analysis/impl-pipeline/HALT exists, STOP. Do not fix anything and do not
+      re-review. Read it, report what is failing, what you have already tried, and which decision
+      you need — then emit a CEZ:ASK. The halt fired because the last round left MORE unresolved
+      findings than the one before it, which means iterating again makes the code worse.
+
+      If you are re-entering this step after a failed bar: fix the outstanding findings FIRST, then
+      re-run the validation gate, then re-review. Set `previous.totalUnresolved` to the count you
+      were told and increment `round` before you finish — the divergence detector reads those and
+      without them it cannot tell a converging loop from a diverging one.
+
+      Then spawn FOUR critic subagents IN PARALLEL, each blocked from reading the others until it
+      has written its own findings. Each returns findings with severity (critical / high / major /
+      minor), file:line, and a concrete fix — never "consider reviewing X".
+
+      ARCHITECTURE critic — module boundaries and coupling. Does anything read a peer module's
+      tables directly rather than through its source-owned facade? Any cross-module ORM relation?
+      Does every out-of-package edit appear in the spec's Gate-2 core-edit ledger with its class
+      and its upstream PR? Does the code degrade with a named explanation when an optional peer is
+      absent, or does it throw? Bar: zero unresolved critical or high.
+
+      SECURITY critic — tenancy, authorisation, secrets. Is every query scoped to tenant AND
+      organization, including the ones whose scope lives in a filter variable rather than inline —
+      a grep cannot see those, which is why you are reading them. Does every action route call
+      runMutationGuards before mutating? Is every PII column in `encryption.ts` with reads through
+      findWithDecryption, and are equality lookups on a hashField rather than the ciphertext? Do
+      cross-tenant references return 404 rather than 403? Bar: zero unresolved critical or high.
+
+      CODE-REVIEW critic — correctness first, then reuse and simplification. Hunt the failure
+      modes, not the style: check-then-act races, outbound calls with no timeout, cache
+      invalidation missing on a write path (especially subscriber- and worker-driven writes, which
+      are the highest-volume and the easiest to forget), unhandled provider rejection, silent
+      catch. Then: is anything reimplemented that the platform already provides? Bar: zero
+      unresolved critical or major, and the validation gate green.
+
+      TESTS critic — does the test suite prove the spec's claims? Every test the spec declares must
+      exist and pass. Both isolation tests (cross-tenant and cross-customer) are hard gates. Are
+      the negative paths covered — the failure that must NOT happen, not just the happy path? Are
+      fixtures created in setup and cleaned in teardown, with no reliance on seeded demo data? A
+      skipped or assertion-free test is an unmet bar wearing a green tick. Bar: zero unresolved
+      critical or major.
+
+      Write .ai/analysis/impl-pipeline/state.json:
+      { slice, round, critics: { <name>: { ran, findings: { critical, high, major, minor },
+      unresolved } }, validationGate: { ran, passed, command }, previous: { totalUnresolved } }.
+      COUNT the findings from the critic reports. Do not assert a number from memory.
+
+  - id: architecture-bar
+    name: "▶ bar — architecture"
+    command: "node .ai/scripts/impl-gate-check.mjs architecture --module packages/connect/src/modules/connect --max-rounds 3"
+    onFail:
+      retry: review-round
+      max: 3
+
+  - id: security-bar
+    name: "▶ bar — security"
+    command: "node .ai/scripts/impl-gate-check.mjs security --module packages/connect/src/modules/connect --max-rounds 3"
+    onFail:
+      retry: review-round
+      max: 3
+
+  - id: code-review-bar
+    name: "▶ bar — code review"
+    command: "node .ai/scripts/impl-gate-check.mjs code-review --module packages/connect/src/modules/connect --max-rounds 3"
+    onFail:
+      retry: review-round
+      max: 3
+
+  - id: tests-bar
+    name: "▶ bar — tests"
+    command: "node .ai/scripts/impl-gate-check.mjs tests --module packages/connect/src/modules/connect --max-rounds 3"
+    onFail:
+      retry: review-round
+      max: 3
+
+  - id: ds-review
+    name: Design-system review
+    prompt: >-
+      Run om-ds-guardian over every new `.tsx` in the slice. It is repo-local and not Skill-tool
+      registered — read .ai/skills/om-ds-guardian/SKILL.md and execute it.
+
+      The mechanical bar already caught hardcoded status colours, arbitrary values and `dark:`
+      overrides. This pass catches what a grep cannot: a raw `<table>` where DataTable belongs, a
+      hand-rolled toggle instead of Switch, a missing empty state, a page without the standard
+      wrapper.
+
+  - id: done
+    name: "▶ Definition of done"
+    command: "node .ai/scripts/impl-gate-check.mjs all --module packages/connect/src/modules/connect --max-rounds 99 && corepack yarn i18n:check-hardcoded && echo '--- slice complete: bars met, gate green, DS reviewed ---'"

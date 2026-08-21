@@ -389,6 +389,51 @@ code-review findings, DS compliance. Both packages asked for independent sign-of
 words — one flagged it as an explicit caveat on its Critical finding, the other tracked it as an
 open question for the whole engagement — and neither got it. This is the cheapest way to get it.
 
+## Implementation — the second pipeline
+
+The spec phase ends where `implement-slice` begins:
+`.ai/cezar/workflows/implement-slice.yaml`, with bars in `.ai/scripts/impl-gate-check.mjs`.
+
+Same three properties as the spec loops — loop on gates not on the artifact, count don't score,
+and let the loop conclude that looping is wrong — applied to code.
+
+**Parallelism is derived from file disjointness, not from optimism.** One implementer subagent per
+group of tasks whose file sets do not overlap; tasks sharing a file are sequential within a group.
+Two agents editing one file is a merge conflict wearing a parallelism costume.
+
+**Four specialised critics, spawned in parallel, each blind to the others until it has written its
+own findings.**
+
+| Critic | Bar | Reads for |
+|---|---|---|
+| Architecture | 0 unresolved critical/high | boundary violations, cross-module ORM relations, missing ledger entries, degradation that throws instead of explaining |
+| Security | 0 unresolved critical/high | tenancy scope, guard wiring, encryption maps and hash lookups, 404-not-403 |
+| Code review | 0 unresolved critical/major **+ validation gate green** | check-then-act races, missing timeouts, cache invalidation on subscriber-driven writes, silent catch |
+| Tests | 0 unresolved critical/major | declared tests exist and pass, both isolation tests, negative paths, no skipped or assertion-free tests |
+
+**Each bar needs two kinds of evidence, and this is the load-bearing design choice.** A critic can
+be argued with; a grep cannot. `impl-gate-check` runs its own mechanical checks over the module —
+peer entity imports, top-level `requireAuth`, raw `fetch`, `console.*`, `any`, hardcoded status
+colours, arbitrary Tailwind values, `dark:` on semantic tokens, `window.confirm`, skipped tests —
+**and** counts critic findings by severity. Both must be clean. Critic sign-off alone would let a
+loop terminate on "an agent said it looked fine", which is the subjective bar the spec pipeline
+already rejects.
+
+**Calibration matters more than coverage.** These rules were tested against shipped modules
+(`planner`, `progress`, `currencies`) before being trusted. Two were wrong and were fixed: the
+route-metadata rule flagged `api/openapi.ts` and `api/helpers.ts`, so a route is now defined as a
+file that *exports an HTTP method handler*; and a "scope-free query" rule fired 31× on `currencies`
+because scope routinely lives in a filter variable — ungreppable, so it was **deleted** and handed
+to the security critic as judgement. A rule that cannot separate correct from incorrect code is
+worse than no rule: it teaches people to ignore the gate.
+
+The mechanical bars target **new** code. Existing modules predate several of these rules and will
+show real-but-pre-existing findings; scope the gate to the module under construction.
+
+**Divergence, in code.** If a round leaves more unresolved findings than the round before, the
+build is getting worse and `impl-gate-check` exits 2. `review-round` then escalates instead of
+fixing — the code equivalent of refusing to write a fourth variant.
+
 ## Definition of done for the spec phase
 
 - [ ] Claims ledger complete; every row has a `file:line` and a non-author verifier
