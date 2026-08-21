@@ -1,106 +1,144 @@
 name: spec-from-design
 description: >-
-  Turn a design prototype or feature brief into an implementable slice spec, with three gates that
-  catch the defects post-hoc review misses: a claims ledger (every platform claim carries a
-  file:line to the code that performs it), a core-edit ledger (every file touched outside the new
-  package is classified and justified), and a frozen-surface list covering all 14 BC surfaces.
-  Full rationale and the defect each gate caught: .ai/docs/spec-pipeline-runbook.md
+  Turn a design prototype or feature brief into an implementable slice spec. Three gates catch the
+  defects post-hoc review misses — a claims ledger (every platform claim carries a file:line to the
+  code that PERFORMS it), an out-of-scope-edit ledger, and a frozen-surface list. Each gate is a
+  self-improving loop: an agent step produces, a command step evaluates a countable threshold, and
+  onFail sends the agent back until the threshold is met — or until the divergence detector halts
+  the loop and escalates to a human. Rationale and the defect each gate caught:
+  .ai/docs/spec-pipeline-runbook.md
 steps:
   - id: setup
     name: Install skills + commit the input
-    command: "corepack yarn install-skills && echo '--- skills installed. Commit the design prototype into the repo before step 2. ---'"
+    command: "corepack yarn install-skills && mkdir -p .ai/analysis/spec-pipeline && rm -f .ai/analysis/spec-pipeline/HALT && echo '--- skills installed, gate state reset. Commit the design prototype before step 2. ---'"
 
   - id: shape
     name: Shape the scope
     prompt: >-
       Task: {{task}}
 
-      Read .ai/docs/spec-pipeline-runbook.md first — it is the method for this whole workflow.
+      Read .ai/docs/spec-pipeline-runbook.md first — it is the method for this whole workflow, and
+      its section "Loops and thresholds" explains how the gate steps below control you.
 
-      Run the om-brainstorm skill (or om-ux-shape if the input is a vague UI/UX idea). These are
-      repo-local or external skills; if the Skill tool says "Unknown skill", read
-      .agents/skills/<name>/SKILL.md or .ai/skills/<name>/SKILL.md and execute it by hand.
+      Run om-brainstorm (or om-ux-shape if the input is a vague UI/UX idea). Repo-local skills are
+      not Skill-tool registered; if you get "Unknown skill", read .ai/skills/<name>/SKILL.md or
+      .agents/skills/<name>/SKILL.md and execute it by hand.
 
-      Commit the design prototype / input artifact into the repo NOW, under the spec's notes
-      directory. Working copies in tmp/ do not survive; a later reviewer will need to read it as a
-      fixture, not as a picture.
+      Commit the design prototype / input artifact into the repo NOW. Working copies in tmp/ do not
+      survive, and a later reviewer must read it as a FIXTURE — its data — not as a picture.
 
       Surface every scope decision you cannot resolve from the input, the codebase or a sensible
-      default, and emit them as ONE CEZ:ASK block with 2-4 questions. Do not write any spec text
-      until they are answered.
+      default, and emit them as ONE CEZ:ASK block with 2-4 questions. Write no spec text until they
+      are answered.
 
   - id: survey
     name: Platform survey
     prompt: >-
-      Run the om-gap-analysis skill (.ai/skills/om-gap-analysis/SKILL.md) to establish the
-      reuse-vs-build boundary with executable coverage verdicts rather than a hand-rolled
-      Grep/Read sweep.
+      Run om-gap-analysis to establish the reuse-vs-build boundary with executable coverage
+      verdicts rather than a hand-rolled Grep/Read sweep.
 
-      Output: for every capability the feature needs, a verdict (platform provides it / partially /
-      absent) WITH the evidence path attached. This feeds the claims ledger in a later step, so
-      record file:line now while you have it.
+      For every capability the feature needs, record a verdict WITH its evidence path. Capture
+      file:line now, while you have it — the next gate will demand it.
 
   - id: draft
     name: Draft spec and plan
     prompt: >-
       Run /speckit-specify then /speckit-plan for the answered scope.
 
-      Repo specifics: there is no .specify scaffolding (no setup-plan.sh, no memory/constitution.md,
-      no templates). Derive the Constitution Check from root AGENTS.md + BACKWARD_COMPATIBILITY.md +
-      .ai/ds-rules.md. Relocate output from specs/NNN-*/ to the repo convention,
-      .ai/specs/{YYYY-MM-DD}-{kebab}.md — see .ai/specs/AGENTS.md.
+      Repo specifics: there is no .specify scaffolding. Derive the Constitution Check from root
+      AGENTS.md + BACKWARD_COMPATIBILITY.md + .ai/ds-rules.md, and relocate output from specs/NNN-*/
+      to .ai/specs/{YYYY-MM-DD}-{kebab}.md per .ai/specs/AGENTS.md.
 
       On top of the numbered FR list, add numbered INVARIANTS. Each names the module that WRITES the
       constrained column, the transaction it is written in, and the behaviour when that module is
-      absent. An FR list cannot express those and they are where the real defects hide.
+      absent. An FR list cannot express those, and they are where the real defects hide.
 
   - id: claims-ledger
     name: "GATE 1 — Claims ledger"
     prompt: >-
-      Run the om-verify-spec-claims skill against the spec and every companion artifact. It is
-      repo-local and NOT Skill-tool registered — read .ai/skills/om-verify-spec-claims/SKILL.md and
-      execute its procedure. Rationale for the gate: .ai/docs/spec-pipeline-runbook.md, Gate 1.
+      Run om-verify-spec-claims against the spec and every companion artifact. It is repo-local and
+      NOT Skill-tool registered — read .ai/skills/om-verify-spec-claims/SKILL.md and execute it.
 
-      The skill is read-only and reports. YOU then apply the outcome: every REFUTED row is struck
-      from the spec, every OVERSTATED row is narrowed to what is actually true, and every UNCITABLE
-      row that carries a decision blocks the pipeline until it is settled or the decision is
-      withdrawn.
+      The skill reports; YOU apply the outcome. Strike every REFUTED row from the spec, narrow every
+      OVERSTATED row to what is actually true, and treat every UNCITABLE row that carries a decision
+      as blocking.
 
-      Report the ledger in full — including the rows that failed, not only the survivors — and say
-      explicitly whether author and verifier were the same agent. If they were, the ledger is
-      UNGATED and must be re-run in the review step by a different agent.
+      Then write .ai/analysis/spec-pipeline/gate-state.json with the `gates.claims` block:
+      rows · confirmed · overstated · refuted · uncitable · loadBearingUnresolved ·
+      unstruckFalseClaims · ungated · newClaimsIntroduced · rowsResolved.
+
+      COUNT every figure from the ledger. Do not assert one from memory — a miscounted headline that
+      propagated across four documents is one of the defects this pipeline exists to catch.
+
+      If you are re-entering this step after a failed gate: copy the previous `gates` block to
+      `previous.gates` and increment `round` FIRST. The divergence detector reads those two fields,
+      and without them it cannot tell a converging loop from a diverging one.
+
+      Set `ungated: true` if you both wrote and verified the claims. That is not a failure to hide —
+      the Architect reviewer re-runs the ledger independently later, which is what clears it.
+
+  - id: claims-gate
+    name: "▶ threshold — claims"
+    command: "node .ai/scripts/spec-gate-check.mjs claims --max-rounds 3"
+    onFail:
+      retry: claims-ledger
+      max: 3
 
   - id: decompose
     name: Decompose into file-pathed tasks
     prompt: >-
-      Run /speckit-tasks scoped to ONE slice. Every task must name a file path.
+      Run /speckit-tasks scoped to ONE slice. Every task names a file path.
 
       Then apply the write-path test as a detector, not a formality: for every headline requirement,
       name the task that performs its WRITE. If no task writes it, the requirement has no mechanism
       — say so explicitly and either add the task or cut the requirement from the slice.
 
-      Regenerate task IDs; never renumber with a regex sweep. Verify at the end that every task
-      cross-reference in every artifact still points at the task it names.
+      Regenerate task IDs; never renumber with a regex sweep. Then verify every task
+      cross-reference in every artifact still points at the task it names, and count the ones that
+      do not.
+
+      Update gate-state.json `gates.writePath`: headlineRequirements · withWriteTask · staleTaskRefs.
+
+  - id: writepath-gate
+    name: "▶ threshold — write path"
+    command: "node .ai/scripts/spec-gate-check.mjs write-path --max-rounds 2"
+    onFail:
+      retry: decompose
+      max: 2
 
   - id: core-ledger
-    name: "GATE 2 — Core-edit ledger"
+    name: "GATE 2 — Out-of-scope-edit ledger"
     prompt: >-
-      Build the core-edit ledger described in .ai/docs/spec-pipeline-runbook.md, Gate 2.
+      Build the ledger from .ai/docs/spec-pipeline-runbook.md, Gate 2.
 
-      Enumerate EVERY file outside the new package the plan touches. Classify each as
-      (a) new file in an existing module, (b) additive DI/registry entry, (c) additive optional
-      field on a public type, (d) entity or table change, (e) function signature or behaviour change.
+      FIRST find and quote this repo's actual rule on editing shared/core code. In open-mercato it is
+      packages/core/AGENTS.md section Extensions — "never mutate core entities" — which is scoped to
+      entities, not to editing core generally. Quote what you find; if no such rule exists, say so
+      rather than inventing one.
+
+      Enumerate EVERY file outside the new package the plan touches. Classify each: (a) new file,
+      (b) additive DI/registry entry, (c) additive optional field, (d) entity or table change,
+      (e) function signature or behaviour change.
 
       Rows (d) and (e) must each state why the sanctioned extension route was rejected — the
-      EntityExtension / data/extensions.ts mechanism, custom fields, or a widget injection spot —
-      and must ship as a separate upstream PR merged before the consuming PR. See
-      packages/core/AGENTS.md section Extensions ("never mutate core entities") and
+      EntityExtension / data/extensions.ts mechanism, custom fields, or a widget injection spot — and
+      must be assigned to a separate upstream PR merged before the consuming PR. See
       packages/core/src/modules/communication_channels/data/extensions.ts for the shipped pattern.
 
-      Read-only access to a peer module's data has no sanctioned mechanism in this platform: adding
-      a source-owned DI read facade is a legitimate (a)+(b) core edit per
-      .ai/lessons.md → "Cross-module query precedent is not permission to copy storage coupling".
-      Record it in the ledger rather than letting it pass unremarked.
+      Read-only access to a peer module's data has no sanctioned mechanism here: adding a
+      source-owned DI read facade is a legitimate (a)+(b) core edit per .ai/lessons.md →
+      "Cross-module query precedent is not permission to copy storage coupling". Record it rather
+      than letting it pass unremarked.
+
+      Update gate-state.json `gates.coreEdit`: rows · classDorE · justified · assignedUpstreamPr ·
+      ruleQuoted.
+
+  - id: coreedit-gate
+    name: "▶ threshold — out-of-scope edits"
+    command: "node .ai/scripts/spec-gate-check.mjs core-edit --max-rounds 2"
+    onFail:
+      retry: core-ledger
+      max: 2
 
   - id: review
     name: Adversarial review — four roles
@@ -112,34 +150,52 @@ steps:
       invariants and formulas, and metrics that are gameable.
 
       Architect — platform claims against source. Re-run om-verify-spec-claims independently: this
-      is the non-author verification the skill requires, and it is the only control that has been
-      shown to work. Assume the ledger is incomplete; verify behaviour, not existence.
+      is the non-author verification the skill requires, and it is what clears `ungated`. Assume the
+      ledger is incomplete; verify behaviour, not existence.
 
       PM/UX — the committed prototype AS A FIXTURE. Read its data, not its pixels: reconcile every
       number the spec takes from it, and find screens or states with no requirement.
 
-      Implementer — the task graph only. "Give me the file list, I am building this Monday."
-      Find requirements with no write path, unpathed work, stale cross-references, and anything
-      that would force a decision at implementation time.
+      Implementer — the task graph only. "Give me the file list, I am building this Monday." Find
+      requirements with no write path, unpathed work, stale cross-references, and anything that
+      would force a decision at implementation time.
 
-      Write one review register naming each finding, its severity, and its evidence. Where two
+      Write one review register naming each finding, its severity and its evidence. Where two
       reviewers disagree, ADJUDICATE — do not average. One has usually gone a level deeper.
+
+      Update gate-state.json `gates.review`: rolesRun · newFindings · dryRounds ·
+      unresolvedCritical. `dryRounds` counts CONSECUTIVE rounds that produced no new finding —
+      increment it when newFindings is 0, reset it to 0 otherwise. Also clear `gates.claims.ungated`
+      if the Architect re-ran the ledger.
 
   - id: remediate
     name: Remediate once
     prompt: >-
-      Apply the review findings ONCE.
+      FIRST: if .ai/analysis/spec-pipeline/HALT exists, STOP. Do not revise anything. Read it, then
+      report what is unresolved, what would settle it and who produces that, and emit a CEZ:ASK
+      asking the owner how to proceed. The halt fired because another revision is the wrong move —
+      three rounds on one document once produced wrong sum, then wrong subtraction, then wrong unit,
+      each round fixing the last defect and introducing a subtler one.
 
-      Do not revise the same document a third time in place. If the artifact has already been
-      revised twice, freeze it and write the NEXT artifact (the phase/slice spec) instead of another
-      version of the same one.
+      Otherwise apply the review findings ONCE.
+
+      Do not revise the same document a third time in place. If it has already been revised twice,
+      freeze it and write the NEXT artifact — the phase or slice spec — instead of another version
+      of the same one. A delta against an overwritten predecessor is worse than either.
 
       Never leave a claim you know to be false in the shipped text, even under a warning banner.
       Strike the sentence and leave [RETRACTED — see <review file> section N].
 
       For any question that cannot be closed by specifying — a number that depends on data no
       fixture contains — say so, name what would close it, and name the deliverable that produces
-      that data. Do not revise toward a fourth variant of the same error.
+      that data.
+
+  - id: review-gate
+    name: "▶ threshold — review dry"
+    command: "node .ai/scripts/spec-gate-check.mjs review --max-rounds 3"
+    onFail:
+      retry: review
+      max: 3
 
   - id: audit
     name: Readiness audit
@@ -152,7 +208,8 @@ steps:
       validators, module paths), cross-artifact consistency and coverage. They will NOT catch a
       wrong premise — that was Gate 1's job.
 
-      Apply every critical and major finding before continuing.
+      Apply every critical and major finding. If any of them invalidates a claim, update
+      gate-state.json and expect the gates to re-open.
 
   - id: freeze
     name: "GATE 3 — Frozen-surface list"
@@ -166,18 +223,27 @@ steps:
       DB and renaming one later needs a data migration.
 
       Check every widget spot ID against the shipped host declaration in that module's
-      extension-points.ts, including its parameter regex — a plausible-looking spot name that the
-      host regex rejects is a silent failure.
+      extension-points.ts, INCLUDING its parameter regex — a plausible-looking spot name the host
+      regex rejects is a silent failure.
 
       State at the top: "where any other document disagrees with this file, this file wins." Add a
-      decision log recording why each choice was made. Then reconcile every other document against
-      it and fix the drift now, before the first migration.
+      decision log. Then reconcile every other document against it and count what disagreed.
+
+      Update gate-state.json `gates.frozenSurfaces`: surfacesTotal · surfacesCovered ·
+      conflictsWithOtherDocs · wildcardedIds.
+
+  - id: frozen-gate
+    name: "▶ threshold — frozen surfaces"
+    command: "node .ai/scripts/spec-gate-check.mjs frozen --max-rounds 2"
+    onFail:
+      retry: freeze
+      max: 2
 
   - id: ds
     name: Design-system review
     prompt: >-
-      Run om-ds-guardian (.ai/skills/om-ds-guardian/SKILL.md) over every new UI composite the spec
-      introduces, BEFORE implementation locks the patterns in.
+      Run om-ds-guardian over every new UI composite the spec introduces, BEFORE implementation
+      locks the patterns in.
 
       Design prototypes reliably violate the hardcoded-status-colour, arbitrary-value and
       raw-<button> rules throughout. Map each prototype pattern to its design-system primitive in
@@ -192,9 +258,6 @@ steps:
       This is the independent sign-off. Report its verdict verbatim, including anything it
       contradicts in the work above.
 
-  - id: gate-check
-    name: Definition of done
-    command: "test -f .ai/docs/spec-pipeline-runbook.md && echo 'Manual check — every box must be ticked:' && sed -n '/^## Definition of done/,$p' .ai/docs/spec-pipeline-runbook.md"
-    onFail:
-      retry: remediate
-      max: 2
+  - id: final-gate
+    name: "▶ Definition of done — all thresholds"
+    command: "node .ai/scripts/spec-gate-check.mjs all --max-rounds 99 && sed -n '/^## Definition of done/,$p' .ai/docs/spec-pipeline-runbook.md"

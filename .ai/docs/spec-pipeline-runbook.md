@@ -38,19 +38,84 @@ pipeline was ever pointed at the codebase again after the research step.
 1.  SHAPE            om-brainstorm / om-ux-shape → owner decisions via CEZ:ASK
 2.  SURVEY           om-gap-analysis → executable coverage verdicts
 3.  DRAFT            /speckit-specify + /speckit-plan
-4.  ▶ GATE 1         Claims ledger
-5.  DECOMPOSE        /speckit-tasks (slice only) — used as a detector
-6.  ▶ GATE 2         Core-edit ledger
-7.  REVIEW           4 agents × 1 round: DDD · Architect · PM-UX · Implementer
-8.  REMEDIATE        once — never in place
+4.  ▶ GATE 1         Claims ledger              ◀─┐ loop until threshold met
+5.  DECOMPOSE        /speckit-tasks — a detector ◀─┤ (or HALT on divergence)
+6.  ▶ GATE 2         Core-edit ledger            ◀─┤
+7.  REVIEW           4 agents: DDD · Architect · PM-UX · Implementer ◀─┤
+8.  REMEDIATE        once — never in place; obeys HALT ──────────────┘
 9.  AUDIT            om-pre-implement-spec + /speckit-analyze
-10. ▶ GATE 3         Frozen-surface list (all 14 BC surfaces)
+10. ▶ GATE 3         Frozen-surface list (all 14 BC surfaces) ◀─ loop
 11. DS               om-ds-guardian on any new UI composite
 12. JUDGE            om-judge-agent-session — neutral read of the whole session
 ```
 
-One review round, not three. Gates 1 and 2 pre-empt the two classes that repeated review rounds
-kept re-finding: wrong platform claims, and requirements with no mechanism.
+One review round *by default*, not three. Gates 1 and 2 pre-empt the two classes that repeated
+review rounds kept re-finding: wrong platform claims, and requirements with no mechanism. Where a
+gate does need more than one pass, it loops against a countable threshold — see below.
+
+## Loops and thresholds
+
+Each gate is a **self-improving loop**: an agent step produces, a command step evaluates a
+threshold, and `onFail.retry` sends the agent back until the threshold is met.
+
+```
+agent step ──▶ node .ai/scripts/spec-gate-check.mjs <gate>
+                     exit 0  threshold met      → advance
+                     exit 1  not met            → onFail.retry the agent step
+                     exit 2  HALT               → stop looping, escalate to a human
+```
+
+| Gate | Threshold — all countable, none subjective | Retries |
+|---|---|---|
+| `claims` | zero OVERSTATED/REFUTED/UNCITABLE rows carrying a decision · zero unstruck false claims · ledger not UNGATED | 3 |
+| `write-path` | every headline requirement has a task that performs its write · zero stale task cross-references | 2 |
+| `core-edit` | the repo's rule is quoted · every (d)/(e) row justified and assigned an upstream PR | 2 |
+| `review` | all four roles ran · zero unresolved criticals · **2 consecutive rounds with no new findings** | 3 |
+| `frozen` | every contract surface covered · zero identifiers disagreeing with another document · zero wildcarded ID groups | 2 |
+
+Three design rules make this converge rather than drift.
+
+**1. Loop on gates, not on the document.** A gate loop is convergent — a ledger row is CONFIRMED or
+it is not. A document-quality loop is divergent, because every revision introduces new claims that
+were never verified. This is not theory: the engagement this pipeline came from ran three rounds on
+one document and produced **wrong sum → wrong subtraction → wrong unit**. Each round fixed the
+previous defect and introduced a subtler one a level down, and each felt like progress from the
+inside. Its own retrospective concluded *"a v4 written the same way will produce a fourth variant."*
+
+**2. Thresholds are counted, never scored.** "Zero uncitable rows carrying a decision" is checkable
+by a script. "Quality ≥ 8/10" is a number the judge re-invents each round, so the loop can satisfy
+it without improving anything. Every figure in `gate-state.json` is COUNTED from the ledger
+artifacts — the same engagement propagated a miscounted headline entity figure across four
+documents before anyone recounted it.
+
+**3. The loop can conclude that looping is wrong.** `spec-gate-check` exits **2** and writes a
+`HALT` marker when either:
+
+- a round **introduces more unverified claims than it resolves** — the divergence signature above,
+  caught by comparing this round's `newClaimsIntroduced` against `rowsResolved`; or
+- the round budget is spent with the threshold still unmet.
+
+On HALT the `remediate` step does not revise. It reports what is unresolved, names what would
+settle it and who produces that, and asks the owner. Some questions genuinely cannot be closed by
+specifying — a contact-volume baseline that depends on operator data no fixture contains is not a
+writing problem — and recognising that is what stopped a fourth revision round from being attempted.
+
+`review` uses **loop-until-dry** rather than a fixed count: two consecutive rounds with no new
+finding. Fixed counts stop while the tail is still producing; a dry-round counter stops when
+discovery is actually exhausted.
+
+### Loop state
+
+The agent maintains `.ai/analysis/spec-pipeline/gate-state.json`. Before re-entering a failed gate
+it copies the current `gates` block to `previous.gates` and increments `round` — without those two
+fields the divergence detector cannot distinguish a converging loop from a diverging one, and the
+loop loses the only control that stops it going wrong slowly.
+
+Two budgets apply, deliberately: the script's `--max-rounds` (soft, needs the agent to increment
+`round`) and cezar's `onFail.max` (hard, enforced by the runner regardless).
+
+Run `node .ai/scripts/spec-gate-check.mjs all` at any point for the full picture; it prints one
+line per gate and each unmet condition beneath it.
 
 ---
 
@@ -333,3 +398,4 @@ open question for the whole engagement — and neither got it. This is the cheap
 - [ ] One review round complete with all four roles; findings remediated once, not in place
 - [ ] No known-false claim remains unstruck
 - [ ] Open questions state what would close them, and who produces that
+- [ ] `node .ai/scripts/spec-gate-check.mjs all` exits 0, and no `HALT` marker remains
