@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { shouldUseSecureCookies } from '@open-mercato/shared/lib/auth/cookieSecurity'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
-import { toAbsoluteUrl } from '@open-mercato/shared/lib/url'
+import { getAppBaseUrl, toAbsoluteUrl } from '@open-mercato/shared/lib/url'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { createConnectedChannelRow, MailboxAlreadyConnectedError } from '../../../../../lib/connect-channel'
@@ -48,7 +48,7 @@ function redirectWithFlash(
 ): Response {
   const base = new URL(
     normalizeOAuthReturnUrl(returnUrl, DEFAULT_OAUTH_RETURN_URL),
-    new URL(req.url).origin,
+    getAppBaseUrl(req),
   )
   base.searchParams.set('flash', flash.type)
   if (flash.code) base.searchParams.set('code', flash.code)

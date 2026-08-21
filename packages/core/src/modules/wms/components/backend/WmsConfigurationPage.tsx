@@ -5,7 +5,8 @@ import { extensionPoints } from '@open-mercato/core/modules/wms/extension-points
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { z } from 'zod'
-import type { ColumnDef, SortingState } from '@tanstack/react-table'
+import type { LegacyColumnDef as ColumnDef } from '@tanstack/react-table/legacy'
+import type { SortingState } from '@tanstack/react-table'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
@@ -42,6 +43,7 @@ type PagedResponse<T> = {
   items: T[]
   total: number
   totalPages: number
+  totalIsCapped?: boolean
   page?: number
   pageSize?: number
 }
@@ -514,6 +516,7 @@ export function WarehouseSection({ viewAllHref }: ConfigSectionOptions = {}) {
             pageSize: 10,
             total: query.data?.total ?? 0,
             totalPages: query.data?.totalPages ?? 1,
+            totalIsCapped: query.data?.totalIsCapped === true,
             onPageChange: setPage,
           }}
           perspective={{ tableId: extensionPoints.hosts.warehousesTable.tableId }}
@@ -774,6 +777,7 @@ export function ZoneSection({ viewAllHref }: ConfigSectionOptions = {}) {
             pageSize: 10,
             total: query.data?.total ?? 0,
             totalPages: query.data?.totalPages ?? 1,
+            totalIsCapped: query.data?.totalIsCapped === true,
             onPageChange: setPage,
           }}
           perspective={{ tableId: extensionPoints.hosts.zonesTable.tableId }}
@@ -981,6 +985,7 @@ export function LocationSection({ viewAllHref }: ConfigSectionOptions = {}) {
             pageSize: 10,
             total: query.data?.total ?? 0,
             totalPages: query.data?.totalPages ?? 1,
+            totalIsCapped: query.data?.totalIsCapped === true,
             onPageChange: setPage,
           }}
           perspective={{ tableId: extensionPoints.hosts.locationsTable.tableId }}
@@ -1275,6 +1280,7 @@ export function InventoryProfilesSection() {
             pageSize: 10,
             total: query.data?.total ?? 0,
             totalPages: query.data?.totalPages ?? 1,
+            totalIsCapped: query.data?.totalIsCapped === true,
             onPageChange: setPage,
           }}
           perspective={{ tableId: extensionPoints.hosts.inventoryProfilesTable.tableId }}

@@ -6,7 +6,8 @@ import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { DataTable, type DataTableExportFormat, withDataTableNamespaces } from '@open-mercato/ui/backend/DataTable'
-import type { ColumnDef, SortingState } from '@tanstack/react-table'
+import type { LegacyColumnDef as ColumnDef } from '@tanstack/react-table/legacy'
+import type { SortingState } from '@tanstack/react-table'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { RowActions } from '@open-mercato/ui/backend/RowActions'
 import { apiCall, apiCallOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
@@ -117,6 +118,7 @@ type CompaniesResponse = {
   total?: number
   page?: number
   totalPages?: number
+  totalIsCapped?: boolean
 }
 
 type DictionaryKindKey = CustomerDictionaryKind
@@ -197,6 +199,7 @@ export default function CustomersCompaniesPage() {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [total, setTotal] = React.useState(0)
   const [totalPages, setTotalPages] = React.useState(1)
+  const [totalIsCapped, setTotalIsCapped] = React.useState(false)
   const [search, setSearch] = React.useState('')
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -421,6 +424,7 @@ export default function CustomersCompaniesPage() {
         setRows(items.map((item) => mapApiItem(item as Record<string, unknown>)).filter((row): row is CompanyRow => !!row))
         setTotal(typeof payload.total === 'number' ? payload.total : items.length)
         setTotalPages(typeof payload.totalPages === 'number' ? payload.totalPages : 1)
+        setTotalIsCapped(payload?.totalIsCapped === true)
       } catch (err) {
         if (!cancelled) {
           setCacheStatus(null)
@@ -962,7 +966,7 @@ export default function CustomersCompaniesPage() {
             />
           )}
           virtualized
-          pagination={{ page, pageSize, total, totalPages, onPageChange: setPage, pageSizeOptions: [10, 25, 50, 100], onPageSizeChange: handlePageSizeChange, cacheStatus }}
+          pagination={{ page, pageSize, total, totalPages, totalIsCapped, onPageChange: setPage, pageSizeOptions: [10, 25, 50, 100], onPageSizeChange: handlePageSizeChange, cacheStatus }}
           isLoading={isLoading}
         />
         <AdvancedFilterPanel

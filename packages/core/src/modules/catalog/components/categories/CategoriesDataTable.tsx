@@ -4,7 +4,7 @@ import * as React from 'react'
 import { extensionPoints } from '@open-mercato/core/modules/catalog/extension-points'
 import Link from 'next/link'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { ColumnDef } from '@tanstack/react-table'
+import type { LegacyColumnDef as ColumnDef } from '@tanstack/react-table/legacy'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
 import { ListEmptyState } from '@open-mercato/ui/backend/filters/ListEmptyState'
 import type { FilterValues } from '@open-mercato/ui/backend/FilterBar'
@@ -39,6 +39,7 @@ type CategoriesResponse = {
   page: number
   pageSize: number
   totalPages: number
+  totalIsCapped?: boolean
 }
 
 const PAGE_SIZE = 50
@@ -114,6 +115,7 @@ export default function CategoriesDataTable() {
   const rows = data?.items ?? []
   const total = data?.total ?? 0
   const totalPages = data?.totalPages ?? 0
+  const totalIsCapped = data?.totalIsCapped === true
 
   const columns = React.useMemo<ColumnDef<CategoryRow>[]>(() => [
     {
@@ -249,6 +251,7 @@ export default function CategoriesDataTable() {
           pageSize: PAGE_SIZE,
           total,
           totalPages,
+          totalIsCapped,
           onPageChange: setPage,
         }}
         isLoading={isLoading}

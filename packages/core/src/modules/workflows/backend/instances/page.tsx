@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { DataTable } from '@open-mercato/ui/backend/DataTable'
-import type { ColumnDef } from '@tanstack/react-table'
+import type { LegacyColumnDef as ColumnDef } from '@tanstack/react-table/legacy'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { RowActions } from '@open-mercato/ui/backend/RowActions'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
@@ -42,6 +42,7 @@ type InstancesResponse = {
     limit: number
     offset: number
     hasMore: boolean
+    totalIsCapped?: boolean
   }
 }
 
@@ -50,6 +51,7 @@ export default function WorkflowInstancesListPage() {
   const [pageSize] = React.useState(50)
   const [total, setTotal] = React.useState(0)
   const [totalPages, setTotalPages] = React.useState(1)
+  const [totalIsCapped, setTotalIsCapped] = React.useState(false)
   const t = useT()
   const router = useRouter()
   const queryClient = useQueryClient()
@@ -83,6 +85,7 @@ export default function WorkflowInstancesListPage() {
         setTotal(response.pagination.total || 0)
         const calculatedPages = Math.ceil((response.pagination.total || 0) / pageSize)
         setTotalPages(calculatedPages || 1)
+        setTotalIsCapped(response.pagination?.totalIsCapped === true)
       }
 
       return response?.data || []
@@ -335,7 +338,7 @@ export default function WorkflowInstancesListPage() {
           perspective={{
             tableId: extensionPoints.hosts.instancesTable.tableId,
           }}
-          pagination={{ page, pageSize, total, totalPages, onPageChange: setPage }}
+          pagination={{ page, pageSize, total, totalPages, totalIsCapped, onPageChange: setPage }}
         />
       </PageBody>
       {ConfirmDialogElement}

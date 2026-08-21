@@ -3,6 +3,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { verifyJwt } from './jwt'
 import { resolveHostBindingOutcome, type HostBinding, type HostBindingOutcome } from './hostBindingStore'
 import { getSharedApiKeyAuthCache } from './apiKeyAuthCache'
+import { isTransientDbError } from '@open-mercato/shared/lib/db/pg-errors'
 
 const TENANT_COOKIE_NAME = 'om_selected_tenant'
 const ORGANIZATION_COOKIE_NAME = 'om_selected_org'
@@ -118,12 +119,22 @@ function readCookieFromHeader(header: string | null | undefined, name: string): 
   return undefined
 }
 
+/**
+ * A blank `om_selected_tenant` is "no selection", not a deliberate "no tenant".
+ *
+ * Unlike the organization cookie there is no all-tenants sentinel to express, and the tenant
+ * selector renders with `includeEmptyOption={false}`, so no UI produces a blank value. Treating it
+ * as an applied override nulled `tenantId` for the whole super-admin session, which is what turned
+ * a cosmetic client bug into `tenantId ?? ''` reaching a NOT NULL uuid column. Reporting the
+ * override as not applied instead keeps the tenant carried in the token and remediates an
+ * already-poisoned browser on its next request, whatever wrote the cookie.
+ */
 function resolveTenantOverride(raw: string | undefined): CookieOverride {
   if (raw === undefined) return { applied: false, value: null }
   const decoded = decodeCookieValue(raw)
-  if (!decoded) return { applied: true, value: null }
+  if (!decoded) return { applied: false, value: null }
   const trimmed = decoded.trim()
-  if (!trimmed) return { applied: true, value: null }
+  if (!trimmed) return { applied: false, value: null }
   return { applied: true, value: trimmed }
 }
 
@@ -298,13 +309,33 @@ async function resolveApiKeyAuth(secret: string): Promise<AuthContext> {
       : []
     const roleNames = roles.map((role) => role.name).filter((name): name is string => typeof name === 'string' && name.length > 0)
 
+    // A role-level super-admin grant is authorization-grade only when it is genuinely
+    // unrestricted: the grant itself must not be organization-scoped, it must belong to the
+    // key's tenant, and the key must not be bound to a single organization. RbacService applies
+    // the same intersection when projecting the scoped ACL, but generic guards
+    // (tenantAccess.resolveIsSuperAdmin, the scoped-API helpers) trust this raw bit *before*
+    // live RBAC runs — so an organization-restricted key must never carry it.
     let keyIsSuperAdmin = false
-    if (roleIds.length) {
-      const superAcl = await em.findOne(
+    const keyOrganizationId = typeof record.organizationId === 'string' && record.organizationId.trim().length > 0
+      ? record.organizationId.trim()
+      : null
+    if (roleIds.length && !keyOrganizationId) {
+      const superAcls = await em.find(
         RoleAcl,
-        { role: { $in: roleIds } as any, isSuperAdmin: true, deletedAt: null } as any,
+        {
+          role: { $in: roleIds } as any,
+          tenantId: record.tenantId ?? null,
+          isSuperAdmin: true,
+          deletedAt: null,
+        } as any,
       )
-      keyIsSuperAdmin = !!(superAcl && (superAcl as { isSuperAdmin?: boolean }).isSuperAdmin)
+      keyIsSuperAdmin = superAcls.some((acl) => {
+        const organizations = Array.isArray((acl as { organizationsJson?: string[] | null }).organizationsJson)
+          ? (acl as { organizationsJson?: string[] | null }).organizationsJson as string[]
+          : null
+        // An empty list means "inherit the key's own binding"; with no binding that is tenant-wide.
+        return !organizations || organizations.length === 0 || organizations.includes('__all__')
+      })
     }
 
     if (cache.shouldWriteLastUsed(record.id)) {
@@ -316,8 +347,25 @@ async function resolveApiKeyAuth(secret: string): Promise<AuthContext> {
       }
     }
 
-    // For session keys, use sessionUserId; for regular keys, use createdBy
-    const actualUserId = record.sessionUserId ?? record.createdBy ?? null
+    // Ephemeral session keys are always user-bound. Regular keys retain their
+    // legacy creator identity, while tenant-scoped regular keys ignore only the
+    // creator's concrete organization when validating the wider key scope.
+    // Keep every session marker fail-closed so a malformed session key cannot
+    // fall back to the regular key path and escape its user/scope binding.
+    const isSessionBoundKey = Boolean(
+      record.sessionToken
+      || record.sessionUserId
+      || record.sessionSecretEncrypted
+      || record.opencodeSessionId
+    )
+    const actualUserId = isSessionBoundKey
+      ? record.sessionUserId ?? null
+      : record.createdBy ?? null
+
+    if (isSessionBoundKey && !actualUserId) {
+      cache.setMiss(secret)
+      return null
+    }
 
     if (actualUserId) {
       const user = await em.findOne(User, { id: actualUserId, deletedAt: null })
@@ -329,7 +377,8 @@ async function resolveApiKeyAuth(secret: string): Promise<AuthContext> {
         cache.setMiss(secret)
         return null
       }
-      if ((user.organizationId ?? null) !== (record.organizationId ?? null)) {
+      const requiresExactOrganization = isSessionBoundKey || Boolean(record.organizationId)
+      if (requiresExactOrganization && (user.organizationId ?? null) !== (record.organizationId ?? null)) {
         cache.setMiss(secret)
         return null
       }
@@ -367,7 +416,14 @@ async function resolveApiKeyAuth(secret: string): Promise<AuthContext> {
     }
     cache.setSuccess(secret, auth, record.expiresAt ? record.expiresAt.getTime() : null)
     return auth
-  } catch {
+  } catch (err) {
+    // A transient DB failure (pool exhausted, `max_connections` reached, DB
+    // restarting) means we could not confirm the key — NOT that it is invalid.
+    // Surface it so callers return a retryable 503 instead of masking it as an
+    // auth miss (401). Genuine misses already returned `null` above.
+    if (isTransientDbError(err)) {
+      throw new AuthResolutionUnavailableError(err)
+    }
     return null
   }
 }
@@ -494,7 +550,20 @@ export async function resolveAuthFromRequestDetailed(req: Request): Promise<Auth
   if (!apiKey) {
     return { auth: null, status: resolveUnauthenticatedStatus() }
   }
-  const apiAuth = await resolveApiKeyAuth(apiKey)
+  let apiAuth: AuthContext
+  try {
+    apiAuth = await resolveApiKeyAuth(apiKey)
+  } catch (err) {
+    // Only a transient canonical-resolution failure maps to 'error' (retryable
+    // 503), mirroring the interactive-token path above. Anything else is an
+    // unexpected bug — rethrow so it surfaces as a 500 rather than being masked
+    // as an auth failure.
+    if (!(err instanceof AuthResolutionUnavailableError)) {
+      throw err
+    }
+    hadUnavailableResolution = true
+    return { auth: null, status: resolveUnauthenticatedStatus() }
+  }
   if (!apiAuth) {
     return { auth: null, status: resolveUnauthenticatedStatus() }
   }
