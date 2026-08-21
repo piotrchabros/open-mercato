@@ -14,7 +14,7 @@ Practical guide for developing, building, testing, and deploying Open Mercato.
 
 ```bash
 # Prerequisites: Node.js 24, Git, Docker Desktop (PostgreSQL + Redis + Meilisearch)
-corepack enable && corepack prepare yarn@4.12.0 --activate
+corepack enable && corepack prepare yarn@4.17.1 --activate
 git clone https://github.com/open-mercato/open-mercato.git
 cd open-mercato && git checkout develop
 docker compose up -d                  # starts PostgreSQL, Redis, Meilisearch
