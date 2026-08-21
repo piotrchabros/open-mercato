@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Date** | 2026-08-21 |
-| **Status** | **Proposed — Gate 1 UNGATED. Do not start coding until the claims ledger is verified by a non-author.** See § Readiness |
+| **Status** | **FROZEN — superseded by [`2026-08-22-connect-phase-1-v2.md`](2026-08-22-connect-phase-1-v2.md). Do not implement from this document.** Retained as the audit trail. Review round 1 drew 19 Critical / 46 Major / 26 Minor findings from four blind reviewers; per [`spec-pipeline-runbook.md`](../docs/spec-pipeline-runbook.md) § 8 it was frozen rather than revised a second time in place. See [`FINDINGS-REGISTER`](../analysis/spec-pipeline/FINDINGS-REGISTER-2026-08-21-connect-phase-1.md). |
 | **Scope** | OSS |
 | **Supersedes** | the Phase-1 slices of both source packages (below) for implementation purposes |
 | **Module(s)** | new `packages/connect`; new `packages/channel-webform`; additive upstream changes to `communication_channels`, `customers`, `sales` |
@@ -214,7 +214,7 @@ way not covered by an existing spec").
 |---|---|---|---|
 | `messages/di.ts` + `lib/thread-reader.ts` | (a)+(b) | None exists — the platform has extension mechanisms for core *data* and *UI*, but **none for reading a peer module's data**. Adding a source-owned facade is what `.ai/lessons.md` → *"Cross-module query precedent is not permission to copy storage coupling"* requires. | PR C |
 | `communication_channels/lib/send-as-user.ts` + `SendMessageInput` | **(e)** | No extension point governs outbound authorisation. Delegating to the existing `assertCanManageChannel` keeps the check in the owning module rather than adding a bypass. | PR A |
-| `messages` — `senderUserId` NOT NULL relaxed | **(d)** | An extension entity cannot relax a NOT NULL on the base table. `communication_channels/lib/system-user.ts` returns a sentinel UUID with **no `auth.users` row**, so the column cannot be satisfied for system-authored sends. | PR A — **sign-off required** |
+| `messages` — `senderUserId` NOT NULL relaxed | **(d)** | ~~An extension entity cannot relax a NOT NULL on the base table. `communication_channels/lib/system-user.ts` returns a sentinel UUID with **no `auth.users` row**, so the column cannot be satisfied for system-authored sends.~~ **[RETRACTED — see [`CLAIMS-LEDGER`](../analysis/spec-pipeline/CLAIMS-LEDGER-2026-08-21-connect-phase-1-merged.md) row 8.]** `messages.sender_user_id` has no foreign key (ORM snapshot: `"foreignKeys": {}`), and `commands/ingest-inbound-message.ts:378` already system-authors messages through the sentinel. The column **is** satisfiable; the change is not required. Dropped in [v2](2026-08-22-connect-phase-1-v2.md). | ~~PR A — sign-off required~~ **not shipped** |
 | `customers`/`sales` `extension-points.ts` | (c) | n/a — declaring a new spot *is* the sanctioned mechanism | PR B |
 | `optimistic-lock-editable-entities.test.ts` curated map | (a) | n/a — see below | `connect` PR |
 
