@@ -1,0 +1,4 @@
+{"file":"components/detail/ActivitiesDayStrip.tsx","action":"Edit","timestamp":"2026-07-28T20:41:30Z","important":false}
+{"file":"components/detail/__tests__/ActivityCard.test.tsx","action":"Edit","timestamp":"2026-07-28T20:42:16Z","important":true}
+{"file":"components/detail/__tests__/ActivityHistorySection.delete.test.tsx","action":"Write","timestamp":"2026-07-28T20:43:22Z","important":true}
+{"file":"__integration__/TC-CRM-087-activity-delete-affordance.spec.ts","action":"Write","timestamp":"2026-07-28T20:48:04Z","important":true}
