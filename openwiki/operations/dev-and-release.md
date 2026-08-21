@@ -83,46 +83,11 @@ yarn docker:test          # Run tests in containers
 
 When a compose `app` container is running, use `node scripts/docker-exec.mjs <cmd>` instead of `yarn <cmd>`.
 
-## Testing Strategy
-
-### Unit Tests
-
-**Source:** `jest.config.cjs`, `jest.config.base.cjs`
-
-- `testEnvironment: 'node'`, `watchman: false`
-- Module name mappers for `@open-mercato/*` packages → `packages/*/src/`
-- Custom `jest-mikroorm-transformer.cjs` with `jsx: 'react-jsx'`
-- `testMatch`: `**/__tests__/**/*.test.(ts|tsx)` (colocated)
-- `setupFiles`: `jest.setup.ts`, `setupFilesAfterEnv`: `jest.dom.setup.ts`
-- Memory-bounded: `maxWorkers: 2` per package, `workerIdleMemoryLimit: '512MB'`
-
-```bash
-yarn test              # Run unit tests (concurrency 2, 1024MB heap)
-yarn test:create-app  # create-app specific tests
-```
-
-### Integration Tests
-
-- `__integration__/` directories with `TC-*.spec.ts` naming (e.g., `TC-CHKT-001.spec.ts`, `TC-SEARCH-003.spec.ts`)
-- `tests/helpers/renderWithProviders.tsx` — wraps components with `QueryClientProvider` + `I18nProvider`
-- Integration tests MUST be self-contained: create fixtures in setup, clean up in teardown
-- Integration test coverage is scoped per CI run based on changed files
-
-### QA System
-
-**Source:** `.ai/qa/AGENTS.md` (22KB), `.ai/qa/scenarios/`
-
-130+ QA scenario markdown files covering: admin, auth, catalog, CRM, sales, WMS, Docker, messages, UMES, undo/redo, security (TOTP/passkeys/sudo), email channels, staff timesheets.
-
-### PR QA Gate
-
-A PR carrying `needs-qa` MUST NOT merge unless it also carries `qa-approved`. `skip-qa` is the explicit opt-out (only when no UI-rendering files changed, no DB/API contract changes, and automated tests cover the behavior).
-
 ## CI/CD Pipeline
 
 **Source:** `.github/workflows/ci.yml`
 
-### CI (ci.yml — "CI for Develop & Main")
+### CI (ci.yml)
 
 - **Triggers:** push + PR on `main`, `develop`, `feat/wms`
 - **Runner:** Blacksmith 4vCPU Ubuntu
@@ -193,7 +158,67 @@ yarn build:app        # Build Next.js app
 ```
 
 The full CI-mirroring gate (used by review/automation skills) is the ordered `validation.commands` list in `.ai/agentic.config.json`:
-`yarn build:packages` → `yarn generate` → `yarn typecheck` → `yarn test` → `yarn build:app`
+
+```bash
+yarn build:packages
+yarn generate
+yarn build:packages
+yarn i18n:check-sync
+yarn i18n:check-usage
+yarn typecheck
+yarn test
+yarn build:app
+```
+
+## Quality Checks
+
+| Command | Purpose |
+|---------|---------|
+| `yarn i18n:check` | Full i18n validation: sync, usage, hardcoded, values |
+| `yarn i18n:check:fix` | Auto-fix translation sync issues |
+| `yarn lint:ds` | Design system ESLint enforcement |
+| `yarn ds:tokens:check` | Design token parity check |
+| `yarn logger:check-console` | Validate structured logging (no raw `console.*`) |
+| `yarn check:dep-versions` | Dependency version consistency |
+| `yarn template:sync` | Template sync between monorepo and standalone template |
+| `yarn agents:check-budget` | Verify AGENTS.md files fit agent instruction budget |
+
+## Deployment
+
+### Railway
+
+```bash
+yarn mercato deploy railway
+```
+
+### VPS / production
+
+Multi-service Docker Compose stack (`docker-compose.fullapp.yml`). See [deployment guides](https://docs.openmercato.com/installation/vps).
+
+### Verdaccio (local registry)
+
+```bash
+yarn registry:setup-user    # configure local registry
+yarn registry:publish       # publish to local registry
+```
+
+## Upgrade Notes
+
+`UPGRADE_NOTES.md` documents backward-incompatible changes between framework versions. Companion AI skills for each upgrade window: `.ai/skills/om-auto-upgrade-<from>-<to>/SKILL.md` — mechanically migrates patterns in user codebases. `BACKWARD_COMPATIBILITY.md` (33KB) documents platform contract-surface stability guarantees.
+
+## Key Configuration Files
+
+| File | Purpose |
+|------|---------|
+| `.ai/agentic.config.json` | Agentic dev config: base branch, tracker, validation commands, labels, QA gate |
+| `turbo.json` | TurboRepo task orchestration (32-way concurrency, cache config) |
+| `jest.config.cjs` | Root Jest config (module aliases, transform, coverage) |
+| `jest.config.base.cjs` | Shared base Jest config (memory-bounded: `maxWorkers: 2`, `workerIdleMemoryLimit: 512MB`) |
+| `eslint.config.mjs` | Root ESLint config |
+| `eslint.ds.config.mjs` | Design system ESLint config |
+| `tsconfig.base.json` | Shared TypeScript config |
+| `.nvmrc` | Node version (24) |
+| `.yarnrc.yml` | Yarn 4 configuration |
 
 ## Key Source References
 

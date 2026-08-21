@@ -2,185 +2,153 @@
 
 ## Monorepo Structure
 
-Open Mercato is a Yarn 4 workspace monorepo orchestrated by TurboRepo (32-way concurrency). Workspaces: `apps/*`, `packages/*`, `external/official-modules/packages/*`.
+Open Mercato is a Yarn 4 workspace monorepo orchestrated by TurboRepo (32-way concurrency). Workspaces are declared in `/package.json`:
 
 ```
-apps/
-├── mercato/       — Next.js application (the main app)
-└── docs/          — Documentation site (Fumadocs)
-
-packages/
-├── core/          — 40 business modules + platform bootstrap
-├── shared/        — Cross-cutting utilities, DI, CRUD, encryption, RBAC, ratelimit, OpenAPI
-├── cli/           — `mercato` CLI: generators, db, server, queue, test, deploy
-├── create-app/    — `create-mercato-app` scaffolder + agentic harness
-├── ui/            — Shared React components, DataTable, CrudForm, design system
-├── events/        — Event bus + DOM Event Bridge (SSE)
-├── queue/         — BullMQ queue infrastructure
-├── search/        — Hybrid search (Meilisearch + vector + token)
-├── checkout/      — Public checkout/payment flow
-├── ai-assistant/  — MCP server + AI agent infrastructure
-├── webhooks/      — Outbound/inbound webhook delivery (Standard Webhooks signing)
-├── cache/         — Caching service (global singleton)
-├── scheduler/     — Job scheduler
-├── telemetry/     — OpenTelemetry instrumentation
-├── gateway-stripe/ — Stripe payment gateway adapter
-├── storage-s3/    — S3 storage adapter
-├── sync-akeneo/   — Akeneo PIM sync adapter
-├── channel-gmail/ — Gmail channel integration
-├── channel-imap/  — IMAP channel integration
-├── content/       — Content management
-├── manufacturing/ — Manufacturing domain
-├── onboarding/    — Self-service onboarding
-├── enterprise/    — Commercial/proprietary enterprise features
-└── eslint-plugin-ds/ — Design system ESLint rules
+workspaces: ["apps/*", "packages/*", "external/official-modules/packages/*"]
 ```
+
+Two apps and 20+ packages. See [Source Map](../source-map.md) for a full package inventory.
 
 ## Module System
 
-Each feature lives under `packages/core/src/modules/<module>/` with auto-discovered:
+Every feature lives under `packages/core/src/modules/<module>/` and follows a strict convention-based file structure. The CLI's `generate` command auto-discovers these files and produces import/registration code in `.mercato/generated/`.
 
-- **Frontend pages:** `frontend/<path>.tsx` → `/<path>`
-- **Backend pages:** `backend/<path>.tsx` → `/backend/<path>` (special: `backend/page.tsx` → `/backend/<module>`)
-- **API routes:** `api/<method>/<path>.ts` → `/api/<path>` dispatched by method
-- **Subscribers:** `subscribers/*.ts` — export `metadata` with `{ event, persistent?, id? }`
-- **Workers:** `workers/*.ts` — export `metadata` with `{ queue, id?, concurrency? }`
-- **Setup, events, custom entities, encryption maps** — auto-discovered convention files
+### Auto-discovered convention files
 
-The `customers` module is the **reference CRUD module** — copy its structure when building new modules. See [Module Anatomy](module-anatomy.md).
+| File | Purpose |
+|------|---------|
+| `index.ts` | Module barrel — exports `ModuleInfo` metadata + `features` (ACL array) |
+| `di.ts` | DI registrar — registers entities + optimistic lock readers into the Awilix container |
+| `setup.ts` | `ModuleSetupConfig` — `seedDefaults`, `seedExamples`, `defaultRoleFeatures` |
+| `events.ts` | Event declarations via `createModuleEvents()` |
+| `ce.ts` | Custom entities (EAV dynamic fields) |
+| `encryption.ts` | Tenant data encryption maps (PII field declarations) |
+| `acl.ts` | RBAC feature declarations — array of `{ id, title, module, dependsOn? }` |
+| `search.ts` | Search configuration (full-text fields, filters, vector) |
+| `extension-points.ts` | Module extension point hosts (DataTable, CrudForm, detail) |
+| `api/openapi.ts` | OpenAPI factory helper for module routes |
 
-## Code Generation
+### Auto-discovered directories
 
-`yarn generate` runs a suite of deterministic generators (`packages/cli/src/lib/generators/`) that scan module convention files and write `.generated.ts` / `.generated.json` registries to `apps/mercato/.mercato/generated/`:
+| Directory | Pattern |
+|-----------|---------|
+| `api/<method>/<path>.ts` | API routes — dispatched by HTTP method to `/api/<path>` |
+| `backend/<path>.tsx` | Backend admin pages → `/backend/<path>` |
+| `frontend/<path>.tsx` | Frontend pages → `/<path>` |
+| `subscribers/*.ts` | Event subscribers — export `metadata` with `{ event, persistent?, id? }` |
+| `workers/*.ts` | Background workers — export `metadata` with `{ queue, id?, concurrency? }` |
+| `commands/*.ts` | Undoable domain commands (Command pattern) |
+| `components/*.tsx` | React components for the module |
+| `data/entities.ts` | MikroORM v7 entity classes |
+| `data/validators.ts` | Field validators |
+| `data/enrichers.ts` | Response enrichers |
+| `data/extensions.ts` | Entity extensions (cross-module data links) |
+| `migrations/` | MikroORM migrations + schema snapshot |
+| `widgets/` | Widget injection table + definitions |
+| `i18n/` | Translation files (en, de, es, ko, pl) |
 
-| Generator | Output | Purpose |
-|-----------|--------|---------|
-| `module-registry` | `modules.*.generated.ts` | Import statements + registration arrays for the module graph |
-| `module-entities` | `entities.generated.ts` | Combined MikroORM entity list |
-| `entity-ids` | `entity-ids.generated.ts` + per-entity files | Stable entity ID constants |
-| `module-di` | `di.generated.ts` | DI container wiring |
-| `module-facts` | `module-facts.generated.ts` | Static facts: routes, pages, events, features, commands, workers, subscribers, enrichers, guards, interceptors, AI agents |
-| `module-extension-facts` | Extension facts | Correlates extensions against host surfaces |
-| `openapi` | `openapi.generated.json` | Static OpenAPI spec from route files |
-| 20+ sub-generators in `extensions/` | Per-surface extension generators | ai-agents, ai-tools, analytics, command-interceptors, component-overrides, dashboard-widgets, enrichers, events, guards, inbox-actions, injection-widgets, interceptors, messages, notifications, page-middleware, search, translatable-fields, workflows |
-
-**Never hand-edit generated files.** `yarn generate watch` runs an in-process poller for live regeneration.
+**Generated outputs** go to `.mercato/generated/` — never hand-edit. The `customers` module is the [reference CRUD module](module-anatomy.md); copy it first when building new modules.
 
 ## Dependency Injection
 
-**Framework:** Awilix (proxy-based DI container)
+**Framework:** Awilix (proxy-based DI container).
 
-- Container type: `AppContainer` from `@open-mercato/shared/lib/di/container`
-- Each module exposes a `register(container)` function in `di.ts`
-- Entities registered as values (`asValue`)
-- Container is constructed **per request**
-- Cross-module resolution uses `container.resolve()` — optional peers wrapped in `tryResolve()` (returns `undefined` when absent)
-- Platform-wide: `crudMutationGuardService`, cache service (singleton via `globalThis`), event bus, KMS service, `TenantDataEncryptionService`, rate limiter — registered in `packages/core/src/bootstrap.ts`
-- Generated `di.generated.ts` aggregates all module registrars
+**Container type:** `AppContainer` from `@open-mercato/shared/lib/di/container`.
 
-## ORM (MikroORM v7)
+- Each module exposes a `register(container)` function in `di.ts`.
+- Entities registered as values (`asValue`).
+- Platform-wide services registered in `packages/core/src/bootstrap.ts`: cache service (singleton via `globalThis`), event bus, KMS service, `TenantDataEncryptionService`, rate limiter.
+- Generated `di.generated.ts` aggregates all module registrars.
+- Cross-module resolution uses `container.resolve()`. For **optional** peers, modules wrap in `tryResolve()` (try/catch returning `undefined`). Never declare a hard `requires` on an optional peer.
 
-- Driver: `@mikro-orm/postgresql` with PostgreSQL 17 + pgvector
-- Entity files: `src/modules/<module>/data/entities.ts`
+## ORM — MikroORM v7
+
+- **Driver:** `@mikro-orm/postgresql` (PostgreSQL 17 + pgvector)
+- **Entity file convention:** `src/modules/<module>/data/entities.ts`
+- Decorators from `@mikro-orm/decorators/legacy`, types from `@mikro-orm/core`
 - UUID primary keys, snake_case table/column names
 - Module-owned tables prefixed with module name (e.g., `catalog_products`, `sales_orders`)
 - Standard columns: `organization_id`, `tenant_id`, `created_at`, `updated_at`, `deleted_at` (soft delete)
-- Migrations are module-scoped in `src/modules/<module>/migrations/` with a `.snapshot-open-mercato.json` snapshot
-- `yarn db:generate` iterates all modules for schema diff; `yarn db:migrate` applies ordered
-- **Never create direct ORM relationships between modules** — use foreign key IDs and fetch separately
-- Use `withAtomicFlush(em, phases, { transaction: true })` for multi-phase mutations
-- Use `runCrudCommandWrite` for commands combining entity writes + custom fields + side effects
-- Use `findWithDecryption`/`findOneWithDecryption` instead of raw `em.find`/`em.findOne` for encrypted fields
+- **Never** create direct ORM relationships between modules — use foreign key IDs and fetch separately
+- Migrations are module-scoped in `src/modules/<module>/migrations/`; each module maintains a `.snapshot-open-mercato.json`
+- `yarn db:generate` iterates all modules for schema diff; `yarn db:migrate` applies ordered migrations
+
+### Transaction Safety — `withAtomicFlush`
+
+When a command mutates entities across multiple phases that include queries, use `withAtomicFlush(em, phases, { transaction: true })` from `@open-mercato/shared/lib/commands/flush`. **Never** run `em.find`/`em.findOne` between scalar mutations and `em.flush()` on the same `EntityManager` — MikroORM's identity-map can silently discard pending changes. Side effects (`emitCrudSideEffects`) and cache invalidation fire **after** `withAtomicFlush` commits. Preferred: `runCrudCommandWrite` for commands combining entity writes + custom fields + side effects.
+
+## RBAC — Feature-Based Access Control
+
+Two-layered: role ACLs + user ACLs per tenant.
+
+**Feature declaration** (`acl.ts`):
+```typescript
+export const features = [
+  { id: 'customers.people.view', title: 'View people', module: 'customers' },
+  { id: 'customers.people.manage', title: 'Manage people', module: 'customers', dependsOn: ['customers.people.view'] },
+]
+```
+
+**Naming convention:** `<module>.<entity>.<action>`
+
+**Default role grants** (`setup.ts`): `admin` gets wildcards (`customers.*`), `employee` gets explicit feature lists.
+
+**Policy order:**
+1. Invalid scope → deny first
+2. Nulled/disabled features → deny
+3. `isSuperAdmin` → grants all active features
+4. Wildcard grants (e.g., `customers.*` matches `customers.people.view`)
+5. Never compare raw feature arrays with exact string checks when wildcard grants apply
+
+**Sync command:** `yarn mercato auth sync-role-acls` (idempotent — propagates new grants to existing tenants).
+
+**Portal/customer RBAC:** Portal pages declare `requireCustomerAuth` and `requireCustomerFeatures` in `page.meta.ts`, enforced server-side by `CustomerRbacService`.
+
+See [Security & Tenancy](security-and-tenancy.md) for full details.
 
 ## Multi-Tenancy
 
-- Core `directory` module defines `tenants` and `organizations`
-- Most entities carry `tenant_id` + `organization_id`
-- Strict scoping on every entity and API — never expose cross-tenant data
-- Multi-hierarchical organizations with role- and user-level visibility controls
+Core `directory` module defines `tenants` and `organizations`. Most entities carry `tenant_id` + `organization_id`. Multi-hierarchical organization trees with role- and user-level visibility controls. **Never expose cross-tenant data or skip tenant/organization scoping.**
 
-## RBAC (Feature-Based Access Control)
+## Encryption
 
-Two-layered: **Role ACLs** + **User ACLs** per tenant.
+`TenantDataEncryptionService` handles all AES/KMS encryption. Use `findWithDecryption`/`findOneWithDecryption` instead of raw `em.find`/`em.findOne`. Encrypted fields declared in module's `encryption.ts` via `defaultEncryptionMaps`. Query index docs and vector search result fields encrypted at rest.
 
-- Features declared in module's `acl.ts`: `{ id: '<module>.<entity>.<action>', title, module, dependsOn?: [] }`
-- Naming: `<module>.<entity>.<action>` (e.g., `customers.people.manage`)
-- Default role grants in `setup.ts`: `defaultRoleFeatures: { admin: ['customers.*'], employee: [...] }`
-- Wildcard grants: `customers.*` matches `customers.people.view`
-- Server-side check: `rbacService.userHasAllFeatures(userId, features, { tenantId, organizationId })`
-- Sync: `yarn mercato auth sync-role-acls` (idempotent)
-- Portal/customer RBAC: `requireCustomerAuth` + `requireCustomerFeatures` in `page.meta.ts`
+## Code Generation
 
-## Tenant Data Encryption
+The CLI `generate` command runs a suite of deterministic code generators (`packages/cli/src/lib/generators/`). Each reads enabled modules from `src/modules.ts`, scans their source files (AST via `ts-morph`), and writes `.generated.ts` / `.generated.json` files to `.mercato/generated/`.
 
-- `TenantDataEncryptionService` — AES-256-GCM encryption with per-tenant Data Encryption Keys (DEKs)
-- KMS service for key management
-- Encrypted fields declared in module's `encryption.ts` via `defaultEncryptionMaps`
-- Use `findWithDecryption` / `findOneWithDecryption` for queries involving encrypted fields
-- Query index docs and vector search result fields encrypted at rest
+Key generators:
+
+| Generator | Output | Purpose |
+|-----------|--------|---------|
+| `module-registry.ts` | `modules.*.generated.ts` | Central registry: import statements + registration arrays |
+| `module-facts.ts` | `module-facts.generated.ts` | Static facts per module: entity IDs, API routes, pages, events, features, commands, workers, subscribers |
+| `module-di.ts` | `di.generated.ts` | DI container wiring |
+| `module-entities.ts` | `entities.generated.ts` | Combined MikroORM entity list |
+| `entity-ids.ts` | `entity-ids.generated.ts` | Per-entity ID constants |
+| `openapi.ts` | `openapi.generated.json` | Static OpenAPI spec from route files |
+| `module-extension-facts.ts` | Extension facts | Enrichers, guards, interceptors, widgets, overrides |
+
+Generation uses checksum-based change detection so unchanged files are skipped. `yarn generate watch` runs an in-process poller that re-runs generators on file changes. Structural invalidation can trigger re-generation when module structure changes.
 
 ## Optimistic Locking
 
-**Default ON** for every `makeCrudRoute` entity (opt out with `OM_OPTIMISTIC_LOCK=off`).
+**Default ON** for every `makeCrudRoute` entity (opt out with `OM_OPTIMISTIC_LOCK=off`). User-editable entities must include an `updated_at` column with `onCreate` + `onUpdate`. `CrudForm` auto-derives the optimistic lock header from `initialValues.updatedAt` (covers update and delete). For custom non-`CrudForm` handlers, wrap mutating calls with `withScopedApiRequestHeaders(buildOptimisticLockHeader(record.updatedAt), …)` and surface conflicts via `surfaceRecordConflict(err, t)`.
 
-- Entity `updated_at` column with `onCreate` + `onUpdate`
-- API responses return `updatedAt`
-- `CrudForm` auto-derives header from `initialValues.updatedAt`
-- Custom handlers: `withScopedApiRequestHeaders(buildOptimisticLockHeader(record.updatedAt), …)` + `surfaceRecordConflict(err, t)`
-- Command writes: `enforceCommandOptimisticLock` + DI-overridable `createCommandOptimisticLockGuardService`
-
-Key sources: `packages/shared/src/lib/crud/optimistic-lock{,-command}.ts`, `packages/ui/src/backend/conflicts/`.
-
-## Event Bus
-
-- `createEventBus()` registered as platform singleton in `bootstrap.ts`
-- Modules declare events via `createModuleEvents()` in `events.ts`
-- Subscribers auto-discovered from `subscribers/*.ts`
-- Persistent subscribers (Redis-backed) for reliable processing
-- DOM Event Bridge (SSE) pushes real-time events to browser via `useAppEvent`, `useOperationProgress`
-- Cross-module coupling via events (loosest coupling option)
-
-## Search Architecture
-
-Hybrid search engine (`packages/search/`):
-
-- **Full-text** via Meilisearch
-- **Vector** search via pgvector
-- **Token** search for exact matches
-- Per-entity view features — hybrid search results filtered by ACL features (recent fix: `cbd7cc2839`)
-- Search config per module in `search.ts`
+See: `packages/shared/src/lib/crud/optimistic-lock{,-command}.ts`, `packages/ui/src/backend/conflicts/`.
 
 ## Bootstrap Pipeline
 
-`packages/core/src/bootstrap.ts` registers platform-wide services:
+`packages/core/src/bootstrap.ts` is the platform-wide DI bootstrap. It:
 
-1. Cache service (singleton via `globalThis`)
-2. Event bus (`createEventBus`)
-3. KMS service
-4. `TenantDataEncryptionService`
-5. Rate limiter
-6. Search modules
+1. Registers cache service as singleton via `globalThis`
+2. Creates and registers the event bus (`createEventBus`)
+3. Registers KMS service
+4. Registers `TenantDataEncryptionService`
+5. Registers rate limiter
+6. Registers search modules
 7. Auto-registers discovered module subscribers
 
-## Agentic Configuration
-
-`.ai/agentic.config.json`:
-
-```json
-{
-  "version": 1,
-  "baseBranch": "develop",
-  "tracker": "github",
-  "browser": { "provider": "playwright" },
-  "validation": {
-    "commands": ["yarn build:packages", "yarn generate", ...]
-  },
-  "labels": { "enabled": true, ... },
-  "qaGate": true
-}
-```
-
-- Base branch: `develop`
-- Validation pipeline: 8-step ordered command chain
-- QA gate enabled — prevents AI agents from merging without QA
-- Label system: pipeline states, categories, priorities, risk levels
+The app entrypoint in `apps/mercato` calls this bootstrap, then resolves the per-request container for each incoming HTTP request.

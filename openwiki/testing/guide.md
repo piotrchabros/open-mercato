@@ -51,6 +51,7 @@ Integration spec files follow `{prefix}-{number}.spec.ts`:
 | `TC-WF-` | Workflow integration | `TC-WF-030` |
 | `TC-EXAMPLE-` | Example module | `TC-EXAMPLE-016` |
 | `TC-SEARCH-` | Search module | `TC-SEARCH-003` |
+| `TC-CHKT-` | Checkout | `TC-CHKT-001` through `043` |
 
 TC numbers map to specs in `.ai/specs/`. Some reference issue numbers directly (e.g., `TC-CRM-2453`).
 
@@ -58,7 +59,7 @@ TC numbers map to specs in `.ai/specs/`. Some reference issue numbers directly (
 
 | File | Focus |
 |------|-------|
-| `validators.test.ts` | Field validators (13.9 KB) |
+| `validators.test.ts` | Field validators |
 | `events.broadcast.test.ts` | Event broadcasting |
 | `configEntityCommandGuards.test.ts` | Config entity command guards |
 | `interactionCommandGuards.test.ts` | Interaction command guards |
@@ -111,7 +112,7 @@ Ephemeral environments use testcontainers to spin up isolated PostgreSQL + Redis
 | Script | Purpose |
 |--------|---------|
 | `scripts/audit-ci.mjs` | Dependency audit gate |
-| `scripts/repo-wide-guards.mjs` | Repository-wide guard checks (23.7 KB) |
+| `scripts/repo-wide-guards.mjs` | Repository-wide guard checks |
 | `scripts/check-client-boundaries.mjs` | Client/server boundary enforcement |
 | `scripts/check-token-parity.mjs` | Design token parity |
 | `scripts/check-turbo-task-graph.mjs` | Turbo task graph validation |
