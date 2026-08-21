@@ -1,127 +1,108 @@
 # Open Mercato — Code Wiki Quickstart
 
-Open Mercato is an **AI-engineering foundation framework** for building enterprise CRM/ERP applications. It combines a modular, multi-tenant platform with an architecture-aware AI harness that knows where code should go, not just how to write it. The framework ships with ready-made business modules (CRM, Sales, Catalog, Auth, Workflows, Search) so teams start at "80% done."
+Open Mercato is an open-source **AI-Engineering Foundation Framework** — a modular, multi-tenant CRM/ERP platform built on Next.js App Router, TypeScript, MikroORM, and Awilix DI. It ships with ready-made business modules (CRM, sales, catalog, checkout, WMS), an architecture-aware AI agent harness, and spec-first development workflows.
 
-**Key value propositions:**
-- **Architecture-aware AI harness** — agents understand module placement, design-system rules, and spec-first workflows
-- **Spec-first development** — all non-trivial changes start with a spec in `.ai/specs/`
-- **Modular architecture** — auto-discovered modules with overlay overrides; drop in your own
-- **Multi-tenant by default** — strict tenant + organization scoping on every entity and API
-- **Open-source, no lock-in** — full code ownership, MIT licensed
+**Version:** 0.6.7 · **License:** MIT · **Node.js:** 24.x · **Package manager:** Yarn 4
 
-## Tech Stack
+## What This Wiki Covers
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js App Router, TypeScript |
-| ORM | MikroORM v7 |
-| DI | Awilix (per-request containers) |
-| Validation | Zod |
-| Database | PostgreSQL 17 (pgvector), Redis 7, Meilisearch |
-| Monorepo | Yarn 4 workspaces + Turborepo |
-| AI | Vercel AI SDK + MCP + OpenCode (Go) |
-| Testing | Jest + Playwright |
+This wiki documents the monorepo at `/Users/piotrchabros/IdeaProjects/open-mercato`. It is organized into the following sections:
 
-**Prerequisites:** Node.js 24, Git, PostgreSQL + Redis (Docker Desktop recommended)
+| Section | Page | What's Inside |
+|---------|------|---------------|
+| **Architecture** | [Architecture Overview](architecture/overview.md) | Monorepo structure, module system, DI, ORM, code generation, bootstrap pipeline |
+| **Architecture** | [Module Anatomy](architecture/module-anatomy.md) | Convention file checklist, CRUD route factory, command pattern, cross-module coupling |
+| **Architecture** | [Security & Tenancy](architecture/security-and-tenancy.md) | Two-level tenancy, RBAC, encryption, optimistic locking, rate limiting, dashboard scope |
+| **Domain** | [Module Inventory](domain/modules.md) | All 40 core modules, their entities, and key domain concepts |
+| **Workflows** | [Key Workflows](workflows/key-workflows.md) | Dev cycle, code generation flow, spec-first process, agentic harness, release process, standalone app scaffolding |
+| **Operations** | [Dev & Release Operations](operations/dev-and-release.md) | Commands, Docker setup, testing strategy, CI/CD pipeline, release stages, validation checklist |
+| **Testing** | [Testing Guide](testing/guide.md) | Jest config, TC naming convention, unit/integration tests, mutation testing, AI agent harness evaluation |
+| **Reference** | [Source Map](source-map.md) | Package-by-package inventory with key paths and entry points |
 
-## Getting Started
+## Key Concepts to Understand First
 
-### Monorepo (core development / full demo)
+1. **Module system** — every feature is a self-contained module under `packages/core/src/modules/<module>/` with auto-discovered convention files. The `customers` module is the reference implementation.
+2. **Code generation** — `yarn generate` uses ts-morph AST manipulation to produce `.mercato/generated/` files (registries, DI wiring, OpenAPI spec, module fact sheets). Never hand-edit generated files.
+3. **Multi-tenancy** — two-level model: `tenants` → `organizations` (with hierarchical trees). Every entity carries `tenant_id` + `organization_id`. Never expose cross-tenant data.
+4. **RBAC** — feature-based access control (not role-based). Features are immutable IDs declared in `acl.ts`. Wildcards supported. Two layers: role ACLs + per-user ACL overrides.
+5. **CRUD factory** — `makeCrudRoute()` in `packages/shared/src/lib/crud/factory.ts` generates complete HTTP route handlers from declarative config. Handles filtering, pagination, cache, optimistic locking, mutation guards, side effects.
+6. **Command pattern** — domain writes go through undoable commands (not direct ORM mutation). Commands provide audit logging, undo/redo, transaction safety via `withAtomicFlush`.
+7. **AI harness** — 231-case evaluation matrix testing AI coding agents against real framework contracts. Ships with `create-mercato-app` and `mercato agentic:init`.
+
+## Getting Started for Development
+
+### Monorepo (core development)
 
 ```bash
-corepack enable && corepack prepare yarn@4.12.0 --activate
 git clone https://github.com/open-mercato/open-mercato.git
 cd open-mercato && git checkout develop
-docker compose up -d                  # PostgreSQL, Redis, Meilisearch
+docker compose up -d          # PostgreSQL, Redis, Meilisearch
 cp apps/mercato/.env.example apps/mercato/.env
-# set DATABASE_URL / JWT_SECRET / REDIS_URL in apps/mercato/.env
-yarn dev:greenfield                   # installs, builds, seeds, starts
+# Set DATABASE_URL / JWT_SECRET / REDIS_URL in apps/mercato/.env
+yarn dev:greenfield           # install, build, seed, start
 ```
 
-Open **http://localhost:3000/backend** — credentials printed in terminal.
+Open `http://localhost:3000/backend` — credentials are printed in the terminal.
 
-### Standalone app (build on Open Mercato without modifying core)
+### Standalone app (build on top of Open Mercato)
 
 ```bash
 npx create-mercato-app my-app
 cd my-app
 docker compose up -d
-# set DATABASE_URL / JWT_SECRET / REDIS_URL in .env
-yarn setup                            # installs, seeds, starts
+# Set DATABASE_URL / JWT_SECRET / REDIS_URL in .env
+yarn setup                    # install, seed, start
 ```
 
-## Essential Commands
+### Essential commands
 
 ```bash
-yarn dev              # Dev runtime (press `d` for raw logs; variants: :verbose, :app, :greenfield)
-yarn build            # Build everything (build:packages / build:app for one side)
-yarn generate         # Run module generators (auto-discovery → generated/ files)
-yarn lint             # Lint all packages
-yarn test             # Unit tests (test:integration for Playwright)
-yarn typecheck        # TypeScript type checking
-yarn db:generate      # Generate database migrations
-yarn db:migrate       # Apply migrations (ask first in PRs)
-yarn initialize       # Full project initialization
-yarn agents:check-budget  # Verify AGENTS.md files fit agent instruction budget
+yarn dev                      # Dev server (press `d` for raw logs)
+yarn generate                 # Run module code generators
+yarn build:packages           # Build all packages
+yarn typecheck                # TypeScript check
+yarn lint                     # Lint all packages
+yarn test                     # Unit tests (concurrency 2)
+yarn db:generate              # Generate migrations from entity diff
+yarn db:migrate               # Apply migrations (ask first in PRs)
 ```
 
-## Monorepo Structure
+### Validation pipeline (CI-mirroring gate)
 
-### Apps (`apps/`)
-- **mercato** — Main Next.js app. User-created modules go in `apps/mercato/src/modules/`.
-- **docs** — Documentation site (Fumadocs).
+Per `.ai/agentic.config.json`:
 
-### Packages (`packages/`)
-All use `@open-mercato/<package>` naming: **shared** (utilities, types, DSL, i18n, data engine), **ui** (design system + backend components), **core** (business modules: auth, catalog, customers, sales, etc.), **cli** (generators, `mercato` CLI), **create-app** (standalone scaffolding + agentic harness), **cache**, **queue**, **events**, **search**, **ai-assistant**, **content**, **onboarding**, **enterprise** (commercial-only), **checkout**, **webhooks**, and integration provider packages (gateway-stripe, channel-gmail, channel-imap, storage-s3, sync-akeneo).
+```
+yarn build:packages → yarn generate → yarn typecheck → yarn test → yarn build:app
+```
 
-### `.ai/` — AI Engineering Infrastructure
-- `.ai/specs/` — Spec-first development (~150+ spec files, named `{YYYY-MM-DD}-{title}.md`)
-- `.ai/skills/` — Local skill registry organized by tiers (`tiers.json`)
-- `.ai/runs/` — Session logs documenting agent work
-- `.ai/docs/` — Agent documentation guides
-- `.ai/qa/` — QA scenarios and test cases
-- `.ai/agentic.config.json` — Root agent configuration
+## Architecture at a Glance
 
-### `external/official-modules/` (git submodule)
-Optional, uncommitted git submodule for community-published modules. When present, it's real working code — first-class for search and refactoring.
+- **Stack:** Next.js App Router, TypeScript, zod, Awilix DI, MikroORM v7 (PostgreSQL 17 + pgvector), Redis, Meilisearch
+- **Monorepo:** Yarn 4 workspaces + TurboRepo (32-way concurrency). 2 apps + 20+ packages.
+- **40 core modules:** customers, sales, catalog, auth, directory, workflows, staff, dashboards, WMS, and more
+- **AI infrastructure:** Agent harness, MCP tools, Code Mode sandbox, 25 standalone skills, spec-first development
+- **Infrastructure packages:** events (bus + SSE bridge), queue (BullMQ workers), cache (4 strategies), search (hybrid fulltext + vector + token)
 
-## Where to Put Code
+## Agent Guidelines
 
-| Type | Location |
-|------|----------|
-| Core platform features | `packages/<package>/src/modules/<module>/` |
-| External integration providers | `packages/<provider-package>/` (e.g., `packages/gateway-stripe`) |
-| Shared utilities/types | `packages/shared/src/lib/` or `packages/shared/src/modules/` |
-| UI components | `packages/ui/src/` |
-| User/app-specific modules | `apps/mercato/src/modules/<module>/` |
+The repository's `AGENTS.md` is the authoritative task router for AI agents — it defines boundary labels (`Always`, `Ask First`, `Never`), validation commands, and a task routing table mapping work types to package-level `AGENTS.md` files. Read it before making any non-trivial changes.
 
-**Never** add code directly under `apps/mercato/src/` except committed, typed `*.generated.ts` registries.
-
-## Core Principles
-
-- **Spec-first**: Check `.ai/specs/` before coding; enter plan mode for 3+ step tasks
-- **No direct ORM relationships between modules** — use foreign key IDs, fetch separately
-- **Always filter by `organization_id`** for tenant-scoped entities
-- **Use DI (Awilix)** to inject services; avoid `new`-ing directly
-- **Validate all inputs with Zod**; derive types via `z.infer`
-- **Use `apiCall`** from `@open-mercato/ui/backend/utils/apiCall` — never raw `fetch`
-- **Never hard-code user-facing strings** — use locale files (`useT()` / `resolveTranslations()`)
-- **No `any` types** — use Zod schemas with `z.infer`, narrow with runtime checks
-
-## Wiki Navigation
-
-- [Architecture Overview](architecture/overview.md) — Module system, auto-discovery, DI, MikroORM, tenancy, bootstrap pipeline
-- [Module Anatomy](architecture/module-anatomy.md) — Standard module files, CRUD route factory, command pattern, OpenAPI
-- [Security & Tenancy](architecture/security-and-tenancy.md) — RBAC, encryption, optimistic locking, route guards
-- [Key Workflows](workflows/key-workflows.md) — Spec-first process, AI assistant, agent harness, event bus, search, checkout
-- [Dev & Release Operations](operations/dev-and-release.md) — Dev commands, Docker, testing, CI/CD, release process
-- [Source Map](source-map.md) — Package inventory and key directory map
+Key rules:
+- Never edit generated files, never add code directly under `apps/mercato/src/` (except committed `*.generated.ts`)
+- Never create direct ORM relationships between modules
+- Never expose cross-tenant data or skip tenant/organization scoping
+- Never bypass mutation guards, encryption helpers, or RBAC checks
+- Always run `yarn generate` after adding/modifying module files
+- Always follow `BACKWARD_COMPATIBILITY.md` before touching contract surfaces
 
 ## Backlog
 
-| Area | Source Anchor | Reason |
-|------|--------------|--------|
-| Design System governance | `.ai/ds-rules.md`, `packages/ui/`, `eslint.ds.config.mjs` | Token compliance, Figma code-connect, and DS-guardian workflow are extensive enough for a dedicated page in a future update |
-| Official Modules system | `external/official-modules/`, `.ai/docs/official-modules.md` | Submodule activation, module-id convention, and cross-repo merge order need deeper inspection |
-| Enterprise package | `packages/enterprise/` | Commercial-only modules and overlays — scope and licensing boundaries need separate treatment |
-| Migration guides | `.ai/skills/om-migrate-mikro-orm/SKILL.md`, `UPGRADE_NOTES.md` | MikroORM v6→v7 migration and version upgrade skills are detailed enough for dedicated docs |
+| Area | Source Anchor | Reason Deferred |
+|------|---------------|-----------------|
+| Official modules submodule | `external/official-modules/`, `.ai/docs/official-modules.md` | Optional submodule, not present in all checkouts |
+| Enterprise package | `packages/enterprise/` | Commercial/proprietary, separate licensing concerns |
+| Manufacturing module | `packages/manufacturing/` | Actively developed, not yet stable enough for detailed docs |
+| Design system token system | `.ai/ds-rules.md`, `packages/ui/src/theme/` | Large surface area, deserves its own page in a future update |
+| AI agent loop controls & overrides | `packages/ai-assistant/`, `.ai/specs/implemented/` | Complex override system, warrants dedicated page |
+| Webhooks signing & delivery | `packages/webhooks/` | Standard Webhooks spec is external; implementation is straightforward |
+| EUDR compliance module | `packages/core/src/modules/eudr/` | Niche regulatory feature, limited applicability |

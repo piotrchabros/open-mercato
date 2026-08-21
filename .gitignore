@@ -106,6 +106,10 @@ package-lock.json
 .idea
 .codex
 
+# Spec Kit (local-only; .ai/specs is the authoritative spec location)
+.specify/
+/specs/
+
 # Claude Code MCP config (may contain API keys)
 .mcp.json
 .vscode/settings.json
