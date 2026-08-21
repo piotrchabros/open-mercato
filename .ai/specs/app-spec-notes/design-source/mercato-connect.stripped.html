@@ -1,0 +1,1809 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/open-mercato-design-system-51c81d47-6f9a-43ec-adcb-9d8f0a18e591/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/open-mercato-design-system-51c81d47-6f9a-43ec-adcb-9d8f0a18e591/tokens/colors.css">
+<link rel="stylesheet" href="_ds/open-mercato-design-system-51c81d47-6f9a-43ec-adcb-9d8f0a18e591/tokens/typography.css">
+<link rel="stylesheet" href="_ds/open-mercato-design-system-51c81d47-6f9a-43ec-adcb-9d8f0a18e591/tokens/layout.css">
+<link rel="stylesheet" href="_ds/open-mercato-design-system-51c81d47-6f9a-43ec-adcb-9d8f0a18e591/tokens/base.css">
+<link rel="stylesheet" href="_ds/open-mercato-design-system-51c81d47-6f9a-43ec-adcb-9d8f0a18e591/styles.css">
+<script src="_ds/open-mercato-design-system-51c81d47-6f9a-43ec-adcb-9d8f0a18e591/_ds_bundle.js"></script>
+<style>
+  html, body { margin:0; padding:0; height:100%; }
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: var(--font-sans); font-size:14px; color: var(--foreground); background: var(--background); }
+  a { color: var(--foreground); text-decoration: none; }
+  a:hover { color: var(--accent-indigo); }
+  *::-webkit-scrollbar { width:8px; height:8px; }
+  *::-webkit-scrollbar-thumb { background: color-mix(in oklch, var(--muted-foreground) 30%, transparent); border-radius:9999px; }
+  *::-webkit-scrollbar-thumb:hover { background: color-mix(in oklch, var(--muted-foreground) 50%, transparent); }
+  *::-webkit-scrollbar-track { background: transparent; }
+  @keyframes omPulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.45; transform:scale(.82); } }
+</style>
+</helmet>
+<div>
+  <header>
+    <div>
+      <div>mc</div>
+      <div>
+        <span>{{ brandName }}</span>
+        <span>Open Mercato</span>
+      </div>
+    </div>
+    <div>
+      <div class="om-input om-input-sm">
+        <span class="om-input-slot"></span>
+        <input placeholder="Szukaj klienta, zamówienia, zgłoszenia" value="{{ search }}" onInput="{{ onSearch }}">
+      </div>
+    </div>
+    <div></div>
+    <div>
+      <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ toggleStatus }}">
+        <span></span>{{ statusLabel }}
+      </button>
+      <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ go.wallboard }}">
+        Softfon
+      </button>
+      <div></div>
+      <div>
+        <div>MK</div>
+        <div>
+          <span>Marta Kwiatkowska</span>
+          <span>Zespół Zwroty · zmiana 8–16</span>
+        </div>
+      </div>
+    </div>
+  </header>
+  <div>
+    <nav>
+      <div>
+        <div>Obsługa</div>
+        <button type="button" onClick="{{ go.inbox }}">
+          <span>Inbox</span>
+          <span class="om-badge om-badge-sm om-badge-v-default">{{ counts.open }}</span>
+        </button>
+        <button type="button" onClick="{{ go.tickets }}">
+          <span>Zgłoszenia</span>
+          <span>{{ counts.tickets }}</span>
+        </button>
+        <button type="button" onClick="{{ go.customer }}">
+          <span>Klient 360</span>
+        </button>
+        <button type="button" onClick="{{ go.ai }}">
+          <span>AI Assist</span>
+        </button>
+      </div>
+      <div>
+        <div>Ruch</div>
+        <button type="button" onClick="{{ go.wallboard }}">
+          <span>Wallboard</span>
+          <span></span>
+        </button>
+        <button type="button" onClick="{{ go.campaigns }}">
+          <span>Kampanie i dialer</span>
+        </button>
+      </div>
+      <div>
+        <div>Analityka</div>
+        <button type="button" onClick="{{ go.dashboard }}">
+          <span>Dashboard KPI</span>
+        </button>
+        <button type="button" onClick="{{ go.quality }}">
+          <span>Jakość rozmów</span>
+        </button>
+      </div>
+      <div>
+        <div>Konfiguracja</div>
+        <button type="button" onClick="{{ go.ivr }}">
+          <span>IVR i przepływy</span>
+        </button>
+        <button type="button" onClick="{{ go.bots }}">
+          <span>Boty AI</span>
+        </button>
+        <button type="button" onClick="{{ go.channels }}">
+          <span>Kanały i integracje</span>
+        </button>
+        <button type="button" onClick="{{ go.portal }}">
+          <span>Portal klienta</span>
+        </button>
+        <button type="button" onClick="{{ go.settings }}">
+          <span>Ustawienia</span>
+        </button>
+      </div>
+      <div></div>
+      <div>
+        <div>Routing</div>
+        <div>{{ routingLabel }}</div>
+        <div>System sam podaje kolejną sprawę według SLA i wartości klienta.</div>
+      </div>
+    </nav>
+    <main>
+      <sc-if value="{{ isInbox }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <section>
+          <div>
+            <div>
+              <h1>Rozmowy</h1>
+              <button type="button" class="om-btn om-btn-2xs om-btn-v-default" onClick="{{ takeNext }}">Weź następną</button>
+            </div>
+            <div>
+              <sc-for list="{{ channelFilters }}" as="f" hint-placeholder-count="6">
+                <button type="button" onClick="{{ f.onSelect }}">
+                  <span></span>{{ f.label }}
+                </button>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <sc-for list="{{ convList }}" as="c" hint-placeholder-count="7">
+              <button type="button" onClick="{{ c.onSelect }}">
+                <div>
+                  <span></span>
+                  <span>{{ c.name }}</span>
+                  <span>{{ c.time }}</span>
+                </div>
+                <div>{{ c.snippet }}</div>
+                <div>
+                  <span>{{ c.channelLabel }}</span>
+                  <span>·</span>
+                  <span>SLA {{ c.sla }}</span>
+                  <span></span>
+                  <sc-if value="{{ c.vip }}" hint-placeholder-val="{{ true }}"><span class="om-badge om-badge-sm om-badge-v-brand">VIP</span></sc-if>
+                </div>
+              </button>
+            </sc-for>
+          </div>
+        </section>
+        <section>
+          <div>
+            <div>
+              <div>
+                <h2>{{ active.name }}</h2>
+                <span class="om-badge om-badge-sm om-badge-v-neutral">{{ active.channelLabel }}</span>
+                <sc-if value="{{ active.vip }}" hint-placeholder-val="{{ true }}"><span class="om-badge om-badge-sm om-badge-v-brand">VIP</span></sc-if>
+              </div>
+              <div>{{ active.subline }}</div>
+            </div>
+            <div>
+              <div>
+                <span>Do przekroczenia SLA</span>
+                <span>{{ active.sla }}</span>
+              </div>
+              <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ noop }}">
+                Przekaż
+              </button>
+              <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ go.customer }}">Karta klienta</button>
+              <button type="button" class="om-btn om-btn-sm om-btn-v-default" onClick="{{ resolveActive }}">Zamknij sprawę</button>
+            </div>
+          </div>
+          <div>
+            <sc-for list="{{ messages }}" as="m" hint-placeholder-count="5">
+              <div>
+                <div>
+                  <span>{{ m.author }}</span>
+                  <span>·</span><span>{{ m.channelLabel }}</span><span>·</span><span>{{ m.time }}</span>
+                </div>
+                <div>{{ m.text }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div>
+            <div>
+              <span>Odpowiedz przez</span>
+              <sc-for list="{{ replyChannels }}" as="r" hint-placeholder-count="4">
+                <button type="button" onClick="{{ r.onSelect }}">
+                  <span></span>{{ r.label }}
+                </button>
+              </sc-for>
+            </div>
+            <textarea value="{{ composer }}" onInput="{{ onComposer }}" onKeyDown="{{ onComposerKey }}" placeholder="Napisz odpowiedź. Enter wysyła, Shift+Enter to nowa linia."></textarea>
+            <div>
+              <button type="button" class="om-btn om-btn-sm om-btn-v-ghost" onClick="{{ insertSuggestion }}">
+                Wstaw sugestię AI
+              </button>
+              <button type="button" class="om-btn om-btn-sm om-btn-v-ghost" onClick="{{ noop }}">Szablony</button>
+              <button type="button" class="om-btn om-btn-sm om-btn-v-ghost" onClick="{{ noop }}">Załącz</button>
+              <span></span>
+              <span>Podsumowanie po rozmowie wypełni AI</span>
+              <button type="button" class="om-btn om-btn-sm om-btn-v-default" onClick="{{ send }}">Wyślij</button>
+            </div>
+          </div>
+        </section>
+        <sc-if value="{{ aiAssist }}" hint-placeholder-val="{{ true }}">
+        <aside>
+          <div>
+            <div>
+              <span>
+              </span>
+              <h3>AI Assist</h3>
+              <span></span>
+              <span class="om-badge om-badge-sm om-badge-v-info">Kontekst z 4 kanałów</span>
+            </div>
+            <div>
+              <div>Streszczenie sprawy</div>
+              <p>{{ ai.summary }}</p>
+            </div>
+            <div>
+              <div>Sugerowana odpowiedź</div>
+              <div>{{ ai.suggestion }}</div>
+              <div>
+                <button type="button" class="om-btn om-btn-2xs om-btn-v-default" onClick="{{ insertSuggestion }}">Wstaw</button>
+                <button type="button" class="om-btn om-btn-2xs om-btn-v-outline" onClick="{{ noop }}">Przeredaguj</button>
+                <button type="button" class="om-btn om-btn-2xs om-btn-v-muted" onClick="{{ noop }}">Odrzuć</button>
+              </div>
+            </div>
+            <div>
+              <div>Następne działanie</div>
+              <sc-for list="{{ ai.actions }}" as="a" hint-placeholder-count="3">
+                <button type="button" onClick="{{ a.onRun }}">
+                  <span>
+                    <span>{{ a.label }}</span>
+                    <span>{{ a.hint }}</span>
+                  </span>
+                </button>
+              </sc-for>
+            </div>
+            <div>
+              <div>Źródła</div>
+              <div>
+                <sc-for list="{{ ai.sources }}" as="s" hint-placeholder-count="2">
+                  <span>{{ s.label }}</span>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h3>Klient</h3>
+              <span></span>
+              <button type="button" class="om-btn om-btn-2xs om-btn-v-link" onClick="{{ go.customer }}">Pełna karta</button>
+            </div>
+            <div>
+              <div>{{ active.initials }}</div>
+              <div>
+                <span>{{ active.name }}</span>
+                <span>{{ active.email }}</span>
+              </div>
+            </div>
+            <div>
+              <sc-for list="{{ active.tags }}" as="t" hint-placeholder-count="3">
+                <span class="om-badge om-badge-sm om-badge-v-neutral">{{ t.label }}</span>
+              </sc-for>
+            </div>
+            <div>
+              <div>
+                <span>Wartość życiowa</span>
+                <span>{{ active.ltv }}</span>
+              </div>
+              <div>
+                <span>Zamówienia</span>
+                <span>{{ active.orders }}</span>
+              </div>
+              <div>
+                <span>Ostatni NPS</span>
+                <span>{{ active.nps }}</span>
+              </div>
+              <div>
+                <span>Ryzyko odejścia</span>
+                <span>{{ active.churn }}</span>
+              </div>
+            </div>
+            <div>
+              <div>Kontekst zamówienia</div>
+              <div>
+                <div>
+                  <span>{{ active.order.id }}</span>
+                  <span class="om-badge om-badge-sm om-badge-v-warning">{{ active.order.status }}</span>
+                </div>
+                <span>{{ active.order.items }}</span>
+                <span>{{ active.order.carrier }}</span>
+                <div>
+                  <button type="button" class="om-btn om-btn-2xs om-btn-v-outline" onClick="{{ noop }}">Zwrot</button>
+                  <button type="button" class="om-btn om-btn-2xs om-btn-v-outline" onClick="{{ noop }}">Kupon</button>
+                  <button type="button" class="om-btn om-btn-2xs om-btn-v-outline" onClick="{{ noop }}">Faktura</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <h3>Tożsamość klienta</h3>
+            <p>Numer z WhatsApp, adres e-mail i profil Instagram zostały połączone w jeden profil.</p>
+            <div>
+              <div>
+                <div></div>
+              </div>
+              <span>94%</span>
+            </div>
+            <button type="button" class="om-btn om-btn-2xs om-btn-v-outline" onClick="{{ noop }}">Sprawdź dopasowanie</button>
+          </div>
+        </aside>
+        </sc-if>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isTickets }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div>
+          <div>
+            <h1>Zgłoszenia</h1>
+            <p>Sprawy klientów niezależnie od kanału. Kliknij status, aby przesunąć zgłoszenie dalej.</p>
+          </div>
+          <span></span>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ noop }}">Eksportuj CSV</button>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-default" onClick="{{ noop }}">Utwórz zgłoszenie</button>
+        </div>
+        <div>
+          <div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Numer</th>
+                  <th>Temat</th>
+                  <th>Klient</th>
+                  <th>Kanał</th>
+                  <th>Opiekun</th>
+                  <th>SLA</th>
+                  <th>Priorytet</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ tickets }}" as="t" hint-placeholder-count="6">
+                  <tr>
+                    <td>{{ t.id }}</td>
+                    <td>{{ t.subject }}</td>
+                    <td>{{ t.customer }}</td>
+                    <td>
+                      <span><span></span>{{ t.channelLabel }}</span>
+                    </td>
+                    <td>{{ t.agent }}</td>
+                    <td>{{ t.sla }}</td>
+                    <td>{{ t.priority }}</td>
+                    <td>
+                      <button type="button" onClick="{{ t.onCycle }}">
+                        <span class="{{ t.statusVariant }}">{{ t.status }}</span>
+                      </button>
+                    </td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isCustomer }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div>
+          <div>
+            <div>{{ active.initials }}</div>
+            <div>
+              <div>
+                <h1>{{ active.name }}</h1>
+                <sc-if value="{{ active.vip }}" hint-placeholder-val="{{ true }}"><span class="om-badge om-badge-sm om-badge-v-brand">VIP</span></sc-if>
+              </div>
+              <p>{{ active.subline }}</p>
+            </div>
+            <span></span>
+            <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ go.inbox }}">Wróć do rozmowy</button>
+            <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ noop }}">Zadzwoń</button>
+            <button type="button" class="om-btn om-btn-sm om-btn-v-default" onClick="{{ noop }}">Nowe zgłoszenie</button>
+          </div>
+          <div>
+            <sc-for list="{{ custTabs }}" as="tb" hint-placeholder-count="4">
+              <button type="button" onClick="{{ tb.onSelect }}">{{ tb.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div>
+          <div>
+            <div>
+              <span>Wartość życiowa</span>
+              <span>{{ active.ltv }}</span>
+            </div>
+            <div>
+              <span>Zamówienia</span>
+              <span>{{ active.orders }}</span>
+            </div>
+            <div>
+              <span>Ostatni NPS</span>
+              <span>{{ active.nps }}</span>
+            </div>
+            <div>
+              <span>Ryzyko odejścia</span>
+              <span>{{ active.churn }}</span>
+            </div>
+            <div>
+              <span>Kanał preferowany</span>
+              <span>{{ active.channelLabel }}</span>
+            </div>
+          </div>
+          <sc-if value="{{ custTabIs.przeglad }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <div>
+              <div>
+                <h2>Jedna oś czasu, wszystkie kanały</h2>
+                <span></span>
+                <span class="om-badge om-badge-sm om-badge-v-muted">6 ostatnich zdarzeń</span>
+              </div>
+              <div>
+                <sc-for list="{{ timeline }}" as="e" hint-placeholder-count="5">
+                  <div>
+                    <span>{{ e.when }}</span>
+                    <span>
+                      <span></span>
+                      <span></span>
+                    </span>
+                    <span>
+                      <span>{{ e.title }}</span>
+                      <span>{{ e.detail }}</span>
+                      <span>{{ e.channelLabel }}</span>
+                    </span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div>
+              <div>
+                <h2>Podsumowanie AI</h2>
+                <p>{{ ai.summary }}</p>
+                <div>
+                  <sc-for list="{{ active.tags }}" as="t" hint-placeholder-count="3">
+                    <span class="om-badge om-badge-sm om-badge-v-neutral">{{ t.label }}</span>
+                  </sc-for>
+                </div>
+              </div>
+              <div>
+                <h2>Zgody i dane</h2>
+                <div><span></span>Marketing e-mail<span></span><span>udzielona 2021</span></div>
+                <div><span></span>Powiadomienia SMS<span></span><span>udzielona 2023</span></div>
+                <div><span></span>Nagrywanie rozmów<span></span><span>informacja odtworzona</span></div>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+          <sc-if value="{{ custTabIs.rozmowy }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <h2>Historia kontaktów</h2>
+            <sc-for list="{{ timeline }}" as="e" hint-placeholder-count="4">
+              <div>
+                <span></span>
+                <span>{{ e.title }}</span>
+                <span>{{ e.channelLabel }}</span>
+                <span>{{ e.when }}</span>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ custTabIs.zamowienia }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <h2>Zamówienia z Open Mercato</h2>
+            <sc-for list="{{ orders }}" as="o" hint-placeholder-count="4">
+              <div>
+                <span>{{ o.id }}</span>
+                <span>
+                  <span>{{ o.items }}</span>
+                  <span>{{ o.date }}</span>
+                </span>
+                <span class="{{ o.variant }}">{{ o.status }}</span>
+                <span>{{ o.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+          <sc-if value="{{ custTabIs.zgloszenia }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <h2>Zgłoszenia klienta</h2>
+            <sc-for list="{{ custTickets }}" as="z" hint-placeholder-count="3">
+              <div>
+                <span>{{ z.id }}</span>
+                <span>{{ z.subject }}</span>
+                <span class="{{ z.variant }}">{{ z.status }}</span>
+                <span>{{ z.updated }}</span>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isWallboard }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div>
+          <div>
+            <h1>Wallboard</h1>
+            <p>Kolejki i zespół w czasie rzeczywistym. Dane odświeżają się co 4 sekundy.</p>
+          </div>
+          <span></span>
+          <span><span></span>na żywo</span>
+        </div>
+        <div>
+          <div>
+            <div>
+              <span>Oczekujących</span>
+              <span>{{ liveTotals.waiting }}</span>
+            </div>
+            <div>
+              <span>W obsłudze</span>
+              <span>{{ liveTotals.inCall }}</span>
+            </div>
+            <div>
+              <span>SLA dzisiaj</span>
+              <span>{{ liveTotals.sla }}</span>
+            </div>
+            <div>
+              <span>Porzucone</span>
+              <span>{{ liveTotals.abandon }}</span>
+            </div>
+          </div>
+          <div>
+            <div>
+              <sc-for list="{{ queues }}" as="q" hint-placeholder-count="4">
+                <div>
+                  <div>
+                    <h3>{{ q.name }}</h3>
+                    <span></span>
+                    <button type="button" class="om-btn om-btn-2xs om-btn-v-outline" onClick="{{ q.onTake }}">Pobierz sprawę</button>
+                  </div>
+                  <div>
+                    <span><span>Oczekujących</span><span>{{ q.waiting }}</span></span>
+                    <span><span>Najdłużej</span><span>{{ q.longest }}</span></span>
+                    <span><span>Agenci</span><span>{{ q.agents }}</span></span>
+                    <span><span>SLA</span><span>{{ q.sla }}</span></span>
+                  </div>
+                  <div>
+                    <div></div>
+                  </div>
+                  <span>{{ q.channels }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div>
+              <h3>Zespół teraz</h3>
+              <sc-for list="{{ agentsLive }}" as="a" hint-placeholder-count="5">
+                <div>
+                  <span></span>
+                  <span>
+                    <span>{{ a.name }}</span>
+                    <span>{{ a.state }} · {{ a.team }}</span>
+                  </span>
+                  <span>
+                    <span>{{ a.handled }}</span>
+                    <span>śr. {{ a.avg }}</span>
+                  </span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div>
+          <div>
+            <h1>Dashboard KPI</h1>
+            <p>Sierpień 2026 · wszystkie kanały · porównanie z poprzednim miesiącem</p>
+          </div>
+          <span></span>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ noop }}">Zmień okres</button>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ noop }}">Eksportuj raport</button>
+        </div>
+        <div>
+          <div>
+            <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="6">
+              <div>
+                <span>{{ k.label }}</span>
+                <div>
+                  <span>{{ k.value }}</span>
+                  <span>{{ k.delta }}</span>
+                </div>
+                <span>{{ k.hint }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div>
+            <div>
+              <h3>Kontakty w tygodniu</h3>
+              <div>
+                <sc-for list="{{ bars }}" as="b" hint-placeholder-count="7">
+                  <div>
+                    <span>{{ b.v }}</span>
+                    <div></div>
+                    <span>{{ b.label }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div>
+              <h3>Udział kanałów</h3>
+              <div>
+                <div><div><span>SMS i powiadomienia</span><span>31%</span></div><div><div></div></div></div>
+                <div><div><span>Telefon</span><span>21%</span></div><div><div></div></div></div>
+                <div><div><span>E-mail</span><span>16%</span></div><div><div></div></div></div>
+                <div><div><span>Chat na stronie</span><span>14%</span></div><div><div></div></div></div>
+                <div><div><span>WhatsApp</span><span>11%</span></div><div><div></div></div></div>
+                <div><div><span>Social i pozostałe</span><span>7%</span></div><div><div></div></div></div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div><h3>Wyniki zespołu</h3></div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Agent</th>
+                  <th>Zespół</th>
+                  <th>Sprawy</th>
+                  <th>FCR</th>
+                  <th>Średni czas</th>
+                  <th>NPS</th>
+                  <th>Sugestie AI</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ agentStats }}" as="a" hint-placeholder-count="5">
+                  <tr>
+                    <td>{{ a.name }}</td>
+                    <td>{{ a.team }}</td>
+                    <td>{{ a.handled }}</td>
+                    <td>{{ a.fcr }}</td>
+                    <td>{{ a.aht }}</td>
+                    <td>{{ a.nps }}</td>
+                    <td>{{ a.ai }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isCampaigns }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div>
+          <div>
+            <h1>Kampanie i dialer</h1>
+            <p>Kontakt wychodzący z tej samej bazy klientów co obsługa. Bez osobnego narzędzia do wysyłek.</p>
+          </div>
+          <span></span>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-default" onClick="{{ noop }}">Nowa kampania</button>
+        </div>
+        <div>
+          <div>
+            <sc-for list="{{ campaigns }}" as="c" hint-placeholder-count="4">
+              <div>
+                <div>
+                  <span></span>
+                  <div>
+                    <h3>{{ c.name }}</h3>
+                    <span>{{ c.mode }} · {{ c.channel }} · {{ c.owner }}</span>
+                  </div>
+                  <span class="{{ c.stateVariant }}">{{ c.stateLabel }}</span>
+                </div>
+                <div>
+                  <div><span>{{ c.done }} z {{ c.contacts }} kontaktów</span><span>{{ c.progress }}</span></div>
+                  <div><div></div></div>
+                </div>
+                <div>
+                  <span><span>Dodzwanialność</span><span>{{ c.connect }}</span></span>
+                  <span><span>Konwersja</span><span>{{ c.conversion }}</span></span>
+                  <span><button type="button" class="{{ c.btnClass }}" onClick="{{ c.onToggle }}">{{ c.btnLabel }}</button></span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div>
+            <h3>Reguły oddzwaniania</h3>
+            <p>Nieodebrane połączenie wraca do kolejki z priorytetem klienta. System dobiera godzinę na podstawie tego, kiedy klient wcześniej odbierał, a po trzeciej nieudanej próbie przechodzi na SMS z linkiem do rezerwacji rozmowy.</p>
+            <div>
+              <span class="om-badge om-badge-v-neutral">Maks. 3 próby</span>
+              <span class="om-badge om-badge-v-neutral">Okno 9:00–19:00</span>
+              <span class="om-badge om-badge-v-neutral">Priorytet VIP na początek</span>
+              <span class="om-badge om-badge-v-neutral">Fallback: SMS z linkiem</span>
+              <span class="om-badge om-badge-v-neutral">Bez dzwonienia po zamkniętej sprawie</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isIvr }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div>
+          <div>
+            <h1>IVR i przepływy</h1>
+            <p>Przepływ „Infolinia główna” · ostatnia zmiana 2 dni temu przez Iwonę Sadowską</p>
+          </div>
+          <span></span>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ noop }}">Testuj przepływ</button>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-default" onClick="{{ noop }}">Publikuj</button>
+        </div>
+        <div>
+          <div>
+            <sc-for list="{{ ivrNodes }}" as="n" hint-placeholder-count="6">
+              <div>
+                <div>
+                  <div>{{ n.step }}</div>
+                  <div></div>
+                </div>
+                <div>
+                  <div>
+                    <h3>{{ n.title }}</h3>
+                    <span class="om-badge om-badge-sm om-badge-v-info">{{ n.tag }}</span>
+                  </div>
+                  <p>{{ n.detail }}</p>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div>
+            <span>
+            </span>
+            <div>
+              <span>Menu tonowe jest tu opcją awaryjną</span>
+              <span>Klient mówi, czego potrzebuje, a rozpoznanie intencji kieruje rozmowę. Drzewo wyborów włącza się dopiero, gdy pewność modelu spada poniżej 0,8.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isBots }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div>
+          <div>
+            <h1>Boty AI</h1>
+            <p>Intencje wspólne dla chatbota, voicebota i IVR. Jedna konfiguracja, wszystkie kanały.</p>
+          </div>
+          <span></span>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ noop }}">Historia zmian</button>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-default" onClick="{{ noop }}">Dodaj intencję</button>
+        </div>
+        <div>
+          <div>
+            <sc-for list="{{ intents }}" as="i" hint-placeholder-count="5">
+              <div>
+                <div>
+                  <h3>{{ i.name }}</h3>
+                  <span>{{ i.examples }}</span>
+                  <span>{{ i.volume }}</span>
+                </div>
+                <div>
+                  <div><span>Obsłużone bez agenta</span><span>{{ i.containment }}</span></div>
+                  <div><div></div></div>
+                </div>
+                <div>
+                  <span>Przekazane do agenta</span>
+                  <span>{{ i.handoff }}</span>
+                </div>
+                <div>
+                  <span>{{ i.stateLabel }}</span>
+                  <button type="button" onClick="{{ i.onToggle }}">
+                    <span></span>
+                  </button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div>
+            <div>
+              <h3>Luki w wiedzy</h3>
+              <p>Pytania, na które bot nie umiał odpowiedzieć w ostatnim tygodniu.</p>
+              <sc-for list="{{ gaps }}" as="g" hint-placeholder-count="3">
+                <div>
+                  <span>
+                    <span>{{ g.topic }}</span>
+                    <span>{{ g.action }}</span>
+                  </span>
+                  <span>{{ g.volume }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div>
+              <h3>Reguły przekazania do człowieka</h3>
+              <div>
+                <div><span></span>Klient VIP lub sprawa powyżej 1 000 zł</div>
+                <div><span></span>Dwie nieudane próby odpowiedzi</div>
+                <div><span></span>Wykryta frustracja w treści wiadomości</div>
+                <div><span></span>Prośba o rozmowę z konsultantem</div>
+                <div><span></span>Reklamacja jakościowa i szkoda transportowa</div>
+              </div>
+              <p>Przekazanie zawiera streszczenie rozmowy, więc agent nie zaczyna od pytania „w czym mogę pomóc”.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isChannels }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div>
+          <div>
+            <h1>Kanały i integracje</h1>
+            <p>Dziewięć kanałów kontaktu i systemy, z których pochodzi kontekst klienta.</p>
+          </div>
+          <span></span>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-default" onClick="{{ noop }}">Dodaj kanał</button>
+        </div>
+        <div>
+          <div>
+            <sc-for list="{{ channelsCfg }}" as="c" hint-placeholder-count="9">
+              <div>
+                <div>
+                  <span></span>
+                  <h3>{{ c.name }}</h3>
+                  <span class="{{ c.statusVariant }}">{{ c.status }}</span>
+                </div>
+                <p>{{ c.detail }}</p>
+                <div>
+                  <span><span>Wolumen</span><span>{{ c.volume }}</span></span>
+                  <span><span>SLA</span><span>{{ c.sla }}</span></span>
+                  <span></span>
+                  <button type="button" class="om-btn om-btn-2xs om-btn-v-outline" onClick="{{ c.onOpen }}">Ustawienia</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div>
+            <h3>Integracje</h3>
+            <div>
+              <sc-for list="{{ integrations }}" as="g" hint-placeholder-count="7">
+                <div>
+                  <span>
+                    <span>{{ g.name }}</span>
+                    <span>{{ g.kind }}</span>
+                  </span>
+                  <span>{{ g.status }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isQuality }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div>
+          <div>
+            <h1>Jakość rozmów</h1>
+            <p>Nagrania i transkrypcje z automatyczną oceną. Do odsłuchu trafiają sprawy odstające od normy.</p>
+          </div>
+          <span></span>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ noop }}">Karta oceny</button>
+        </div>
+        <div>
+          <div>
+            <sc-for list="{{ recordings }}" as="r" hint-placeholder-count="4">
+              <div>
+                <div>
+                  <span>{{ r.id }}</span>
+                  <span><span></span>{{ r.channelLabel }}</span>
+                  <span></span>
+                  <span>{{ r.score }}</span>
+                  <span>/ 100</span>
+                </div>
+                <div>
+                  <span>{{ r.topic }}</span>
+                  <span>{{ r.customer }} · agent {{ r.agent }} · {{ r.length }}</span>
+                </div>
+                <span>Nastrój: {{ r.sentiment }}</span>
+                <div>
+                  <button type="button" class="om-btn om-btn-2xs om-btn-v-outline" onClick="{{ r.onPlay }}">Odtwórz</button>
+                  <button type="button" class="om-btn om-btn-2xs om-btn-v-outline" onClick="{{ noop }}">Transkrypcja</button>
+                  <button type="button" class="om-btn om-btn-2xs om-btn-v-outline" onClick="{{ noop }}">Oceń</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div>
+            <div>
+              <h3>Karta oceny NAG-8841</h3>
+              <div>
+                <div><div><span>Rozpoznanie potrzeby</span><span>9 / 10</span></div><div><div></div></div></div>
+                <div><div><span>Rozwiązanie sprawy</span><span>10 / 10</span></div><div><div></div></div></div>
+                <div><div><span>Zgodność z procedurą</span><span>7 / 10</span></div><div><div></div></div></div>
+                <div><div><span>Ton rozmowy</span><span>9 / 10</span></div><div><div></div></div></div>
+              </div>
+              <p>Uwaga AI: brak informacji o nagrywaniu na początku rozmowy. Do omówienia na spotkaniu zespołu.</p>
+              <button type="button" class="om-btn om-btn-sm om-btn-v-default" onClick="{{ noop }}">Zatwierdź ocenę</button>
+            </div>
+            <div>
+              <h3>Do odsłuchu w tym tygodniu</h3>
+              <div><span>Rozmowy z niskim NPS</span><span>14</span></div>
+              <div><span>Powtórne kontakty w tej samej sprawie</span><span>9</span></div>
+              <div><span>Odstępstwa od procedury</span><span>6</span></div>
+              <div><span>Sprawy nowych agentów</span><span>11</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isAi }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div>
+          <div>
+            <h1>AI Assist</h1>
+            <p>Co AI robi za zespół i gdzie jego podpowiedzi są odrzucane.</p>
+          </div>
+          <span></span>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ go.inbox }}">Zobacz w rozmowie</button>
+        </div>
+        <div>
+          <div>
+            <sc-for list="{{ aiMetrics }}" as="m" hint-placeholder-count="4">
+              <div>
+                <span>{{ m.label }}</span>
+                <span>{{ m.value }}</span>
+                <span>{{ m.hint }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div>
+            <div>
+              <h3>Biblioteka podpowiedzi</h3>
+              <sc-for list="{{ aiLibrary }}" as="l" hint-placeholder-count="4">
+                <div>
+                  <span>
+                    <span>{{ l.name }}</span>
+                    <span>{{ l.owner }} · {{ l.use }}</span>
+                  </span>
+                  <span>{{ l.accept }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div>
+              <h3>Zasady, które trzymamy</h3>
+              <div>
+                <span>Agent zawsze widzi treść przed wysłaniem. AI nie odpowiada za niego bez akceptacji.</span>
+                <span>Każda podpowiedź ma źródło: artykuł z bazy wiedzy, zamówienie lub wcześniejszą rozmowę.</span>
+                <span>Podsumowanie po rozmowie powstaje automatycznie i można je poprawić w 10 sekund.</span>
+                <span>Dane klienta nie opuszczają instancji Open Mercato.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isPortal }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div>
+          <div>
+            <h1>Portal klienta</h1>
+            <p>Podgląd tego, co widzi klient. Ta sama sprawa co w inboxie agenta, bez potrzeby kontaktu.</p>
+          </div>
+          <span></span>
+          <span class="om-badge om-badge-sm om-badge-v-warning">Wersja testowa</span>
+        </div>
+        <div>
+          <div>
+            <div>
+              <div>
+                <div>mc</div>
+                <span>Twoje sprawy</span>
+                <span></span>
+                <span>Anna Kowalska</span>
+              </div>
+              <div>
+                <div>
+                  <span>Przesyłka ZM-48213 opóźniona</span>
+                  <span></span>
+                  <span>aktualizacja 12 minut temu</span>
+                </div>
+                <p>Twoja paczka utknęła na sortowni w Warszawie. Zgłosiliśmy sprawę przewoźnikowi i przygotowujemy wysyłkę zastępczą. Odpowiemy z numerem nowej przesyłki dzisiaj do 16:00.</p>
+                <div>
+                  <button type="button" class="om-btn om-btn-sm om-btn-v-default" onClick="{{ noop }}">Chcę wysyłkę zastępczą</button>
+                  <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ noop }}">Poproszę o zwrot pieniędzy</button>
+                </div>
+              </div>
+              <div>
+                <span>Historia sprawy</span>
+                <div><span></span><span><span>Sprawa przekazana do konsultanta</span><span>dziś 09:12 · WhatsApp</span></span></div>
+                <div><span></span><span><span>Reklamacja u przewoźnika zgłoszona</span><span>wt. 14:04 · telefon</span></span></div>
+                <div><span></span><span><span>Powiadomienie o opóźnieniu</span><span>pon. 18:40 · e-mail</span></span></div>
+              </div>
+            </div>
+            <div>
+              <div>
+                <span>Załatw sam</span>
+                <div>
+                  <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ noop }}">Zgłoś zwrot lub wymianę</button>
+                  <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ noop }}">Pobierz fakturę</button>
+                  <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ noop }}">Zmień termin dostawy</button>
+                </div>
+              </div>
+              <div>
+                <span>Napisz do nas</span>
+                <p>Odpowiadamy w kanale, który wybierzesz. Historia rozmowy zostaje w jednym miejscu.</p>
+                <div>
+                  <span class="om-badge om-badge-v-neutral">WhatsApp</span>
+                  <span class="om-badge om-badge-v-neutral">Chat</span>
+                  <span class="om-badge om-badge-v-neutral">E-mail</span>
+                  <span class="om-badge om-badge-v-neutral">Telefon</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+      <div>
+        <div>
+          <div>
+            <h1>Ustawienia</h1>
+            <p>Moduły, kanały i integracje tej instalacji. Wyłączony moduł znika z nawigacji zespołu.</p>
+          </div>
+          <span></span>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-outline" onClick="{{ noop }}">Historia zmian</button>
+          <button type="button" class="om-btn om-btn-sm om-btn-v-default" onClick="{{ noop }}">Zapisz konfigurację</button>
+        </div>
+        <div>
+          <div>
+            <div>
+              <span>Aktywne moduły</span>
+              <span>{{ activeModuleCount }}</span>
+            </div>
+            <div>
+              <span>Podłączone kanały</span>
+              <span>{{ activeChannelCount }}</span>
+            </div>
+            <div>
+              <span>Działające integracje</span>
+              <span>{{ activeIntegrCount }}</span>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h2>Moduły</h2>
+              <span>Płacisz i uczysz zespół tylko tego, czego używacie</span>
+            </div>
+            <div>
+              <sc-for list="{{ modules }}" as="m" hint-placeholder-count="9">
+                <div>
+                  <div>
+                    <span>{{ m.name }}</span>
+                    <span>{{ m.detail }}</span>
+                  </div>
+                  <span>{{ m.dep }}</span>
+                  <span>{{ m.stateLabel }}</span>
+                  <button type="button" onClick="{{ m.onToggle }}">
+                    <span></span>
+                  </button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h2>Kanały do podłączenia</h2>
+              <span>Każdy kanał trafia do tego samego wątku klienta</span>
+            </div>
+            <div>
+              <sc-for list="{{ chanSetup }}" as="c" hint-placeholder-count="9">
+                <div>
+                  <div>
+                    <span></span>
+                    <span>{{ c.name }}</span>
+                    <button type="button" onClick="{{ c.onToggle }}">
+                      <span></span>
+                    </button>
+                  </div>
+                  <span>{{ c.detail }}</span>
+                  <span>{{ c.stateLabel }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <div>
+              <h2>Status integracji</h2>
+              <span>Źródła kontekstu klienta i dane zwrotne</span>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>System</th>
+                  <th>Zakres danych</th>
+                  <th>Uprawnienia</th>
+                  <th>Ostatnia synchronizacja</th>
+                  <th>Status</th>
+                  <th>Akcja</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ integrDetail }}" as="g" hint-placeholder-count="7">
+                  <tr>
+                    <td>{{ g.name }}</td>
+                    <td>{{ g.kind }}</td>
+                    <td>{{ g.scope }}</td>
+                    <td>{{ g.sync }}</td>
+                    <td><span class="{{ g.variant }}">{{ g.status }}</span></td>
+                    <td><button type="button" class="{{ g.btnClass }}" onClick="{{ g.onAct }}">{{ g.btnLabel }}</button></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <div>
+              <h2>Reguły obsługi</h2>
+              <div>
+                <span>Cel pierwszej odpowiedzi</span>
+                <div>
+                  <sc-for list="{{ slaOptions }}" as="o" hint-placeholder-count="3">
+                    <button type="button" onClick="{{ o.onSelect }}">{{ o.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <div>
+                <span>Godziny pracy zespołu</span>
+                <div>
+                  <sc-for list="{{ hoursOptions }}" as="o" hint-placeholder-count="3">
+                    <button type="button" onClick="{{ o.onSelect }}">{{ o.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <div>
+                <span>
+                  <span>Podsumowanie po rozmowie od AI</span>
+                  <span>Agent tylko zatwierdza treść notatki</span>
+                </span>
+                <span>{{ autoWrapSw.label }}</span>
+                <button type="button" onClick="{{ onAutoWrap }}">
+                  <span></span>
+                </button>
+              </div>
+              <div>
+                <span>
+                  <span>Nagrywanie rozmów</span>
+                  <span>Z zapowiedzią zgodną z RODO na starcie połączenia</span>
+                </span>
+                <span>{{ recordingSw.label }}</span>
+                <button type="button" onClick="{{ onRecording }}">
+                  <span></span>
+                </button>
+              </div>
+            </div>
+            <div>
+              <span>
+              </span>
+              <div>
+                <span>Dwie rzeczy wymagają uwagi</span>
+                <span>Klucz API SalesManago wygasł 3 dni temu — segmenty i zgody marketingowe nie aktualizują się. Token Instagram DM wygasa za 6 dni.</span>
+                <div>
+                  <button type="button" class="om-btn om-btn-2xs om-btn-v-outline" onClick="{{ noop }}">Odnów SalesManago</button>
+                  <button type="button" class="om-btn om-btn-2xs om-btn-v-outline" onClick="{{ noop }}">Odnów Instagram</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+    </main>
+  </div>
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div>{{ toast }}</div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;brandName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Mercato Connect&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;aiAssist&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Zachowanie&quot;},&quot;routing&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Auto push (next best)&quot;,&quot;Kolejka ręczna&quot;],&quot;default&quot;:&quot;Auto push (next best)&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Zachowanie&quot;}}">
+const CH = {
+  telefon:   { label: 'telefon',   color: 'var(--chart-indigo)' },
+  email:     { label: 'e-mail',    color: 'var(--chart-blue)' },
+  chat:      { label: 'chat',      color: 'var(--chart-teal)' },
+  whatsapp:  { label: 'whatsapp',  color: 'var(--chart-emerald)' },
+  messenger: { label: 'messenger', color: 'var(--chart-cyan)' },
+  sms:       { label: 'sms',       color: 'var(--chart-amber)' },
+  instagram: { label: 'instagram', color: 'var(--chart-pink)' },
+  formularz: { label: 'formularz', color: 'var(--muted-foreground)' },
+  portal:    { label: 'portal',    color: 'var(--chart-violet)' }
+};
+const CONVS = [
+  { id:'c1', name:'Anna Kowalska', channel:'whatsapp', time:'2 min', sla:'02:14', slaLevel:'warn', vip:true,
+    snippet:'Paczka miała być wczoraj, śledzenie stoi w miejscu. Zamówienie ZM-48213.',
+    email:'anna.kowalska@gmail.com', initials:'AK', ltv:'14 820 zł', orders:'23', nps:'9', churn:'niskie',
+    subline:'Numer +48 601 209 118 · połączona z e-mail i Instagram · klient od 2021',
+    tags:['VIP','Klub Premium','Odbiór InPost'],
+    order:{ id:'ZM-48213', status:'Opóźniona dostawa', items:'Buty trailowe Nomad 41 · Skarpety merino 3-pak', carrier:'InPost · paczkomat WAW-142 · ostatni skan 2 dni temu' },
+    ai:{ summary:'Klientka VIP czeka na paczkę ZM-48213 od 4 dni. Kurier zgłosił zagubienie na sortowni. Pisała wcześniej na czacie i dzwoniła na infolinię — sprawa nie została domknięta.',
+      suggestion:'Dzień dobry Pani Anno, sprawdziłam przesyłkę ZM-48213 — utknęła na sortowni w Warszawie. Wysyłam dziś nową paczkę z dostawą na jutro do 12:00 i dopisuję 50 zł na kolejne zakupy za to opóźnienie. Numer nowej przesyłki prześlę na WhatsApp.',
+      actions:[ { label:'Wyślij nową paczkę z priorytetem', hint:'Open Mercato · magazyn Łódź, dostępne 4 szt.' },
+        { label:'Dodaj kupon 50 zł do konta', hint:'Rekompensata dla klienta VIP przy opóźnieniu' },
+        { label:'Otwórz reklamację u przewoźnika', hint:'InPost API · szablon zagubiona przesyłka' } ],
+      sources:['Baza wiedzy: Opóźnienia i zagubione przesyłki','Polityka rekompensat VIP 2026','Historia: 3 kontakty w tej sprawie'] } },
+  { id:'c2', name:'Marek Wiśniewski', channel:'telefon', time:'w kolejce 0:41', sla:'00:19', slaLevel:'bad', vip:false,
+    snippet:'Rozmowa oczekująca w kolejce Zwroty. Rozpoznany po numerze telefonu.',
+    email:'m.wisniewski@onet.pl', initials:'MW', ltv:'3 140 zł', orders:'6', nps:'7', churn:'średnie',
+    subline:'Kolejka Zwroty i reklamacje · oczekuje 41 s · rozpoznany po numerze',
+    tags:['Zwrot w toku','Pierwszy zwrot'],
+    order:{ id:'ZM-48090', status:'Zwrot zgłoszony', items:'Kurtka softshell Ridge L', carrier:'Etykieta zwrotna wysłana 2 dni temu' },
+    ai:{ summary:'Klient dzwoni w sprawie zwrotu kurtki ZM-48090. Etykieta zwrotna została wysłana, ale nie ma jeszcze skanu nadania. Prawdopodobne pytanie: termin zwrotu pieniędzy.',
+      suggestion:'Dzień dobry, widzę Pański zwrot kurtki Ridge. Zwrot pieniędzy uruchamiamy w dniu przyjęcia paczki na magazyn, standardowo 2 dni od nadania. Mogę zwrócić środki od razu po skanie kuriera — wtedy pieniądze będą u Pana w 24 godziny.',
+      actions:[ { label:'Uruchom zwrot po skanie nadania', hint:'Automatyzacja · Open Mercato zwroty' },
+        { label:'Wyślij status zwrotu SMS-em', hint:'Klient preferuje SMS' } ],
+      sources:['Baza wiedzy: Terminy zwrotów płatności','Regulamin zwrotów 14 dni'] } },
+  { id:'c3', name:'Katarzyna Nowak', channel:'email', time:'18 min', sla:'01:22', slaLevel:'warn', vip:false,
+    snippet:'Proszę o fakturę na firmę do zamówienia ZM-47990, NIP w załączniku.',
+    email:'k.nowak@nowakstudio.pl', initials:'KN', ltv:'8 950 zł', orders:'11', nps:'8', churn:'niskie',
+    subline:'Wątek e-mail · 2 wiadomości · klient B2B',
+    tags:['B2B','Faktura na firmę'],
+    order:{ id:'ZM-47990', status:'Wysłane', items:'Plecak Alpine 30L × 2', carrier:'DPD · dostarczono' },
+    ai:{ summary:'Klientka prosi o korektę danych na fakturze do ZM-47990 — zakup na firmę. NIP jest w załączniku, dane zgadzają się z rejestrem.',
+      suggestion:'Dzień dobry, dziękuję za dane. Wystawiłam fakturę na Nowak Studio z NIP 5252448391 i wysłałam ją na ten adres. Dopisałam dane firmowe do Pani konta, więc kolejne zamówienia będą fakturowane automatycznie.',
+      actions:[ { label:'Wystaw korektę faktury', hint:'Open Mercato · moduł fakturowania' },
+        { label:'Zapisz dane firmowe na koncie', hint:'Uniknięcie kolejnych zgłoszeń' } ],
+      sources:['Baza wiedzy: Faktury i korekty','Weryfikacja NIP: rejestr VAT'] } },
+  { id:'c4', name:'Piotr Zieliński', channel:'chat', time:'25 min', sla:'03:40', slaLevel:'ok', vip:false,
+    snippet:'Czy rozmiar 42 w bucie Nomad wróci do sprzedaży? Chatbot przekazał rozmowę.',
+    email:'piotr.z@wp.pl', initials:'PZ', ltv:'620 zł', orders:'2', nps:'—', churn:'wysokie',
+    subline:'Chat na stronie · przekazane przez bota po 2 pytaniach',
+    tags:['Nowy klient','Przekazane z bota'],
+    order:{ id:'Koszyk 8 213 zł', status:'Koszyk aktywny', items:'Buty trailowe Nomad 42 · brak w magazynie', carrier:'Powiadomienie o dostępności nieaktywne' },
+    ai:{ summary:'Potencjalny klient pyta o dostępność rozmiaru 42. Dostawa od producenta planowana na 12 dni. W koszyku ma produkt za 8 213 zł — warto zaproponować alternatywę.',
+      suggestion:'Rozmiar 42 wraca do magazynu w ciągu 12 dni — mogę włączyć powiadomienie e-mailem. Jeśli buty potrzebne są szybciej, model Nomad Trail GTX w 42 jest dostępny od razu i ma tę samą podeszwę.',
+      actions:[ { label:'Włącz powiadomienie o dostępności', hint:'Kanał: chat i e-mail' },
+        { label:'Zaproponuj alternatywę z magazynu', hint:'3 modele o zbliżonych parametrach' } ],
+      sources:['Stany magazynowe Open Mercato','Plan dostaw dostawcy · tydzień 36'] } },
+  { id:'c5', name:'Julia Lewandowska', channel:'instagram', time:'41 min', sla:'02:58', slaLevel:'ok', vip:false,
+    snippet:'Kod rabatowy LATO25 nie działa w koszyku, a widziałam go na waszym profilu.',
+    email:'julia.lew@gmail.com', initials:'JL', ltv:'1 280 zł', orders:'3', nps:'6', churn:'średnie',
+    subline:'Instagram DM · @julia.lew · profil połączony z kontem w sklepie',
+    tags:['Kanał social','Promocja LATO25'],
+    order:{ id:'Koszyk 349 zł', status:'Koszyk porzucony', items:'Bluza Ridge S', carrier:'Kod LATO25 wygasł 3 dni temu' },
+    ai:{ summary:'Kod LATO25 wygasł 3 dni temu, ale post na Instagramie nadal jest widoczny. To trzecie takie zgłoszenie dzisiaj — warto zgłosić do marketingu.',
+      suggestion:'Kod LATO25 wygasł w niedzielę, przepraszamy za nieaktualny post. Wystawiłam dla Pani kod JESIEN25 o tej samej wartości, ważny 7 dni — wystarczy wpisać go w koszyku.',
+      actions:[ { label:'Wystaw kod zastępczy', hint:'Ta sama wartość, ważność 7 dni' },
+        { label:'Zgłoś nieaktualny post do marketingu', hint:'3 zgłoszenia w tej sprawie dzisiaj' } ],
+      sources:['Lista promocji i terminów','Baza wiedzy: Kody rabatowe'] } },
+  { id:'c6', name:'Tomasz Dąbrowski', channel:'messenger', time:'1 godz.', sla:'04:10', slaLevel:'ok', vip:false,
+    snippet:'Karton dotarł rozerwany, produkt ma zadrapanie. Wysyłam zdjęcia.',
+    email:'t.dabrowski@interia.pl', initials:'TD', ltv:'2 470 zł', orders:'5', nps:'5', churn:'wysokie',
+    subline:'Messenger · 4 wiadomości · 2 załączniki',
+    tags:['Reklamacja','Uszkodzenie w transporcie'],
+    order:{ id:'ZM-48155', status:'Reklamacja', items:'Termos Summit 1L', carrier:'DHL · dostarczono, zdjęcia w załączniku' },
+    ai:{ summary:'Uszkodzenie w transporcie potwierdzone zdjęciami. Wartość produktu 189 zł — poniżej progu automatycznej wymiany bez zwrotu towaru.',
+      suggestion:'Dziękuję za zdjęcia — uszkodzenie jest wyraźne. Wysyłam nowy termos dziś, bez konieczności odsyłania uszkodzonego. Przesyłkę zgłaszam do reklamacji u przewoźnika po naszej stronie.',
+      actions:[ { label:'Wymiana bez zwrotu towaru', hint:'Wartość poniżej progu 250 zł' },
+        { label:'Zgłoś szkodę transportową', hint:'DHL · zdjęcia dołączone automatycznie' } ],
+      sources:['Polityka wymian i uszkodzeń','Progi decyzyjne agenta'] } },
+  { id:'c7', name:'Ewa Szymańska', channel:'sms', time:'2 godz.', sla:'05:35', slaLevel:'ok', vip:false,
+    snippet:'Tak, potwierdzam dostawę w piątek po 16:00.',
+    email:'ewa.szym@gmail.com', initials:'ES', ltv:'5 610 zł', orders:'9', nps:'10', churn:'niskie',
+    subline:'SMS · odpowiedź na automatyczne potwierdzenie terminu',
+    tags:['Potwierdzenie dostawy','Automatyzacja'],
+    order:{ id:'ZM-48201', status:'W dostawie', items:'Namiot Basecamp 3', carrier:'Kurier własny · piątek 16:00–20:00' },
+    ai:{ summary:'Klientka potwierdziła termin dostawy SMS-em. Sprawa może zostać zamknięta automatycznie po aktualizacji okna dostawy.',
+      suggestion:'Dziękujemy za potwierdzenie. Kurier dostarczy namiot w piątek między 16:00 a 20:00, wyślemy SMS 30 minut przed dostawą.',
+      actions:[ { label:'Zapisz okno dostawy i zamknij sprawę', hint:'Automatyzacja może zamknąć wątek' } ],
+      sources:['Harmonogram dostaw · piątek','Baza wiedzy: Zmiana terminu dostawy'] } },
+  { id:'c8', name:'Rafał Mazur', channel:'formularz', time:'3 godz.', sla:'06:00', slaLevel:'ok', vip:false,
+    snippet:'Zapytanie hurtowe: 200 szt. plecaków Alpine z logo firmy, termin październik.',
+    email:'r.mazur@grupatermika.pl', initials:'RM', ltv:'0 zł', orders:'0', nps:'—', churn:'—',
+    subline:'Formularz B2B · lead z kampanii LinkedIn · nieprzypisany opiekun',
+    tags:['Lead B2B','Wysoka wartość'],
+    order:{ id:'Wycena W-2213', status:'Do wyceny', items:'Plecak Alpine 30L × 200, nadruk logo', carrier:'Termin realizacji: październik' },
+    ai:{ summary:'Lead B2B o szacowanej wartości 62 000 zł. Wymaga wyceny nadruku i potwierdzenia terminu produkcji. Brak przypisanego opiekuna sprzedaży.',
+      suggestion:'Dzień dobry Panie Rafale, dziękuję za zapytanie. Przy 200 sztukach z nadrukiem przygotujemy wycenę indywidualną w ciągu 24 godzin i potwierdzimy termin październikowy. Czy mogę zadzwonić dziś po 14:00, aby dopytać o kolory i miejsce nadruku?',
+      actions:[ { label:'Przypisz opiekuna B2B', hint:'Kolejka Sprzedaż B2B · 2 osoby dostępne' },
+        { label:'Utwórz wycenę w Open Mercato', hint:'Szablon: nadruk, ilość powyżej 100 szt.' } ],
+      sources:['Cennik hurtowy 2026','Terminy produkcji nadruków'] } }
+];
+const MSGS = {
+  c1: [
+    { author:'Anna Kowalska', side:'in', channel:'telefon', time:'wt. 14:02', text:'Dzwoniłam wczoraj w sprawie paczki, obiecano kontakt do 24 godzin. Nikt nie oddzwonił.' },
+    { author:'System', side:'sys', channel:'system', time:'wt. 14:04', text:'Rozmowa zakończona. Notatka agenta: przekazane do reklamacji przewoźnika. Kanał zmieniony na WhatsApp — kontekst przeniesiony.' },
+    { author:'Anna Kowalska', side:'in', channel:'whatsapp', time:'dziś 09:12', text:'Śledzenie ZM-48213 nadal pokazuje sortownię Warszawa. To już czwarty dzień.' },
+    { author:'Bot Mercato', side:'bot', channel:'whatsapp', time:'dziś 09:12', text:'Sprawdzam status przesyłki. Ostatni skan: sortownia Warszawa, 2 dni temu. Przekazuję rozmowę do konsultanta ze względu na status VIP.' },
+    { author:'Anna Kowalska', side:'in', channel:'whatsapp', time:'dziś 09:31', text:'Potrzebuję tych butów na weekend, inaczej proszę o zwrot pieniędzy.' }
+  ],
+  c2: [
+    { author:'System', side:'sys', channel:'telefon', time:'dziś 11:20', text:'Połączenie przychodzące, kolejka Zwroty i reklamacje. Klient rozpoznany po numerze: Marek Wiśniewski, zwrot ZM-48090 w toku.' },
+    { author:'Bot Mercato', side:'bot', channel:'telefon', time:'dziś 11:20', text:'Zapowiedź IVR: „Widzimy Pański zwrot kurtki Ridge. Aby poznać status, wybierz 1. Aby rozmawiać z konsultantem, wybierz 2.” Klient wybrał 2.' }
+  ],
+  c3: [
+    { author:'Katarzyna Nowak', side:'in', channel:'email', time:'dziś 10:44', text:'Dzień dobry, proszę o fakturę na firmę do zamówienia ZM-47990. Dane: Nowak Studio, NIP 5252448391.' },
+    { author:'Bot Mercato', side:'bot', channel:'email', time:'dziś 10:45', text:'Potwierdzenie odbioru wiadomości wysłane. Wykryta intencja: faktura na firmę. Załącznik z danymi rozpoznany.' }
+  ],
+  c4: [
+    { author:'Piotr Zieliński', side:'in', channel:'chat', time:'dziś 10:58', text:'Cześć, czy Nomad w 42 wróci do sprzedaży?' },
+    { author:'Bot Mercato', side:'bot', channel:'chat', time:'dziś 10:58', text:'Rozmiar 42 jest chwilowo niedostępny. Chcesz, żebym powiadomił Cię e-mailem, gdy wróci?' },
+    { author:'Piotr Zieliński', side:'in', channel:'chat', time:'dziś 10:59', text:'Wolę wiedzieć konkretnie, kiedy. Poproszę człowieka.' }
+  ],
+  c5: [
+    { author:'Julia Lewandowska', side:'in', channel:'instagram', time:'dziś 10:34', text:'Hej, kod LATO25 z waszego posta nie działa w koszyku. Co robić?' }
+  ],
+  c6: [
+    { author:'Tomasz Dąbrowski', side:'in', channel:'messenger', time:'dziś 09:50', text:'Termos przyszedł w rozerwanym kartonie, na obudowie jest zadrapanie. Wysyłam zdjęcia.' },
+    { author:'System', side:'sys', channel:'messenger', time:'dziś 09:51', text:'Dwa załączniki. AI rozpoznało uszkodzenie opakowania i produktu z pewnością 88%.' }
+  ],
+  c7: [
+    { author:'Bot Mercato', side:'bot', channel:'sms', time:'dziś 08:30', text:'Dostawa namiotu Basecamp 3 planowana na piątek 16:00–20:00. Odpowiedz TAK, aby potwierdzić.' },
+    { author:'Ewa Szymańska', side:'in', channel:'sms', time:'dziś 08:41', text:'TAK, potwierdzam dostawę w piątek po 16:00.' }
+  ],
+  c8: [
+    { author:'Rafał Mazur', side:'in', channel:'formularz', time:'dziś 07:58', text:'Dzień dobry, potrzebujemy 200 plecaków Alpine 30L z nadrukiem logo. Termin: październik. Proszę o wycenę i warunki płatności.' }
+  ]
+};
+const TICKETS = [
+  { id:'ZG-1042', subject:'Zagubiona przesyłka ZM-48213', customer:'Anna Kowalska', agent:'Marta Kwiatkowska', channel:'whatsapp', status:'Eskalacja', sla:'02:14', slaLevel:'warn', priority:'Wysoki', updated:'2 min' },
+  { id:'ZG-1041', subject:'Zwrot kurtki Ridge — termin płatności', customer:'Marek Wiśniewski', agent:'Nieprzypisane', channel:'telefon', status:'Nowe', sla:'00:19', slaLevel:'bad', priority:'Wysoki', updated:'teraz' },
+  { id:'ZG-1039', subject:'Faktura na firmę do ZM-47990', customer:'Katarzyna Nowak', agent:'Paweł Górski', channel:'email', status:'W toku', sla:'01:22', slaLevel:'warn', priority:'Średni', updated:'18 min' },
+  { id:'ZG-1036', subject:'Dostępność rozmiaru 42 — Nomad', customer:'Piotr Zieliński', agent:'Marta Kwiatkowska', channel:'chat', status:'Oczekuje na klienta', sla:'03:40', slaLevel:'ok', priority:'Niski', updated:'25 min' },
+  { id:'ZG-1034', subject:'Kod rabatowy LATO25 nie działa', customer:'Julia Lewandowska', agent:'Ola Bąk', channel:'instagram', status:'W toku', sla:'02:58', slaLevel:'ok', priority:'Niski', updated:'41 min' },
+  { id:'ZG-1030', subject:'Uszkodzenie w transporcie — termos Summit', customer:'Tomasz Dąbrowski', agent:'Paweł Górski', channel:'messenger', status:'W toku', sla:'04:10', slaLevel:'ok', priority:'Średni', updated:'1 godz.' },
+  { id:'ZG-1028', subject:'Zapytanie hurtowe 200 szt. Alpine 30L', customer:'Rafał Mazur', agent:'Nieprzypisane', channel:'formularz', status:'Nowe', sla:'06:00', slaLevel:'ok', priority:'Wysoki', updated:'3 godz.' },
+  { id:'ZG-1024', subject:'Zmiana adresu dostawy ZM-48180', customer:'Bartosz Król', agent:'Ola Bąk', channel:'sms', status:'Rozwiązane', sla:'—', slaLevel:'ok', priority:'Niski', updated:'wczoraj' },
+  { id:'ZG-1019', subject:'Reklamacja jakości nadruku', customer:'Grupa Termika', agent:'Paweł Górski', channel:'email', status:'Oczekuje na klienta', sla:'12:00', slaLevel:'ok', priority:'Średni', updated:'wczoraj' }
+];
+const QUEUES = [
+  { name:'Zwroty i reklamacje', waiting:8, longest:'2:41', agents:'6 / 8', sla:74, channels:['telefon','chat','e-mail'] },
+  { name:'Sprzedaż i doradztwo', waiting:4, longest:'0:52', agents:'5 / 6', sla:93, channels:['telefon','chat','whatsapp'] },
+  { name:'Status zamówienia', waiting:3, longest:'0:34', agents:'4 / 4', sla:96, channels:['whatsapp','sms','messenger'] },
+  { name:'B2B i hurt', waiting:2, longest:'1:18', agents:'2 / 3', sla:88, channels:['e-mail','formularz','telefon'] }
+];
+const AGENTS = [
+  { name:'Marta Kwiatkowska', state:'Rozmowa', team:'Zwroty', handled:'31', avg:'4:12', load:82 },
+  { name:'Paweł Górski', state:'Podsumowanie', team:'Zwroty', handled:'27', avg:'5:04', load:71 },
+  { name:'Ola Bąk', state:'Rozmowa', team:'Social', handled:'44', avg:'2:38', load:90 },
+  { name:'Karol Adamczyk', state:'Gotowy', team:'Sprzedaż', handled:'22', avg:'6:20', load:48 },
+  { name:'Iwona Sadowska', state:'Przerwa', team:'B2B', handled:'12', avg:'9:47', load:0 }
+];
+const CAMPAIGNS = [
+  { name:'Porzucone koszyki powyżej 300 zł', channel:'telefon', mode:'Predictive dialer', contacts:'1 840', done:'1 208', progress:66, connect:'41%', conversion:'12,4%', owner:'Zespół Sprzedaż', running:true },
+  { name:'Powiadomienia o dostawie', channel:'sms', mode:'Wysyłka automatyczna', contacts:'6 210', done:'6 210', progress:100, connect:'98%', conversion:'—', owner:'Automatyzacja', running:true },
+  { name:'Reaktywacja klientów VIP', channel:'whatsapp', mode:'Sekwencja z botem', contacts:'420', done:'118', progress:28, connect:'76%', conversion:'19,1%', owner:'Zespół CX', running:false },
+  { name:'Ankieta NPS po dostawie', channel:'email', mode:'Wysyłka cykliczna', contacts:'3 900', done:'2 350', progress:60, connect:'62%', conversion:'NPS 61', owner:'Automatyzacja', running:true }
+];
+const INTENTS = [
+  { name:'Status zamówienia', examples:'gdzie jest paczka, kiedy dostawa, numer śledzenia', containment:84, handoff:16, volume:'4 210 / mies.', on:true },
+  { name:'Zwrot i wymiana', examples:'chcę zwrócić, wymiana rozmiaru, etykieta zwrotna', containment:62, handoff:38, volume:'2 980 / mies.', on:true },
+  { name:'Dostępność produktu', examples:'czy jest rozmiar, kiedy dostawa do sklepu', containment:71, handoff:29, volume:'1 640 / mies.', on:true },
+  { name:'Faktura i dokumenty', examples:'faktura na firmę, korekta, duplikat', containment:48, handoff:52, volume:'860 / mies.', on:true },
+  { name:'Reklamacja jakościowa', examples:'uszkodzony, wada, nie działa', containment:22, handoff:78, volume:'540 / mies.', on:false }
+];
+const TIMELINE = [
+  { when:'dziś 09:31', channel:'whatsapp', title:'Wiadomość: prośba o zwrot pieniędzy', detail:'Rozmowa aktywna, obsługuje Marta Kwiatkowska' },
+  { when:'dziś 09:12', channel:'whatsapp', title:'Bot sprawdził status przesyłki', detail:'Przekazane do konsultanta ze względu na status VIP' },
+  { when:'wt. 14:02', channel:'telefon', title:'Połączenie przychodzące, 6:12', detail:'Notatka: przekazane do reklamacji przewoźnika' },
+  { when:'pon. 18:40', channel:'email', title:'Powiadomienie o opóźnieniu wysłane', detail:'Automatyzacja: opóźnienie powyżej 48 godzin' },
+  { when:'23 sie', channel:'portal', title:'Zamówienie ZM-48213 złożone', detail:'2 pozycje, 749 zł, płatność BLIK' },
+  { when:'11 sie', channel:'instagram', title:'Pytanie o rozmiarówkę', detail:'Obsłużone przez bota, ocena 5/5' }
+];
+const ORDERS = [
+  { id:'ZM-48213', date:'23 sie 2026', value:'749 zł', status:'Opóźniona dostawa', variant:'om-badge om-badge-sm om-badge-v-warning', items:'Buty Nomad 41, skarpety merino' },
+  { id:'ZM-47702', date:'2 sie 2026', value:'1 240 zł', status:'Dostarczone', variant:'om-badge om-badge-sm om-badge-v-success', items:'Kurtka Ridge, czapka wełniana' },
+  { id:'ZM-46980', date:'14 lip 2026', value:'389 zł', status:'Dostarczone', variant:'om-badge om-badge-sm om-badge-v-success', items:'Bidon Summit 750 ml × 2' },
+  { id:'ZM-45120', date:'3 cze 2026', value:'2 190 zł', status:'Zwrot rozliczony', variant:'om-badge om-badge-sm om-badge-v-neutral', items:'Namiot Basecamp 2, materac' }
+];
+const CUST_TICKETS = [
+  { id:'ZG-1042', subject:'Zagubiona przesyłka ZM-48213', status:'Eskalacja', variant:'om-badge om-badge-sm om-badge-v-error', updated:'2 min' },
+  { id:'ZG-0987', subject:'Pytanie o rozmiarówkę butów', status:'Rozwiązane', variant:'om-badge om-badge-sm om-badge-v-success', updated:'11 sie' },
+  { id:'ZG-0940', subject:'Zwrot namiotu Basecamp 2', status:'Rozwiązane', variant:'om-badge om-badge-sm om-badge-v-success', updated:'8 cze' }
+];
+const KPIS = [
+  { label:'Rozwiązane przy pierwszym kontakcie', value:'78,4%', delta:'+6,1 pkt', deltaColor:'var(--status-success-icon)', hint:'cel 75%' },
+  { label:'Średni czas obsługi', value:'4:38', delta:'-52 s', deltaColor:'var(--status-success-icon)', hint:'wszystkie kanały' },
+  { label:'SLA pierwszej odpowiedzi', value:'91%', delta:'-2 pkt', deltaColor:'var(--status-warning-icon)', hint:'cel 93%' },
+  { label:'NPS', value:'61', delta:'+4', deltaColor:'var(--status-success-icon)', hint:'2 940 ankiet' },
+  { label:'Sprawy obsłużone przez AI', value:'38%', delta:'+9 pkt', deltaColor:'var(--status-success-icon)', hint:'bez udziału agenta' },
+  { label:'Koszt kontaktu', value:'6,20 zł', delta:'-1,10 zł', deltaColor:'var(--status-success-icon)', hint:'średnia miesiąca' }
+];
+const BARS = [
+  { label:'pon.', h:'46%', v:'1 210' }, { label:'wt.', h:'62%', v:'1 640' }, { label:'śr.', h:'54%', v:'1 430' },
+  { label:'czw.', h:'71%', v:'1 880' }, { label:'pt.', h:'88%', v:'2 320' }, { label:'sob.', h:'38%', v:'1 010' }, { label:'niedz.', h:'27%', v:'720' }
+];
+const AGENT_STATS = [
+  { name:'Ola Bąk', team:'Social', handled:'44', fcr:'84%', aht:'2:38', nps:'64', ai:'71%' },
+  { name:'Marta Kwiatkowska', team:'Zwroty', handled:'31', fcr:'81%', aht:'4:12', nps:'62', ai:'58%' },
+  { name:'Paweł Górski', team:'Zwroty', handled:'27', fcr:'74%', aht:'5:04', nps:'55', ai:'44%' },
+  { name:'Karol Adamczyk', team:'Sprzedaż', handled:'22', fcr:'69%', aht:'6:20', nps:'58', ai:'39%' },
+  { name:'Iwona Sadowska', team:'B2B', handled:'12', fcr:'92%', aht:'9:47', nps:'71', ai:'26%' }
+];
+const RECORDINGS = [
+  { id:'NAG-8841', customer:'Anna Kowalska', agent:'Marta Kwiatkowska', channel:'telefon', length:'6:12', score:88, topic:'Zagubiona przesyłka', sentiment:'Negatywny na starcie, pozytywny na końcu' },
+  { id:'NAG-8836', customer:'Marek Wiśniewski', agent:'Paweł Górski', channel:'telefon', length:'4:02', score:72, topic:'Zwrot płatności', sentiment:'Neutralny' },
+  { id:'NAG-8830', customer:'Julia Lewandowska', agent:'Ola Bąk', channel:'instagram', length:'—', score:94, topic:'Kod rabatowy', sentiment:'Pozytywny' },
+  { id:'NAG-8822', customer:'Bartosz Król', agent:'Ola Bąk', channel:'chat', length:'—', score:64, topic:'Zmiana adresu dostawy', sentiment:'Negatywny' }
+];
+const IVR = [
+  { step:'1', title:'Powitanie', detail:'Zapowiedź z rozpoznaniem numeru. Klient znany: imię w powitaniu.', tag:'Zapowiedź' },
+  { step:'2', title:'Rozpoznanie intencji AI', detail:'Klient mówi swobodnie. Model rozpoznaje 12 intencji, pewność powyżej 0,8 kieruje bez menu.', tag:'AI' },
+  { step:'3', title:'Kontekst z Open Mercato', detail:'Sprawdzenie ostatniego zamówienia, zwrotu i otwartych zgłoszeń przed routingiem.', tag:'Dane' },
+  { step:'4', title:'Routing po SLA i wartości', detail:'VIP i sprawy blisko przekroczenia SLA na początek kolejki. Skill-based do zespołu.', tag:'Routing' },
+  { step:'5', title:'Kolejka lub callback', detail:'Powyżej 90 s oczekiwania system proponuje oddzwonienie w wybranym oknie.', tag:'Kolejka' },
+  { step:'6', title:'Podsumowanie po rozmowie', detail:'Transkrypcja, streszczenie i tagi zapisywane w karcie klienta bez pracy agenta.', tag:'Automatyzacja' }
+];
+const CHANNELS_CFG = [
+  { key:'telefon', name:'Telefonia i wirtualna centrala', status:'Aktywny', detail:'4 numery, kolejki i IVR, nagrywanie zgodne z RODO', volume:'8 410 / mies.', sla:'91%' },
+  { key:'email', name:'E-mail', status:'Aktywny', detail:'3 skrzynki, autoodpowiedzi, wykrywanie duplikatów wątków', volume:'6 120 / mies.', sla:'88%' },
+  { key:'chat', name:'Chat na stronie', status:'Aktywny', detail:'Widget z botem i przekazaniem do agenta, proaktywne zaproszenia', volume:'5 480 / mies.', sla:'95%' },
+  { key:'whatsapp', name:'WhatsApp Business', status:'Aktywny', detail:'Szablony zatwierdzone, wysyłka kampanii, potwierdzenia dostaw', volume:'4 260 / mies.', sla:'94%' },
+  { key:'messenger', name:'Messenger', status:'Aktywny', detail:'2 strony, automatyczne odpowiedzi poza godzinami pracy', volume:'1 940 / mies.', sla:'90%' },
+  { key:'instagram', name:'Instagram DM', status:'Wymaga uwagi', detail:'Token wygasa za 6 dni, odnów dostęp do konta', volume:'1 210 / mies.', sla:'86%' },
+  { key:'sms', name:'SMS', status:'Aktywny', detail:'Dwukierunkowy, nadawca MERCATO, kampanie i powiadomienia', volume:'12 800 / mies.', sla:'—' },
+  { key:'formularz', name:'Formularze', status:'Aktywny', detail:'5 formularzy, mapowanie na kolejki i kampanie', volume:'740 / mies.', sla:'92%' },
+  { key:'portal', name:'Portal klienta', status:'Wersja testowa', detail:'Samoobsługa: status paczki, zwroty, baza wiedzy', volume:'3 100 sesji', sla:'—' }
+];
+const INTEGRATIONS = [
+  { name:'Open Mercato ERP', kind:'Zamówienia, zwroty, magazyn', status:'Połączone' },
+  { name:'BaseLinker', kind:'Marketplace i wysyłki', status:'Połączone' },
+  { name:'PrestaShop', kind:'Sklep i koszyki', status:'Połączone' },
+  { name:'HubSpot', kind:'CRM sprzedaż', status:'Połączone' },
+  { name:'SalesManago', kind:'Marketing automation', status:'Połączone' },
+  { name:'InPost i DHL', kind:'Śledzenie i reklamacje przesyłek', status:'Połączone' },
+  { name:'Dynamics 365', kind:'CRM B2B', status:'Konfiguracja' }
+];
+const AI_METRICS = [
+  { label:'Sprawy zamknięte bez agenta', value:'38%', hint:'boty i automatyzacje' },
+  { label:'Sugestie przyjęte przez agentów', value:'72%', hint:'2 140 sugestii w tygodniu' },
+  { label:'Czas odzyskany na sprawie', value:'2:40', hint:'streszczenia i podsumowania' },
+  { label:'Pewność rozpoznania intencji', value:'0,86', hint:'średnia z 12 intencji' }
+];
+const AI_LIBRARY = [
+  { name:'Opóźniona dostawa VIP', use:'412 użyć', accept:'81%', owner:'Zespół CX' },
+  { name:'Zwrot płatności po skanie nadania', use:'308 użyć', accept:'77%', owner:'Zespół Zwroty' },
+  { name:'Brak rozmiaru, alternatywa z magazynu', use:'256 użyć', accept:'69%', owner:'Zespół Sprzedaż' },
+  { name:'Uszkodzenie w transporcie, wymiana', use:'184 użyć', accept:'74%', owner:'Zespół Zwroty' }
+];
+const GAPS = [
+  { topic:'Warunki płatności B2B', volume:'86 pytań w tygodniu', action:'Brak artykułu w bazie wiedzy' },
+  { topic:'Gwarancja producenta na obuwie', volume:'54 pytania', action:'Artykuł nieaktualny od marca' },
+  { topic:'Odbiór w salonie', volume:'41 pytań', action:'Brak intencji w bocie' }
+];
+const MODULES = [
+  { key:'inbox', name:'Inbox omnichannel', detail:'Rozmowy ze wszystkich kanałów w jednym wątku klienta.', dep:'Wymagany rdzeń modułu', locked:true },
+  { key:'tickets', name:'Zgłoszenia i SLA', detail:'Sprawy z priorytetami, zegarem SLA i eskalacjami.', dep:'Zależność: Inbox' },
+  { key:'wallboard', name:'Wallboard i kolejki', detail:'Podgląd kolejek oraz obłożenia zespołu na żywo.', dep:'Zależność: telefonia lub chat' },
+  { key:'dashboard', name:'Analityka i raporty', detail:'KPI, raporty okresowe i wyniki zespołu.', dep:'Bez zależności' },
+  { key:'campaigns', name:'Kampanie wychodzące', detail:'Predictive dialer, wysyłki SMS i e-mail, reguły oddzwaniania.', dep:'Zależność: telefonia, SMS' },
+  { key:'bots', name:'Boty AI i IVR', detail:'Wspólne intencje dla chatbota, voicebota i infolinii.', dep:'Zależność: Inbox' },
+  { key:'ai', name:'AI Assist dla agenta', detail:'Streszczenia, sugestie odpowiedzi, podsumowania po rozmowie.', dep:'Zależność: baza wiedzy' },
+  { key:'quality', name:'Jakość rozmów', detail:'Nagrania, transkrypcje i automatyczne karty oceny.', dep:'Zależność: telefonia' },
+  { key:'portal', name:'Portal klienta', detail:'Samoobsługa: status sprawy, zwroty, dokumenty.', dep:'Zależność: Zgłoszenia' }
+];
+const INTEGR_DETAIL = [
+  { name:'Open Mercato ERP', kind:'Zamówienia, zwroty, stany magazynowe', status:'Połączone', sync:'2 minuty temu', scope:'odczyt i zapis' },
+  { name:'BaseLinker', kind:'Marketplace, wysyłki, statusy przesyłek', status:'Połączone', sync:'8 minut temu', scope:'odczyt i zapis' },
+  { name:'PrestaShop', kind:'Sklep, koszyki, konta klientów', status:'Połączone', sync:'12 minut temu', scope:'odczyt' },
+  { name:'HubSpot', kind:'CRM sprzedaż, leady, właściciele kontaktów', status:'Połączone', sync:'godzinę temu', scope:'odczyt i zapis' },
+  { name:'SalesManago', kind:'Marketing automation, segmenty, zgody', status:'Wymaga uwagi', sync:'3 dni temu', scope:'klucz API wygasł' },
+  { name:'InPost i DHL', kind:'Śledzenie przesyłek, reklamacje transportowe', status:'Połączone', sync:'5 minut temu', scope:'odczyt i zapis' },
+  { name:'Dynamics 365', kind:'CRM B2B, kontrakty hurtowe', status:'Nieaktywne', sync:'—', scope:'nie skonfigurowano' }
+];
+class Component extends DCLogic {
+  state = {
+    screen: 'inbox',
+    status: 'available',
+    channel: 'all',
+    convId: 'c1',
+    composer: '',
+    search: '',
+    replyChannel: null,
+    solved: [],
+    msgs: JSON.parse(JSON.stringify(MSGS)),
+    toast: null,
+    custTab: 'przeglad',
+    modules: { inbox:true, tickets:true, wallboard:true, dashboard:true, campaigns:true, bots:true, ai:true, quality:true, portal:true },
+    chan: { telefon:true, email:true, chat:true, whatsapp:true, messenger:true, instagram:true, sms:true, formularz:true, portal:false },
+    integr: null,
+    slaTarget: '2 godziny',
+    hours: '8:00–20:00',
+    autoWrap: true,
+    recording: true,
+    tickets: null,
+    campaigns: null,
+    intents: null,
+    tick: 0
+  };
+  componentDidMount() {
+    this.timer = setInterval(() => this.setState(s => ({ tick: s.tick + 1 })), 4000);
+  }
+  componentWillUnmount() { clearInterval(this.timer); if (this.toastTimer) clearTimeout(this.toastTimer); }
+  flash(msg) {
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.setState({ toast: msg });
+    this.toastTimer = setTimeout(() => this.setState({ toast: null }), 2600);
+  }
+  slaColor(level) {
+    return level === 'bad' ? 'var(--status-error-icon)' : level === 'warn' ? 'var(--status-warning-icon)' : 'var(--muted-foreground)';
+  }
+  extra() {
+    const s = this.state;
+    const t = s.tick;
+    const jitter = (base, amp, seed) => Math.max(0, Math.round(base + Math.sin((t + seed) * 1.3) * amp));
+    const tickets = s.tickets || TICKETS;
+    const campaigns = s.campaigns || CAMPAIGNS;
+    const intents = s.intents || INTENTS;
+    const statusMap = {
+      'Nowe': 'info', 'W toku': 'warning', 'Oczekuje na klienta': 'neutral', 'Rozwiązane': 'success', 'Eskalacja': 'error'
+    };
+    const cycle = ['Nowe', 'W toku', 'Oczekuje na klienta', 'Rozwiązane'];
+    const integrList = s.integr || INTEGR_DETAIL;
+    const sw = on => ({ trackBg: on ? 'var(--accent-indigo)' : 'var(--muted)', knobLeft: on ? '18px' : '2px' });
+    const integrVariant = st => st === 'Połączone' ? 'om-badge om-badge-sm om-badge-v-success' : st === 'Wymaga uwagi' ? 'om-badge om-badge-sm om-badge-v-warning' : 'om-badge om-badge-sm om-badge-v-muted';
+    return {
+      isSettings: s.screen === 'settings',
+      mod: s.modules,
+      modules: MODULES.map(m => Object.assign({
+        name: m.name, detail: m.detail, dep: m.dep,
+        stateLabel: m.locked ? 'Rdzeń' : (s.modules[m.key] ? 'Włączony' : 'Wyłączony'),
+        locked: !!m.locked,
+        onToggle: () => {
+          if (m.locked) { this.flash('Inbox omnichannel jest wymagany'); return; }
+          const modules = Object.assign({}, s.modules, { [m.key]: !s.modules[m.key] });
+          const next = { modules };
+          if (!modules[m.key] && s.screen === m.key) next.screen = 'settings';
+          this.setState(next);
+          this.flash(m.name + (s.modules[m.key] ? ' — wyłączony' : ' — włączony'));
+        }
+      }, sw(m.locked ? true : s.modules[m.key]))),
+      chanSetup: CHANNELS_CFG.map(c => Object.assign({
+        name: c.name, color: CH[c.key].color, detail: c.detail,
+        stateLabel: s.chan[c.key] ? 'Podłączony' : 'Nie podłączony',
+        stateColor: s.chan[c.key] ? 'var(--foreground)' : 'var(--muted-foreground)',
+        onToggle: () => {
+          const chan = Object.assign({}, s.chan, { [c.key]: !s.chan[c.key] });
+          this.setState({ chan });
+          this.flash(c.name + (s.chan[c.key] ? ' — odłączony' : ' — podłączony'));
+        }
+      }, sw(s.chan[c.key]))),
+      integrDetail: integrList.map((g, i) => ({
+        name: g.name, kind: g.kind, status: g.status, sync: g.sync, scope: g.scope,
+        variant: integrVariant(g.status),
+        btnLabel: g.status === 'Połączone' ? 'Rozłącz' : g.status === 'Wymaga uwagi' ? 'Odnów dostęp' : 'Połącz',
+        btnClass: g.status === 'Połączone' ? 'om-btn om-btn-2xs om-btn-v-outline' : 'om-btn om-btn-2xs om-btn-v-default',
+        onAct: () => {
+          const status = g.status === 'Połączone' ? 'Nieaktywne' : 'Połączone';
+          const list = integrList.map((y, j) => j === i ? Object.assign({}, y, { status, sync: status === 'Połączone' ? 'teraz' : '—', scope: status === 'Połączone' ? 'odczyt i zapis' : 'nie skonfigurowano' }) : y);
+          this.setState({ integr: list });
+          this.flash(g.name + ' — ' + status.toLowerCase());
+        }
+      })),
+      slaOptions: ['30 minut', '2 godziny', '8 godzin'].map(o => ({
+        label: o,
+        bg: s.slaTarget === o ? 'var(--secondary)' : 'var(--background)',
+        border: s.slaTarget === o ? 'var(--foreground)' : 'var(--border)',
+        fg: s.slaTarget === o ? 'var(--foreground)' : 'var(--muted-foreground)',
+        onSelect: () => this.setState({ slaTarget: o })
+      })),
+      hoursOptions: ['8:00–16:00', '8:00–20:00', '24/7 z botem'].map(o => ({
+        label: o,
+        bg: s.hours === o ? 'var(--secondary)' : 'var(--background)',
+        border: s.hours === o ? 'var(--foreground)' : 'var(--border)',
+        fg: s.hours === o ? 'var(--foreground)' : 'var(--muted-foreground)',
+        onSelect: () => this.setState({ hours: o })
+      })),
+      autoWrapSw: Object.assign({ label: s.autoWrap ? 'Włączone' : 'Wyłączone' }, sw(s.autoWrap)),
+      onAutoWrap: () => this.setState({ autoWrap: !s.autoWrap }),
+      recordingSw: Object.assign({ label: s.recording ? 'Włączone' : 'Wyłączone' }, sw(s.recording)),
+      onRecording: () => this.setState({ recording: !s.recording }),
+      activeModuleCount: MODULES.filter(m => m.locked || s.modules[m.key]).length + ' z ' + MODULES.length,
+      activeChannelCount: Object.keys(s.chan).filter(k => s.chan[k]).length + ' z 9',
+      activeIntegrCount: integrList.filter(g => g.status === 'Połączone').length + ' z ' + integrList.length,
+      isTickets: s.screen === 'tickets',
+      isCustomer: s.screen === 'customer',
+      isAi: s.screen === 'ai',
+      isWallboard: s.screen === 'wallboard',
+      isCampaigns: s.screen === 'campaigns',
+      isDashboard: s.screen === 'dashboard',
+      isQuality: s.screen === 'quality',
+      isIvr: s.screen === 'ivr',
+      isBots: s.screen === 'bots',
+      isChannels: s.screen === 'channels',
+      isPortal: s.screen === 'portal',
+      tickets: tickets.map((x, i) => ({
+        id: x.id, subject: x.subject, customer: x.customer, agent: x.agent,
+        channelLabel: CH[x.channel].label, channelColor: CH[x.channel].color,
+        status: x.status, statusVariant: 'om-badge om-badge-sm om-badge-v-' + (statusMap[x.status] || 'neutral'),
+        sla: x.sla, slaColor: x.slaLevel === 'bad' ? 'var(--status-error-icon)' : x.slaLevel === 'warn' ? 'var(--status-warning-icon)' : 'var(--muted-foreground)',
+        priority: x.priority, updated: x.updated,
+        onCycle: () => {
+          const next = cycle[(cycle.indexOf(x.status) + 1) % cycle.length];
+          const list = tickets.map((y, j) => j === i ? Object.assign({}, y, { status: next, updated: 'teraz' }) : y);
+          this.setState({ tickets: list });
+          this.flash(x.id + ': ' + next);
+        }
+      })),
+      queues: QUEUES.map((q, i) => ({
+        name: q.name,
+        waiting: jitter(q.waiting, 2, i),
+        longest: q.longest,
+        agents: q.agents,
+        sla: jitter(q.sla, 2, i * 2) + '%',
+        slaColor: q.sla < 80 ? 'var(--status-error-icon)' : q.sla < 90 ? 'var(--status-warning-icon)' : 'var(--status-success-icon)',
+        barWidth: Math.min(100, jitter(q.sla, 2, i * 2)) + '%',
+        barColor: q.sla < 80 ? 'var(--status-error-icon)' : q.sla < 90 ? 'var(--status-warning-icon)' : 'var(--status-success-icon)',
+        channels: q.channels.join(' · '),
+        onTake: () => this.flash('Pobrano sprawę z kolejki ' + q.name)
+      })),
+      agentsLive: AGENTS.map((a, i) => ({
+        name: a.name, state: a.state, team: a.team,
+        handled: a.handled, avg: a.avg,
+        dot: a.state === 'Rozmowa' ? 'var(--status-success-icon)' : a.state === 'Podsumowanie' ? 'var(--status-warning-icon)' : a.state === 'Przerwa' ? 'var(--muted-foreground)' : 'var(--accent-indigo)',
+        load: a.load + '%'
+      })),
+      liveTotals: { waiting: jitter(17, 4, 1), inCall: jitter(23, 3, 5), sla: jitter(91, 3, 9) + '%', abandon: '3,2%' },
+      campaigns: campaigns.map((c, i) => ({
+        name: c.name, channel: CH[c.channel].label, channelColor: CH[c.channel].color,
+        mode: c.mode, contacts: c.contacts, done: c.done, progress: c.progress + '%',
+        connect: c.connect, conversion: c.conversion, owner: c.owner,
+        stateLabel: c.running ? 'Aktywna' : 'Wstrzymana',
+        stateVariant: c.running ? 'om-badge om-badge-sm om-badge-v-success' : 'om-badge om-badge-sm om-badge-v-muted',
+        btnLabel: c.running ? 'Wstrzymaj' : 'Uruchom',
+        btnClass: c.running ? 'om-btn om-btn-2xs om-btn-v-outline' : 'om-btn om-btn-2xs om-btn-v-default',
+        onToggle: () => {
+          const list = campaigns.map((y, j) => j === i ? Object.assign({}, y, { running: !y.running }) : y);
+          this.setState({ campaigns: list });
+          this.flash(c.name + (c.running ? ' — wstrzymana' : ' — uruchomiona'));
+        }
+      })),
+      intents: intents.map((x, i) => ({
+        name: x.name, examples: x.examples, containment: x.containment + '%',
+        handoff: x.handoff + '%', volume: x.volume,
+        barWidth: x.containment + '%',
+        barColor: x.containment > 70 ? 'var(--status-success-icon)' : x.containment > 45 ? 'var(--status-warning-icon)' : 'var(--status-error-icon)',
+        stateLabel: x.on ? 'Włączona' : 'Wyłączona',
+        trackBg: x.on ? 'var(--accent-indigo)' : 'var(--muted)',
+        knobLeft: x.on ? '18px' : '2px',
+        onToggle: () => {
+          const list = intents.map((y, j) => j === i ? Object.assign({}, y, { on: !y.on }) : y);
+          this.setState({ intents: list });
+        }
+      })),
+      custTabs: ['przeglad', 'rozmowy', 'zamowienia', 'zgloszenia'].map(k => ({
+        label: k === 'przeglad' ? 'Przegląd' : k === 'rozmowy' ? 'Rozmowy' : k === 'zamowienia' ? 'Zamówienia' : 'Zgłoszenia',
+        fg: s.custTab === k ? 'var(--foreground)' : 'var(--muted-foreground)',
+        border: s.custTab === k ? 'var(--accent-indigo)' : 'transparent',
+        onSelect: () => this.setState({ custTab: k })
+      })),
+      custTabIs: { przeglad: s.custTab === 'przeglad', rozmowy: s.custTab === 'rozmowy', zamowienia: s.custTab === 'zamowienia', zgloszenia: s.custTab === 'zgloszenia' },
+      timeline: TIMELINE.map(x => ({ when: x.when, title: x.title, detail: x.detail, channelLabel: (CH[x.channel] || { label: x.channel }).label, color: (CH[x.channel] || { color: 'var(--muted-foreground)' }).color })),
+      orders: ORDERS,
+      custTickets: CUST_TICKETS,
+      kpis: KPIS,
+      bars: BARS,
+      agentStats: AGENT_STATS,
+      recordings: RECORDINGS.map(r => ({
+        id: r.id, customer: r.customer, agent: r.agent, length: r.length, score: r.score,
+        channelLabel: CH[r.channel].label, channelColor: CH[r.channel].color,
+        topic: r.topic, sentiment: r.sentiment,
+        scoreColor: r.score >= 85 ? 'var(--status-success-icon)' : r.score >= 70 ? 'var(--status-warning-icon)' : 'var(--status-error-icon)',
+        onPlay: () => this.flash('Odtwarzanie nagrania ' + r.id)
+      })),
+      ivrNodes: IVR,
+      channelsCfg: CHANNELS_CFG.map(c => ({
+        name: c.name, color: CH[c.key].color, status: c.status,
+        statusVariant: c.status === 'Aktywny' ? 'om-badge om-badge-sm om-badge-v-success' : c.status === 'Wymaga uwagi' ? 'om-badge om-badge-sm om-badge-v-warning' : 'om-badge om-badge-sm om-badge-v-muted',
+        detail: c.detail, volume: c.volume, sla: c.sla,
+        onOpen: () => this.flash('Konfiguracja kanału: ' + c.name)
+      })),
+      integrations: INTEGRATIONS,
+      aiMetrics: AI_METRICS,
+      aiLibrary: AI_LIBRARY,
+      gaps: GAPS
+    };
+  }
+  renderVals() {
+    const s = this.state;
+    const aiAssist = this.props.aiAssist ?? true;
+    const routing = this.props.routing ?? 'Auto push (next best)';
+    const navKeys = ['inbox','tickets','customer','ai','wallboard','campaigns','dashboard','quality','ivr','bots','channels','portal','settings'];
+    const nav = {}; const go = {};
+    navKeys.forEach(k => {
+      nav[k] = s.screen === k
+        ? { bg: 'var(--sidebar-accent)', fg: 'var(--sidebar-accent-foreground)' }
+        : { bg: 'transparent', fg: 'var(--muted-foreground)' };
+      go[k] = () => this.setState({ screen: k });
+      const modKey = k === 'ivr' ? 'bots' : k;
+      nav[k].disp = (s.modules[modKey] === false) ? 'none' : 'flex';
+    });
+    const visible = CONVS.filter(c => !s.solved.includes(c.id));
+    const convs = visible.filter(c => s.channel === 'all' || c.channel === s.channel);
+    const active = CONVS.find(c => c.id === s.convId) || CONVS[0];
+    const filters = [{ key:'all', label:'wszystkie', dot:'var(--foreground)' }]
+      .concat(Object.keys(CH).map(k => ({ key:k, label:CH[k].label, dot:CH[k].color })));
+    const chanStyle = (key, dot) => {
+      const on = s.channel === key;
+      return { border: on ? 'var(--foreground)' : 'var(--border)', bg: on ? 'var(--secondary)' : 'var(--background)', fg: on ? 'var(--foreground)' : 'var(--muted-foreground)', dot };
+    };
+    const msgs = (s.msgs[active.id] || []).map(m => {
+      const isIn = m.side === 'in';
+      const isSys = m.side === 'sys';
+      const isBot = m.side === 'bot';
+      return {
+        author: m.author,
+        channelLabel: (CH[m.channel] || { label: m.channel }).label,
+        time: m.time,
+        text: m.text,
+        align: isIn ? 'flex-start' : isSys ? 'center' : 'flex-end',
+        width: isSys ? '100%' : 'auto',
+        textAlign: isSys ? 'center' : 'left',
+        authorColor: isBot ? 'var(--accent-indigo)' : 'var(--muted-foreground)',
+        bg: isIn ? 'var(--background)' : isSys ? 'transparent' : isBot ? 'color-mix(in oklch, var(--accent-indigo) 8%, transparent)' : 'var(--primary)',
+        fg: isIn ? 'var(--foreground)' : isSys ? 'var(--muted-foreground)' : isBot ? 'var(--foreground)' : 'var(--primary-foreground)',
+        border: isIn ? 'var(--border)' : isSys ? 'var(--border)' : isBot ? 'color-mix(in oklch, var(--accent-indigo) 25%, transparent)' : 'var(--primary)'
+      };
+    });
+    return Object.assign(this.extra(), {
+      brandName: this.props.brandName ?? 'Mercato Connect',
+      aiAssist,
+      routingLabel: routing,
+      isInbox: s.screen === 'inbox',
+      isOther: false,
+      nav, go,
+      noop: () => this.flash('Akcja demonstracyjna'),
+      search: s.search,
+      onSearch: e => this.setState({ search: e.target.value }),
+      statusLabel: s.status === 'available' ? 'Dostępna' : s.status === 'busy' ? 'Zajęta' : 'Przerwa',
+      statusColor: s.status === 'available' ? 'var(--status-success-icon)' : s.status === 'busy' ? 'var(--status-warning-icon)' : 'var(--muted-foreground)',
+      toggleStatus: () => this.setState(st => ({ status: st.status === 'available' ? 'busy' : st.status === 'busy' ? 'break' : 'available' })),
+      counts: { open: visible.length, tickets: 34 },
+      channelFilters: filters.map(f => Object.assign({ label: f.label, onSelect: () => this.setState({ channel: f.key }) }, chanStyle(f.key, f.dot))),
+      convList: convs.map(c => ({
+        name: c.name, snippet: c.snippet, time: c.time, sla: c.sla, vip: c.vip,
+        channelLabel: CH[c.channel].label, color: CH[c.channel].color,
+        slaColor: this.slaColor(c.slaLevel),
+        bg: c.id === s.convId ? 'color-mix(in oklch, var(--muted) 45%, transparent)' : 'var(--background)',
+        activeBar: c.id === s.convId ? 'var(--foreground)' : 'transparent',
+        onSelect: () => this.setState({ convId: c.id, composer: '', replyChannel: null })
+      })),
+      active: {
+        name: active.name, subline: active.subline, sla: active.sla, vip: active.vip,
+        channelLabel: CH[active.channel].label, slaColor: this.slaColor(active.slaLevel),
+        initials: active.initials, email: active.email, ltv: active.ltv, orders: active.orders,
+        nps: active.nps, churn: active.churn,
+        churnColor: active.churn === 'wysokie' ? 'var(--status-error-icon)' : active.churn === 'średnie' ? 'var(--status-warning-icon)' : 'var(--foreground)',
+        tags: active.tags.map(t => ({ label: t })),
+        order: active.order
+      },
+      messages: msgs,
+      ai: {
+        summary: active.ai.summary,
+        suggestion: active.ai.suggestion,
+        actions: active.ai.actions.map(a => ({ label: a.label, hint: a.hint, onRun: () => this.flash(a.label + ' — wykonane') })),
+        sources: active.ai.sources.map(x => ({ label: x }))
+      },
+      replyChannels: [active.channel, 'email', 'sms', 'telefon'].filter((v, i, arr) => arr.indexOf(v) === i).map(k => {
+        const on = (s.replyChannel || active.channel) === k;
+        return { label: CH[k].label, dot: CH[k].color,
+          border: on ? 'var(--foreground)' : 'var(--border)', bg: on ? 'var(--secondary)' : 'var(--background)', fg: on ? 'var(--foreground)' : 'var(--muted-foreground)',
+          onSelect: () => this.setState({ replyChannel: k }) };
+      }),
+      composer: s.composer,
+      onComposer: e => this.setState({ composer: e.target.value }),
+      onComposerKey: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); } },
+      send: () => this.send(),
+      insertSuggestion: () => this.setState({ composer: active.ai.suggestion }),
+      takeNext: () => {
+        const next = visible.find(c => c.id !== s.convId) || visible[0];
+        if (next) { this.setState({ convId: next.id, channel: 'all', composer: '' }); this.flash('Przypisano: ' + next.name + ' · ' + CH[next.channel].label); }
+      },
+      resolveActive: () => {
+        const rest = visible.filter(c => c.id !== active.id);
+        this.setState({ solved: s.solved.concat([active.id]), convId: rest[0] ? rest[0].id : active.id });
+        this.flash('Sprawa zamknięta. Podsumowanie AI zapisane w karcie klienta.');
+      },
+      toast: s.toast
+    });
+  }
+  send() {
+    const s = this.state;
+    const text = s.composer.trim();
+    if (!text) return;
+    const active = CONVS.find(c => c.id === s.convId);
+    const ch = s.replyChannel || active.channel;
+    const msgs = JSON.parse(JSON.stringify(s.msgs));
+    const d = new Date();
+    const time = 'dziś ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    msgs[active.id] = (msgs[active.id] || []).concat([{ author: 'Marta Kwiatkowska', side: 'out', channel: ch, time, text }]);
+    this.setState({ msgs, composer: '' });
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "spec": ".ai/specs/2026-08-21-connect-phase-1-merged.md",
+  "round": 1,
+  "gates": {
+    "claims": {
+      "rows": 14, "confirmed": 14, "overstated": 0, "refuted": 0, "uncitable": 0,
+      "loadBearingUnresolved": 0, "unstruckFalseClaims": 0,
+      "ungated": true,
+      "newClaimsIntroduced": 0, "rowsResolved": 0
+    },
+    "coreEdit": { "rows": 5, "classDorE": 2, "justified": 2, "assignedUpstreamPr": 2, "ruleQuoted": true },
+    "writePath": { "headlineRequirements": 23, "withWriteTask": 23, "staleTaskRefs": 0 },
+    "review": { "rolesRun": 0, "newFindings": 0, "dryRounds": 0, "unresolvedCritical": 0 },
+    "frozenSurfaces": { "surfacesTotal": 14, "surfacesCovered": 14, "conflictsWithOtherDocs": 0, "wildcardedIds": 0 }
+  }
+}
