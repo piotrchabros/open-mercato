@@ -1,16 +1,38 @@
 {
-  "spec": ".ai/specs/2026-08-21-connect-phase-1-merged.md",
-  "round": 1,
+  "spec": ".ai/specs/2026-08-22-connect-phase-1-v2.md",
+  "round": 3,
   "gates": {
     "claims": {
-      "rows": 14, "confirmed": 14, "overstated": 0, "refuted": 0, "uncitable": 0,
-      "loadBearingUnresolved": 0, "unstruckFalseClaims": 0,
-      "ungated": true,
-      "newClaimsIntroduced": 0, "rowsResolved": 0
+      "rows": 26, "confirmed": 22, "overstated": 2, "refuted": 2, "uncitable": 0,
+      "loadBearingUnresolved": 3, "unstruckFalseClaims": 1,
+      "ungated": false,
+      "newClaimsIntroduced": 3, "rowsResolved": 1
     },
-    "coreEdit": { "rows": 5, "classDorE": 2, "justified": 2, "assignedUpstreamPr": 2, "ruleQuoted": true },
-    "writePath": { "headlineRequirements": 23, "withWriteTask": 23, "staleTaskRefs": 0 },
-    "review": { "rolesRun": 0, "newFindings": 0, "dryRounds": 0, "unresolvedCritical": 0 },
-    "frozenSurfaces": { "surfacesTotal": 14, "surfacesCovered": 14, "conflictsWithOtherDocs": 0, "wildcardedIds": 0 }
+    "coreEdit": { "rows": 7, "classDorE": 1, "justified": 1, "assignedUpstreamPr": 1, "ruleQuoted": true },
+    "writePath": { "headlineRequirements": 27, "withWriteTask": 21, "staleTaskRefs": 1 },
+    "review": { "rolesRun": 4, "newFindings": 66, "dryRounds": 0, "unresolvedCritical": 15 },
+    "frozenSurfaces": { "surfacesTotal": 14, "surfacesCovered": 14, "conflictsWithOtherDocs": 2, "wildcardedIds": 0 }
+  },
+  "previous": {
+    "gates": {
+      "claims": {
+        "rows": 23, "confirmed": 22, "overstated": 0, "refuted": 1, "uncitable": 0,
+        "loadBearingUnresolved": 1, "unstruckFalseClaims": 1,
+        "ungated": false,
+        "newClaimsIntroduced": 0, "rowsResolved": 0
+      },
+      "coreEdit": { "rows": 5, "classDorE": 2, "justified": 1, "assignedUpstreamPr": 2, "ruleQuoted": true },
+      "writePath": { "headlineRequirements": 23, "withWriteTask": 17, "staleTaskRefs": 16 },
+      "review": { "rolesRun": 4, "newFindings": 91, "dryRounds": 0, "unresolvedCritical": 19 },
+      "frozenSurfaces": { "surfacesTotal": 14, "surfacesCovered": 14, "conflictsWithOtherDocs": 0, "wildcardedIds": 0 }
+    }
+  },
+  "counting": {
+    "roundAccounting": "The round counter tracks the SPEC PHASE, not the filename. Merged spec rounds 1-2, v2 round 3. Resetting to 1 because the artifact was renamed would be exactly the threshold-gaming the runbook's rule 2 forbids — the budget is on the loop, not the document.",
+    "claims": "26 rows = the 23 in CLAIMS-LEDGER + 3 NEW platform claims v2 introduced, all three falsified by REVIEW-architect-r2.md. rowsResolved=1 (row 8, retracted in v2 and struck in the frozen spec). newClaimsIntroduced=3: (a) 'message_thread_id is available on the message.received payload' — REFUTED, the payload emits 10 fields and threadId is not among them (ingest-inbound-message.ts:515-529) though the value is in hand at :385-404; (b) 'a communication_channels-owned facade can compose messages bodies' — OVERSTATED, the hub has only ever read ids cross-module (enrichers.ts:144-147); (c) 'nullable organization_id is compatible with the CRUD scoping path' — REFUTED, buildScopedWhere never emits IS NULL (crud.ts:14-29) and CRUD create/update/delete hard-require an org (factory.ts:2388-2391,2716-2726). unstruckFalseClaims=1: (a) is still asserted in v2's § Reading peer data.",
+    "coreEdit": "rows 7 (v2's ledger). classDorE dropped 2 -> 1: the senderUserId (d) row is retracted, leaving only the send-as-user (e) row, which is justified and assigned to PR A. This gate is the one that genuinely improved.",
+    "writePath": "27 FRs in v2 (FR-001..FR-027). withWriteTask=21 counts only FRs whose named task can actually perform the write: REVIEW-implementer-r2.md finds FR-009/010/011/025 dead because no send-worker task exists, and FR-002/FR-003's assign trigger dead because no assign route exists. staleTaskRefs=1 (T-DATA-02 creates connect_case_reopen, a table v2's § Data model no longer defines).",
+    "review": "newFindings=66 = 15C + 30M + 21m FRESH in round 2. Per role fresh: DDD 6C/8M/7m, Architect 3C/6M/5m, PM-UX 3C/9M/3m, Implementer 3C/7M/6m. Regression over round 1's 91: 35 RESOLVED, 35 PARTIAL, 21 UNRESOLVED. dryRounds=0 — round 2 was emphatically not dry.",
+    "frozenSurfaces": "Unchanged at 2: the transfer notification ID (surface 11, FROZEN) is still undeclared, and connect.case.assigned still has no reachable writer."
   }
 }
