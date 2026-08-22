@@ -53,7 +53,7 @@ never copy `JWT_SECRET` / `TENANT_DATA_ENCRYPTION_KEY` from another instance (sh
 signing keys make tokens from one instance valid on the other).
 
 ```bash
-cd /srv/open-mercato-<env> && umask 077 && cat > .env <<EOF
+cd /srv/open-mercato-<env> && umask 077 && ENC_KEY=$(openssl rand -hex 32) && cat > .env <<EOF
 DEPLOY_ENV=<env>
 APP_PORT=127.0.0.1:<port>       # loopback ONLY — Caddy is the public edge
 CONTAINER_PORT=3000
@@ -70,7 +70,9 @@ POSTGRES_DB=open-mercato-<env>
 
 JWT_SECRET=$(openssl rand -hex 32)
 MEILISEARCH_MASTER_KEY=$(openssl rand -hex 24)
-TENANT_DATA_ENCRYPTION_KEY=$(openssl rand -hex 32)
+# Both, same value — the FALLBACK one is what the KMS actually reads (see below)
+TENANT_DATA_ENCRYPTION_KEY=$ENC_KEY
+TENANT_DATA_ENCRYPTION_FALLBACK_KEY=$ENC_KEY
 
 ADMIN_EMAIL=<admin email>
 OM_INIT_SUPERADMIN_EMAIL=<admin email>
@@ -90,7 +92,23 @@ Rules that bite if ignored:
 - `APP_PORT` takes a full bind spec. Bare `3500` publishes on **all interfaces**,
   exposing the app around Caddy; always write `127.0.0.1:<port>`.
 - `JWT_SECRET` has no default — compose refuses to start without it (`:?` guard).
-- `TENANT_DATA_ENCRYPTION_KEY` is 64 hex chars (`openssl rand -hex 32`).
+- `TENANT_DATA_ENCRYPTION_KEY` is 64 hex chars (`openssl rand -hex 32`) — **but it is
+  not the key that gets used.** `resolveDerivedKeySecret()` in
+  `packages/shared/src/lib/encryption/kms.ts` reads
+  `TENANT_DATA_ENCRYPTION_FALLBACK_KEY` **first**, and the compose file defaults it to
+  the published literal `dev-tenant-encryption-fallback-key-32chars`. Leave it unset
+  and every tenant record is encrypted under a secret that ships in the repo. Set
+  **both** to the same freshly generated value, before first boot:
+
+  ```bash
+  KEY=$(openssl rand -hex 32)
+  printf 'TENANT_DATA_ENCRYPTION_KEY=%s\nTENANT_DATA_ENCRYPTION_FALLBACK_KEY=%s\n' "$KEY" "$KEY" >> .env
+  ```
+
+  Changing it later orphans everything already encrypted (including user e-mails, which
+  is how login resolves accounts) — on an existing instance this is a key-rotation
+  exercise, not an edit. Confirm which secret is live in the startup banner:
+  `Source: TENANT_DATA_ENCRYPTION_FALLBACK_KEY` plus a fingerprint.
 - All four `APP_URL` / `APP_ALLOWED_ORIGINS` / `PLATFORM_*` values must be the public
   origin. Leaving `localhost:3000` breaks post-login redirects, generated links and
   the origin allowlist behind the proxy.
@@ -115,6 +133,13 @@ end; write to a log file instead when you want live progress.
 
 The image is tagged `open-mercato/app:<env>`, and the `mcp` service reuses that exact
 tag — build `app` only, never both, or the two builds race on one tag.
+
+**Never run `yarn install` / `yarn generate` / `yarn build` on the host.** The
+`Dockerfile` already runs `yarn install --immutable` and
+`yarn build:packages && yarn generate && yarn build:packages` in the builder stage,
+and the runner stage reinstalls with `yarn workspaces focus --production`. The
+deployment checkout has no `node_modules` and needs none; a host-side `yarn` only
+burns time and can leave state that confuses the next build.
 
 ## 4. Bring the stack up
 
@@ -230,10 +255,27 @@ cd /srv/open-mercato-<env>
 git fetch origin && git checkout <branch> && git reset --hard origin/<branch>
 docker compose -f docker-compose.fullapp.yml build app
 docker compose -f docker-compose.fullapp.yml up -d
+# REQUIRED when the branch added ACL features — see below
+docker compose -f docker-compose.fullapp.yml exec -T app yarn mercato auth sync-role-acls
 ```
 
-Data survives (named volumes are keyed by `DEPLOY_ENV`); the init marker makes the
-app run migrations only. New migrations in the branch apply automatically on boot.
+Data survives (named volumes are keyed by `DEPLOY_ENV`); the init marker makes
+`init-or-migrate.sh` skip `mercato init` and run `yarn db:migrate` instead, so new
+migrations in the branch apply automatically on boot. You never invoke `db:migrate`
+by hand.
+
+**Role ACLs are the one thing no boot step syncs.** A fresh `mercato init` calls
+`ensureDefaultRoleAcls`, so a brand-new instance already has every feature the branch
+declares. An **existing** database does not: newly declared `defaultRoleFeatures`
+never reach roles that already exist, so the branch's pages and menu entries are
+simply invisible to admin/employee and it looks like the deploy silently failed. Run
+the idempotent sync after every redeploy of a branch that touched `acl.ts` /
+`setup.ts` (add `--tenant <id>` only to target one tenant):
+
+```bash
+docker compose -f docker-compose.fullapp.yml exec -T app yarn mercato auth sync-role-acls
+# ✅ Synced role ACLs for tenant <uuid>  (~0.5 s)
+```
 
 ## Teardown
 
