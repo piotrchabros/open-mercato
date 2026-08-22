@@ -8209,6 +8209,7 @@ __metadata:
     "@open-mercato/channel-imap": "workspace:*"
     "@open-mercato/checkout": "workspace:*"
     "@open-mercato/cli": "workspace:*"
+    "@open-mercato/connect": "workspace:*"
     "@open-mercato/content": "workspace:*"
     "@open-mercato/core": "workspace:*"
     "@open-mercato/documents": "workspace:*"
@@ -8493,6 +8494,20 @@ __metadata:
     "@open-mercato/shared": "workspace:*"
   bin:
     mercato: ./bin/mercato
+  languageName: unknown
+  linkType: soft
+
+"@open-mercato/connect@workspace:*, @open-mercato/connect@workspace:packages/connect":
+  version: 0.0.0-use.local
+  resolution: "@open-mercato/connect@workspace:packages/connect"
+  dependencies:
+    "@open-mercato/shared": "workspace:*"
+    "@types/jest": "npm:^30.0.0"
+    jest: "npm:^30.4.2"
+    ts-jest: "npm:^29.4.12"
+    typescript: "npm:7.0.2"
+  peerDependencies:
+    "@open-mercato/shared": "workspace:*"
   languageName: unknown
   linkType: soft
 

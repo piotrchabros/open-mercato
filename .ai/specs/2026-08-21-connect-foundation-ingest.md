@@ -165,6 +165,32 @@ New module IDs, entity IDs, API URLs, ACL IDs, event IDs, and DI keys are additi
 - Tenant isolation, optimistic locking, mutation guards, encryption, i18n, and search leakage are explicit gates.
 - Full validation uses local Node 24 with the runner recorded in the handoff.
 
+## Implementation Status
+
+| Phase | Status | Date | Notes |
+|-------|--------|------|-------|
+| FDN-SET-01 — package scaffold | Done | 2026-08-22 | `packages/connect` |
+| FDN-SET-02 — workspace/app/template/generator registration | Done | 2026-08-22 | App module registry + `package.json`, create-app template mirrored via `yarn template:sync:fix`; `yarn generate` discovers the module, its API routes, workers and entities |
+| FDN-SET-03 — remove the spike Case CRUD route | N/A | 2026-08-22 | The spike package was never merged into this line (`cez/connect-phase-1-spike` only), so there is no `api/cases/route.ts`, no nullable-organization row and no plaintext subject to migrate or quarantine. Foundation exposes no Case CRUD route |
+| FDN-DATA-01 — entities | Done | 2026-08-22 | 10 entities, all `organization_id NOT NULL`; receipt state machine expressed as a DB check constraint |
+| FDN-DATA-02 — validators, encryption map, extensions | Done | 2026-08-22 | `handle_value` declares `handle_hash` as its equality-lookup sibling |
+| FDN-DATA-03 — migration + snapshot | Done | 2026-08-22 | `Migration20260822220000_connect`, Connect-only; `db:migrate` not run |
+| FDN-DOM-01 — lifecycle + attach predicate | Done | 2026-08-22 | Pure functions with 33 tests |
+| FDN-ING-01 — subscriber + ingest command | Done | 2026-08-22 | Claim-before-work, identity-binding lock, per-conversation reply-target provenance |
+| FDN-EVT-01 — events + outbox + publisher | Done | 2026-08-22 | Identifier-only payloads; `connect.contact_identity.unresolved` staged atomically with the identity |
+| FDN-EVT-02 — outbox queue, wake job, scheduler entry | Done | 2026-08-22 | Best-effort after-commit wake plus per-organization sweep; scheduler absence degrades the capability report rather than failing setup |
+| FDN-ING-02 — classifier | Done | 2026-08-22 | Consumes Contract D's classification rather than re-parsing headers |
+| FDN-ING-03 — rate limiter | Done | 2026-08-22 | Composite key, idempotent by external message id, no broader fallback |
+| FDN-ING-04 — identity resolver | Done | 2026-08-22 | Keyed blind index written unconditionally; below-threshold stays unresolved |
+| FDN-ING-05 — receipt sweep schedule + recovery | Done | 2026-08-22 | Lease reclaim, bounded attempts, dead-letter |
+| FDN-API-01 — settings route | Done | 2026-08-22 | Guarded, hand-wired optimistic lock (not a `makeCrudRoute` resource) |
+| FDN-API-02 — receipt replay/acknowledge | Done | 2026-08-22 | Replay reuses the same receipt and idempotency scope; acknowledge preserves evidence |
+| FDN-ACL-01 — ACL, setup, locales | Done | 2026-08-22 | Three features, default role grants, five complete locales |
+| FDN-GUARD-01 — guard scan coverage | Done | 2026-08-22 | The workspace optimistic-lock audit already scans `packages/<pkg>/src/modules`, so `packages/connect` is covered without widening; all 25 optimistic-lock guard suites pass |
+| FDN-TEST-01 — unit tests | Done | 2026-08-22 | 72 tests: lifecycle/attach, classification, suppression policy, hashing and threshold, receipt claim/duplicate/reclaim, activation and capability reporting |
+| FDN-TEST-02 — self-contained integration | Not Started | — | Requires a live database; the idempotency race, cross-tenant 404, legacy-channel no-op and post-enable recovery scenarios are covered at unit level only |
+
 ## Changelog
 
+- 2026-08-22: Implemented the package, data model, domain rules, ingest, outbox, recovery, settings and remediation surfaces with unit coverage; integration verification (FDN-TEST-02) outstanding.
 - 2026-08-21: Successor drafted from the executed vertical spike; corrected tenancy, event-key, CRUD/OpenAPI, and suppression mechanisms.

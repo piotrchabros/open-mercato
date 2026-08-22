@@ -1,0 +1,15 @@
+{
+  "connect.errors.organizationRequired": "Select an organization first.",
+  "connect.errors.reopenWindowTooLong": "The reopen window cannot be longer than the auto-close window.",
+  "connect.nav.group": "Integrations",
+  "connect.nav.title": "Connect",
+  "connect.receipts.acknowledged": "Acknowledged. The record is kept for audit.",
+  "connect.receipts.notReplayable": "Only a dead-lettered message can be replayed.",
+  "connect.settings.attachWindowHours": "Attach window (hours)",
+  "connect.settings.autoCloseAfterDays": "Auto-close after (days)",
+  "connect.settings.identityMatchThreshold": "Identity match threshold",
+  "connect.settings.reopenWindowDays": "Reopen window (days)",
+  "connect.settings.suppressionCount": "Messages before suppression",
+  "connect.settings.suppressionWindowMinutes": "Suppression window (minutes)",
+  "connect.settings.title": "Ingestion settings"
+}

@@ -1,0 +1,15 @@
+{
+  "connect.errors.organizationRequired": "먼저 조직을 선택하세요.",
+  "connect.errors.reopenWindowTooLong": "재개 기간은 자동 종료 기간보다 길 수 없습니다.",
+  "connect.nav.group": "통합",
+  "connect.nav.title": "Connect",
+  "connect.receipts.acknowledged": "확인했습니다. 감사를 위해 기록은 보존됩니다.",
+  "connect.receipts.notReplayable": "배달 실패로 표시된 메시지만 재처리할 수 있습니다.",
+  "connect.settings.attachWindowHours": "연결 기간(시간)",
+  "connect.settings.autoCloseAfterDays": "자동 종료(일)",
+  "connect.settings.identityMatchThreshold": "신원 일치 임계값",
+  "connect.settings.reopenWindowDays": "재개 기간(일)",
+  "connect.settings.suppressionCount": "억제 전 메시지 수",
+  "connect.settings.suppressionWindowMinutes": "억제 기간(분)",
+  "connect.settings.title": "수신 설정"
+}
