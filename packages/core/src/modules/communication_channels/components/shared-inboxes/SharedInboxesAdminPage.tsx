@@ -1,7 +1,6 @@
 'use client'
 
 import * as React from 'react'
-import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { Alert, AlertDescription, AlertTitle } from '@open-mercato/ui/primitives/alert'
 import { StatusBadge, type StatusBadgeVariant } from '@open-mercato/ui/primitives/status-badge'
@@ -132,152 +131,150 @@ export function SharedInboxesAdminPage() {
   const selected = items.find((row) => row.id === selectedChannelId) ?? null
 
   return (
-    <Page>
-      <PageBody>
-        <h1 className="mb-2 text-xl font-semibold">
-          {t('communication_channels.sharedInbox.nav.title', 'Shared inboxes')}
-        </h1>
-        <p className="mb-6 text-sm text-muted-foreground">
-          {t(
-            'communication_channels.sharedInbox.page.description',
-            'Team mailboxes owned by this organization. Members you add here still need the shared inbox read and send permissions.',
-          )}
-        </p>
+    <>
+      <h1 className="mb-2 text-xl font-semibold">
+        {t('communication_channels.sharedInbox.nav.title', 'Shared inboxes')}
+      </h1>
+      <p className="mb-6 text-sm text-muted-foreground">
+        {t(
+          'communication_channels.sharedInbox.page.description',
+          'Team mailboxes owned by this organization. Members you add here still need the shared inbox read and send permissions.',
+        )}
+      </p>
 
-        {legacyChannels.length > 0 ? (
-          <Alert status="warning" className="mb-6">
-            <AlertTitle>
-              {t(
-                'communication_channels.sharedInbox.legacy.title',
-                'Legacy email channels need reprovisioning',
+      {legacyChannels.length > 0 ? (
+        <Alert status="warning" className="mb-6">
+          <AlertTitle>
+            {t(
+              'communication_channels.sharedInbox.legacy.title',
+              'Legacy email channels need reprovisioning',
+            )}
+          </AlertTitle>
+          <AlertDescription>
+            {t(
+              'communication_channels.sharedInbox.legacy.description',
+              'These tenant-wide email channels predate organization ownership. They are disabled for team use until you provision them again inside an organization:',
+            )}{' '}
+            {legacyChannels
+              .map((channel) => channel.externalIdentifier ?? channel.displayName)
+              .join(', ')}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {actionError ? (
+        <Alert status="error" className="mb-6">
+          <AlertDescription>{actionError}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className="mb-8">
+        <SectionHeader
+          title={t('communication_channels.sharedInbox.list.title', 'Inboxes')}
+          count={items.length}
+        />
+        <div className="mt-3">
+          {isLoading ? (
+            <LoadingMessage
+              label={t('communication_channels.sharedInbox.list.loading', 'Loading shared inboxes...')}
+            />
+          ) : loadError ? (
+            <ErrorMessage label={loadError} />
+          ) : items.length === 0 ? (
+            <EmptyState
+              title={t('communication_channels.sharedInbox.list.emptyTitle', 'No shared inboxes yet')}
+              description={t(
+                'communication_channels.sharedInbox.list.emptyDescription',
+                'Provision a team mailbox below so several people can answer from one address.',
               )}
-            </AlertTitle>
-            <AlertDescription>
-              {t(
-                'communication_channels.sharedInbox.legacy.description',
-                'These tenant-wide email channels predate organization ownership. They are disabled for team use until you provision them again inside an organization:',
-              )}{' '}
-              {legacyChannels
-                .map((channel) => channel.externalIdentifier ?? channel.displayName)
-                .join(', ')}
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
-        {actionError ? (
-          <Alert status="error" className="mb-6">
-            <AlertDescription>{actionError}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        <div className="mb-8">
-          <SectionHeader
-            title={t('communication_channels.sharedInbox.list.title', 'Inboxes')}
-            count={items.length}
-          />
-          <div className="mt-3">
-            {isLoading ? (
-              <LoadingMessage
-                label={t('communication_channels.sharedInbox.list.loading', 'Loading shared inboxes...')}
-              />
-            ) : loadError ? (
-              <ErrorMessage label={loadError} />
-            ) : items.length === 0 ? (
-              <EmptyState
-                title={t('communication_channels.sharedInbox.list.emptyTitle', 'No shared inboxes yet')}
-                description={t(
-                  'communication_channels.sharedInbox.list.emptyDescription',
-                  'Provision a team mailbox below so several people can answer from one address.',
-                )}
-              />
-            ) : (
-              <ul className="divide-y divide-border rounded-md border border-border">
-                {items.map((row) => (
-                  <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{row.displayName}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {row.externalIdentifier ?? '—'} ·{' '}
-                        {t(
-                          `communication_channels.channel.providers.${row.providerKey}`,
-                          row.providerKey,
-                        )}{' '}
-                        ·{' '}
-                        {t('communication_channels.sharedInbox.list.memberCount', 'members')}:{' '}
-                        {row.activeMemberCount}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StatusBadge variant={statusVariant(row)} dot>
-                        {t(
-                          `communication_channels.sharedInbox.status.${row.status}`,
-                          row.status,
-                        )}
+            />
+          ) : (
+            <ul className="divide-y divide-border rounded-md border border-border">
+              {items.map((row) => (
+                <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{row.displayName}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {row.externalIdentifier ?? '—'} ·{' '}
+                      {t(
+                        `communication_channels.channel.providers.${row.providerKey}`,
+                        row.providerKey,
+                      )}{' '}
+                      ·{' '}
+                      {t('communication_channels.sharedInbox.list.memberCount', 'members')}:{' '}
+                      {row.activeMemberCount}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge variant={statusVariant(row)} dot>
+                      {t(
+                        `communication_channels.sharedInbox.status.${row.status}`,
+                        row.status,
+                      )}
+                    </StatusBadge>
+                    {row.projectionMode === 'connect_managed' ? (
+                      <StatusBadge variant="info">
+                        {t('communication_channels.sharedInbox.list.connectManaged', 'Connect')}
                       </StatusBadge>
-                      {row.projectionMode === 'connect_managed' ? (
-                        <StatusBadge variant="info">
-                          {t('communication_channels.sharedInbox.list.connectManaged', 'Connect')}
-                        </StatusBadge>
-                      ) : null}
+                    ) : null}
+                    <Button
+                      variant="outline"
+                      onClick={() => setSelectedChannelId(row.id === selectedChannelId ? null : row.id)}
+                      aria-expanded={row.id === selectedChannelId}
+                    >
+                      {t('communication_channels.sharedInbox.list.manageMembers', 'Members')}
+                    </Button>
+                    {row.isActive ? (
                       <Button
                         variant="outline"
-                        onClick={() => setSelectedChannelId(row.id === selectedChannelId ? null : row.id)}
-                        aria-expanded={row.id === selectedChannelId}
+                        onClick={() => void confirmDisable(row.id)}
+                        disabled={busyChannelId === row.id}
                       >
-                        {t('communication_channels.sharedInbox.list.manageMembers', 'Members')}
+                        {t('communication_channels.sharedInbox.list.disable', 'Disable')}
                       </Button>
-                      {row.isActive ? (
-                        <Button
-                          variant="outline"
-                          onClick={() => void confirmDisable(row.id)}
-                          disabled={busyChannelId === row.id}
-                        >
-                          {t('communication_channels.sharedInbox.list.disable', 'Disable')}
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          onClick={() => void runChannelAction(row.id, 'reconnect')}
-                          disabled={busyChannelId === row.id}
-                        >
-                          {t('communication_channels.sharedInbox.list.reconnect', 'Reconnect')}
-                        </Button>
-                      )}
-                      {row.projectionMode === 'legacy_customers' ? (
-                        <Button
-                          variant="outline"
-                          onClick={() => void runChannelAction(row.id, 'connect-projection')}
-                          disabled={busyChannelId === row.id}
-                        >
-                          {t('communication_channels.sharedInbox.list.enableConnect', 'Use Connect')}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        onClick={() => void runChannelAction(row.id, 'reconnect')}
+                        disabled={busyChannelId === row.id}
+                      >
+                        {t('communication_channels.sharedInbox.list.reconnect', 'Reconnect')}
+                      </Button>
+                    )}
+                    {row.projectionMode === 'legacy_customers' ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => void runChannelAction(row.id, 'connect-projection')}
+                        disabled={busyChannelId === row.id}
+                      >
+                        {t('communication_channels.sharedInbox.list.enableConnect', 'Use Connect')}
+                      </Button>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
+      </div>
 
-        {selected ? (
-          <div className="mb-8">
-            <SharedInboxMembersPanel
-              channelId={selected.id}
-              channelName={selected.displayName}
-              onMembershipChanged={reload}
-            />
-          </div>
-        ) : null}
+      {selected ? (
+        <div className="mb-8">
+          <SharedInboxMembersPanel
+            channelId={selected.id}
+            channelName={selected.displayName}
+            onMembershipChanged={reload}
+          />
+        </div>
+      ) : null}
 
-        <ProvisionSharedInboxForm
-          eligibleProviders={data?.eligibleProviders ?? []}
-          onProvisioned={reload}
-        />
+      <ProvisionSharedInboxForm
+        eligibleProviders={data?.eligibleProviders ?? []}
+        onProvisioned={reload}
+      />
 
-        {ConfirmDialogElement}
-      </PageBody>
-    </Page>
+      {ConfirmDialogElement}
+    </>
   )
 }
 

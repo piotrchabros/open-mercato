@@ -729,3 +729,93 @@ describe('link-channel-message subscriber — threading inheritance', () => {
     expect(em.find).not.toHaveBeenCalled()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Connect-managed channels (communication_channels upstream Contract E)
+// ---------------------------------------------------------------------------
+
+describe('link-channel-message subscriber — projection ownership', () => {
+  const CONNECT_LINK = {
+    id: 'mcl-connect',
+    externalConversationId: 'conv-1',
+    providerKey: 'gmail',
+    direction: 'inbound',
+    createdAt: new Date('2026-08-21T10:00:00Z'),
+    channelMetadata: { from: 'alice@example.com', to: ['support@example.com'], subject: 'Hello' },
+  }
+
+  // Connect owns identity resolution AND the reversible unlink retraction for a
+  // `connect_managed` shared inbox. Projecting here as well would leave a second,
+  // unretractable copy of every message on the Customer timeline.
+  it('skips a connect_managed channel entirely', async () => {
+    const em = makeEm({
+      // findOne[0]: link lookup, findOne[1]: channel lookup
+      findOneResults: [CONNECT_LINK, { userId: null, projectionMode: 'connect_managed' }],
+    })
+
+    await handler(
+      {
+        eventType: 'communication_channels.message.received',
+        channelLinkId: 'mcl-connect',
+        channelId: 'ch-connect',
+        tenantId: 'tenant-1',
+        organizationId: 'org-1',
+      } as any,
+      makeCtx(em),
+    )
+
+    expect(mockFindPeople).not.toHaveBeenCalled()
+    expect(em.create).not.toHaveBeenCalled()
+    expect(em.flush).not.toHaveBeenCalled()
+  })
+
+  // The gate must not be skippable by an event that omits `channelId`, or a
+  // partial payload would silently fall through to legacy projection.
+  it('resolves the channel through the conversation when the event omits channelId', async () => {
+    const em = makeEm({
+      // findOne[0]: link, findOne[1]: conversation, findOne[2]: channel
+      findOneResults: [
+        CONNECT_LINK,
+        { channelId: 'ch-connect' },
+        { userId: null, projectionMode: 'connect_managed' },
+      ],
+    })
+
+    await handler(
+      {
+        eventType: 'communication_channels.message.received',
+        channelLinkId: 'mcl-connect',
+        tenantId: 'tenant-1',
+        organizationId: 'org-1',
+      } as any,
+      makeCtx(em),
+    )
+
+    expect(em.findOne).toHaveBeenCalledTimes(3)
+    expect(mockFindPeople).not.toHaveBeenCalled()
+    expect(em.create).not.toHaveBeenCalled()
+  })
+
+  // Every channel that existed before Contract E is `legacy_customers`, so the
+  // pre-existing behaviour must be byte-identical for them.
+  it('still projects a legacy_customers channel', async () => {
+    mockFindPeople.mockResolvedValueOnce([{ id: 'person-1', email: 'alice@example.com' }])
+    const em = makeEm({
+      findOneResults: [CONNECT_LINK, { userId: null, projectionMode: 'legacy_customers' }],
+    })
+    em.getReference.mockReturnValue({ id: 'person-1' })
+
+    await handler(
+      {
+        eventType: 'communication_channels.message.received',
+        channelLinkId: 'mcl-connect',
+        channelId: 'ch-legacy',
+        tenantId: 'tenant-1',
+        organizationId: 'org-1',
+      } as any,
+      makeCtx(em),
+    )
+
+    expect(em.create).toHaveBeenCalledTimes(1)
+  })
+})

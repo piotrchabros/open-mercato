@@ -1,10 +1,17 @@
+import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { SharedInboxesAdminPage } from '@open-mercato/core/modules/communication_channels/components/shared-inboxes/SharedInboxesAdminPage'
 
 /**
  * Server-component page root (Frontend Architecture Contract): the route shell
- * stays a server component and mounts one client leaf, so the page's data
- * fetching and interactivity are the only client-side code on this route.
+ * and its page chrome stay server-rendered, and one client leaf carries the
+ * data fetching and interactivity.
  */
 export default function SharedInboxesPage() {
-  return <SharedInboxesAdminPage />
+  return (
+    <Page>
+      <PageBody>
+        <SharedInboxesAdminPage />
+      </PageBody>
+    </Page>
+  )
 }
