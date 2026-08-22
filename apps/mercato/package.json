@@ -40,6 +40,7 @@
     "@open-mercato/channel-imap": "workspace:*",
     "@open-mercato/checkout": "workspace:*",
     "@open-mercato/cli": "workspace:*",
+    "@open-mercato/connect": "workspace:*",
     "@open-mercato/content": "workspace:*",
     "@open-mercato/core": "workspace:*",
     "@open-mercato/documents": "workspace:*",

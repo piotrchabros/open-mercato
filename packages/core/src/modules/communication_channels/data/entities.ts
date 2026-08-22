@@ -392,6 +392,144 @@ export class SharedChannelMembership {
   updatedAt: Date = new Date()
 }
 
+// ── ChannelDeliveryAttempt ────────────────────────────────────
+
+/**
+ * Terminal state of one outbound delivery attempt.
+ *
+ * `unknown` is not a failure — it means the send may have crossed the provider
+ * boundary and no evidence resolves it. It is reconciliation-only and must
+ * never be retried automatically; see `lib/delivery-status.ts`.
+ */
+export type ChannelDeliveryAttemptStatus = 'pending' | 'sent' | 'failed' | 'unknown'
+
+/**
+ * Durable correlation and outcome record for one outbound send (Connect
+ * upstream Contract A).
+ *
+ * Email providers expose no idempotent-send key and no reliable "did message X
+ * send?" query, so the hub's own record is the only thing that can answer
+ * "did my send happen?" after a caller loses the response. The row is the
+ * caller's handle on that question:
+ *
+ *   - `(tenant, organization, channel, correlationId)` is unique. The FIRST
+ *     accepted submission binds that correlation to an `attemptId` and a
+ *     content `fingerprint`, and the binding is immutable.
+ *   - A resubmission with the SAME attempt and fingerprint returns the original
+ *     outcome — it never re-enqueues.
+ *   - A resubmission with a different attempt or fingerprint is a deterministic
+ *     conflict. It never overwrites the binding, because doing so would let a
+ *     caller silently re-point a correlation at different content.
+ *   - `deliveryRevision` is monotonic per attempt and fences the terminal
+ *     `sent`/`failed` decision against a late or duplicated outcome.
+ */
+@Entity({ tableName: 'channel_delivery_attempts' })
+// Uniqueness is expressed as a partial expression index in the migration so it
+// also covers rows whose organization is NULL (personal channels), which a
+// plain unique constraint would not deduplicate.
+@Index({
+  name: 'channel_delivery_attempts_correlation_uq',
+  expression:
+    `create unique index "channel_delivery_attempts_correlation_uq" on "channel_delivery_attempts" ("tenant_id", (coalesce("organization_id", '00000000-0000-0000-0000-000000000000'::uuid)), "channel_id", "correlation_id")`,
+})
+@Index({
+  name: 'channel_delivery_attempts_attempt_idx',
+  properties: ['tenantId', 'channelId', 'attemptId'],
+})
+@Index({
+  name: 'channel_delivery_attempts_message_idx',
+  properties: ['messageId'],
+})
+@Check({
+  name: 'channel_delivery_attempts_status_chk',
+  expression: `"status" in ('pending', 'sent', 'failed', 'unknown')`,
+})
+export class ChannelDeliveryAttempt {
+  [OptionalProps]?:
+    | 'createdAt'
+    | 'updatedAt'
+    | 'status'
+    | 'deliveryRevision'
+    | 'organizationId'
+    | 'providerMessageId'
+    | 'reasonCode'
+    | 'messageId'
+    | 'threadId'
+    | 'actorUserId'
+    | 'occurredAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid', nullable: true })
+  organizationId?: string | null
+
+  @Property({ name: 'channel_id', type: 'uuid' })
+  channelId!: string
+
+  /** Caller-stable id for "this logical send". Unique within the scope above. */
+  @Property({ name: 'correlation_id', type: 'text' })
+  correlationId!: string
+
+  /** Immutable attempt identity bound to the correlation on first acceptance. */
+  @Property({ name: 'attempt_id', type: 'text' })
+  attemptId!: string
+
+  /**
+   * Canonical hash of recipients, subject, body and thread. A resubmission
+   * whose fingerprint differs is a conflict, so a correlation can never be
+   * quietly re-pointed at different content.
+   */
+  @Property({ name: 'fingerprint', type: 'text' })
+  fingerprint!: string
+
+  @Property({ name: 'status', type: 'text', default: 'pending' })
+  status: ChannelDeliveryAttemptStatus = 'pending'
+
+  /** Monotonic per attempt; fences terminal decisions against late outcomes. */
+  @Property({ name: 'delivery_revision', type: 'int', default: 0 })
+  deliveryRevision: number = 0
+
+  @Property({ name: 'provider_message_id', type: 'text', nullable: true })
+  providerMessageId?: string | null
+
+  @Property({ name: 'reason_code', type: 'text', nullable: true })
+  reasonCode?: string | null
+
+  /** Logical link to messages.message.id (no DB FK — cross-module). */
+  @Property({ name: 'message_id', type: 'uuid', nullable: true })
+  messageId?: string | null
+
+  /** Logical link to messages.message.thread_id (no DB FK — cross-module). */
+  @Property({ name: 'thread_id', type: 'uuid', nullable: true })
+  threadId?: string | null
+
+  /**
+   * The authenticated actor whose authority this send was accepted under.
+   *
+   * Persisted so the delivery worker can RE-CHECK that authority immediately
+   * before invoking the provider: a shared-inbox membership revoked between
+   * enqueue and dispatch must produce a definitive
+   * `failed:authorization_revoked` outcome rather than a send the revoked user
+   * was no longer entitled to make. Logical link to auth.user.id.
+   */
+  @Property({ name: 'actor_user_id', type: 'uuid', nullable: true })
+  actorUserId?: string | null
+
+  /** When the recorded outcome occurred at the provider boundary. */
+  @Property({ name: 'occurred_at', type: Date, nullable: true })
+  occurredAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
 // ── SharedInboxOAuthState ─────────────────────────────────────
 
 /**
@@ -560,6 +698,11 @@ export class ExternalMessage {
 @Index({ name: 'message_channel_links_ext_conv_idx', properties: ['externalConversationId'] })
 @Index({ name: 'message_channel_links_ext_msg_idx', properties: ['externalMessageId'] })
 @Unique({ name: 'message_channel_links_message_uq', properties: ['messageId'] })
+@Check({
+  name: 'message_channel_links_projection_mode_chk',
+  expression:
+    `"projection_mode_at_ingest" is null or "projection_mode_at_ingest" in ('legacy_customers', 'connect_managed')`,
+})
 export class MessageChannelLink {
   [OptionalProps]?: 'createdAt' | 'deliveryStatus' | 'externalMessageId' | 'channelPayload' | 'channelContentType' | 'interactiveState' | 'channelMetadata' | 'organizationId'
 
@@ -600,6 +743,26 @@ export class MessageChannelLink {
 
   @Property({ name: 'channel_metadata', type: 'json', nullable: true })
   channelMetadata?: Record<string, unknown> | null
+
+  /**
+   * The channel's projection mode AT THE MOMENT this message was ingested
+   * (Connect upstream Contract D).
+   *
+   * Snapshotted rather than read live, because a later reprovision, reconnect
+   * or cutover must never change how an ALREADY EMITTED
+   * `communication_channels.message.received` event is classified. Without the
+   * snapshot, a message ingested while the channel was legacy could later be
+   * handed to Connect (double projection) or vice versa (no projection at all).
+   *
+   * NULL on every row written before Contract D; the envelope reader treats
+   * that as `legacy_customers`, which is what those channels were.
+   */
+  @Property({ name: 'projection_mode_at_ingest', type: 'text', nullable: true })
+  projectionModeAtIngest?: ChannelProjectionMode | null
+
+  /** Whether Connect traffic was enabled on the channel at ingest time. */
+  @Property({ name: 'traffic_enabled_at_ingest', type: 'boolean', nullable: true })
+  trafficEnabledAtIngest?: boolean | null
 
   @Property({ name: 'tenant_id', type: 'uuid' })
   tenantId!: string

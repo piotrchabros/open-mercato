@@ -165,6 +165,27 @@ PR B adds DI lifecycle operations and additive storage fields; it does not mutat
 - Cross-module partial success has a durable, idempotent recovery path.
 - Customer context never reads historical audit association as active.
 
+## Implementation Status
+
+| Phase | Status | Date | Notes |
+|-------|--------|------|-------|
+| PROJ-DATA-01 — audit, manual-match, pending projection/retraction, saga entities | Done | 2026-08-22 | `Migration20260823030000_connect`; monotonic `decision`, precommitted `inventory`, partial unique index on OPEN tasks, `unlink_pending_saga_id` + epoch on the identity |
+| PROJ-ING-01 — unresolved-identity subscriber | Done | 2026-08-22 | Persistent; re-reads the CURRENT identity so a late event cannot reopen resolved work; defers idempotency to the partial unique index |
+| PROJ-ING-02 — case-resolved projection subscriber | Done | 2026-08-22 | Deterministic key; stages unresolved work too, so a Case resolved before its match still reaches the timeline |
+| PROJ-CMD-01 — guarded link command | Done | 2026-08-22 | `resolveCustomerReference` runs BEFORE any Connect write; stale/forged/deleted/wrong-kind/sibling-organization/foreign-tenant all collapse to one answer; refuses while an unlink fence is set |
+| PROJ-CMD-02 — unlink saga coordinator | Done | 2026-08-22 | Fence + commit inventory under the identity lock → all-or-none hide at the source → local clear and `commit` → publish. Abort records the decision, tells the source, then clears only the MATCHING fence |
+| PROJ-WRK-01 — projection drain worker + schedule | Done | 2026-08-22 | Leased bounded batch, `connect:{organizationId}:projection-drain-sweep` (120 s); re-checks the unlink fence under the identity lock immediately before the peer call |
+| PROJ-WRK-02 — retraction finalize worker | Done | 2026-08-22 | Grouped per saga; only a `commit` decision may finalize; exhausted attempts become a loud `failed` while the interactions stay hidden upstream |
+| PROJ-WRK-03 — saga recovery worker + schedule | Done | 2026-08-22 | `connect:{organizationId}:projection-recovery-sweep` (300 s); reads the source ledger via `listRetractions` and never guesses; hidden-but-undecided converges to `abort` |
+| PROJ-EVT-01 — projection domain events | Done | 2026-08-22 | `connect.projection.status_changed` staged through the transactional outbox at link and unlink |
+| PROJ-API-01 — queue, link, unlink, unlink-status, case + customer context | Done | 2026-08-22 | Batch capped at 100 (rejected, never truncated); a foreign reference contributes nothing rather than 404-ing, so the route is not an existence oracle |
+| PROJ-ACL-01 — feature IDs and default grants | Done | 2026-08-22 | `connect.customer_match.{read,link,unlink,recover,audit}`; employee gets read+link, manager adds unlink+recover. Denial/wildcard/self-escalation matrices need the integration harness |
+| PROJ-UI-01 — manual-match workflow and unlink confirmation | Done | 2026-08-22 | Queue + kind-tabbed debounced candidate search + explicit confirm; required unlink reason; resumable saga progress; five complete locales |
+| PROJ-WID-01 — enrichers, list columns, detail footers | Done | 2026-08-22 | One batched query per page (`enrichOne` delegates to `enrichMany`); gated on `.read`; absent rather than zeroed for foreign/idle/inert references |
+| PROJ-DS-01 — DS Guardian | Partial | 2026-08-22 | The DS ESLint pass is clean on `packages/connect`; the interactive `om-ds-guardian` review and screenshots need a running app |
+| PROJ-TEST-01..04 — integration/browser | Not Started | — | Require a live database and browser harness. Unit coverage exists for the link ordering, the saga's fence/abort/commit paths, both workers' convergence, both subscribers' idempotency, and the context reader's isolation |
+
 ## Changelog
 
+- 2026-08-22: Implemented the data model, both subscribers, the link command and the unlink saga, the drain/finalize/recovery workers, six API routes, the manual-match UI, the customer-context enrichers and widgets, and five locales with unit coverage; integration and browser verification outstanding.
 - 2026-08-21: Successor split from v2; expanded unlink to full Case and timeline retraction through PR B.

@@ -96,6 +96,23 @@ export const features = [
     module: 'customers',
     dependsOn: ['customers.interactions.view'],
   },
+  /**
+   * Source-owned interaction retraction (Connect upstream Contract B).
+   *
+   * Required by every operation of `customersInteractionLifecycle`, including
+   * creation: a module that may project onto a customer's timeline must also be
+   * accountable for taking that projection back. Granting the two separately
+   * would allow a projector that can create but never retract.
+   *
+   * Not granted to any default role — it is a SERVICE grant for a trusted
+   * server-side projector (Connect), not a human capability.
+   */
+  {
+    id: 'customers.interactions.retract',
+    title: 'Retract projected customer interactions (service)',
+    module: 'customers',
+    dependsOn: ['customers.interactions.view'],
+  },
 ]
 
 export default features

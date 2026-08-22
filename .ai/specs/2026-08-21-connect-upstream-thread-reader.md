@@ -47,6 +47,16 @@ The DI key and input/output types are additive STABLE surfaces. Document them in
 
 One deployable capability: an authorized thread projection. It does not implement Connect Cases, Inbox UI, or outbound send.
 
+## Implementation Status
+
+| Phase | Status | Date | Notes |
+|-------|--------|------|-------|
+| THR-UP-01 — bounded input/output schemas and public types | Done | 2026-08-22 | `lib/thread-reader.ts`; allowlist capped at 200, page at 100, body at 20 000 chars |
+| THR-UP-02 — source-owned reader + existing-DI registration | Done | 2026-08-22 | `communicationChannelsThreadReader`; HMAC-signed cursor binds scope, authorization epoch, allowlist, ordering and page shape |
+| THR-UP-03 — isolation, bounds, placeholder, paging and sanitization tests | Partial | 2026-08-22 | Unit coverage for revoked membership, sibling organization, foreign tenant, wildcard and missing features, allowlist/page bounds, unbound-vs-empty, stable `unavailable` placeholders, HTML/control-character sanitization, attachment metadata carrying no URL, deterministic paging, and cursor refusal on changed allowlist / changed authorization / changed page size / forgery. Integration tests for mixed-tenant allowlists against a real database still pending |
+| THR-UP-04 — public-contract documentation + maintainer sign-off | Partial | 2026-08-22 | Documented in `apps/docs/docs/framework/modules/communication-channels.mdx` § Authorized thread reader. **Named maintainer sign-off for this class (e) change is still outstanding.** |
+
 ## Changelog
 
+- 2026-08-22: Implemented THR-UP-01 and -02; unit coverage for -03 landed; docs written and maintainer sign-off outstanding for -04.
 - 2026-08-21: Extracted PR C from the Inbox umbrella spec and recorded the owner-approved class (e) model.

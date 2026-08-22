@@ -87,6 +87,11 @@ export const enabledModules: ModuleEntry[] = [
   { id: 'devices', from: '@open-mercato/core' },
   { id: 'dictionaries', from: '@open-mercato/core' },
   { id: 'content', from: '@open-mercato/content' },
+  // Mercato Connect — organization-scoped shared inbox built on the
+  // communication_channels hub. Foundation + inbound ingest; the subscriber is
+  // always registered but stays inert until a Connect-managed shared channel
+  // exists and the upstream contracts report compatible versions.
+  { id: 'connect', from: '@open-mercato/connect' },
   { id: 'onboarding', from: '@open-mercato/onboarding' },
   { id: 'api_docs', from: '@open-mercato/core' },
   // Live DS component gallery at /backend/design-system (feature-gated by

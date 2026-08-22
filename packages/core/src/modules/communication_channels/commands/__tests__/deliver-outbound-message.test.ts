@@ -97,7 +97,9 @@ describe('deliverOutboundMessageCommand — idempotency (no double-send)', () =>
   const VALID_ORG = '550e8400-e29b-41d4-a716-446655440030'
 
   function makeCtx(adapter: Record<string, unknown>) {
-    const em: any = { create: jest.fn(), persist: jest.fn(), flush: jest.fn() }
+    // `findOne` answers the delivery-attempt lookup (Contract A). `null` means
+    // "sent without a correlation", i.e. the pre-contract path these tests cover.
+    const em: any = { create: jest.fn(), persist: jest.fn(), flush: jest.fn(), findOne: jest.fn(async () => null) }
     em.fork = () => em
     return {
       container: {
@@ -150,6 +152,9 @@ describe('deliverOutboundMessageCommand — link integrity + reauth', () => {
       }),
       persist: jest.fn(),
       flush: jest.fn(async () => undefined),
+      // `null` = this message carries no send correlation (Contract A), which is
+      // the pre-contract path these tests exercise.
+      findOne: jest.fn(async () => null),
     }
     em.fork = () => em
     const channel = {

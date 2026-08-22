@@ -358,6 +358,249 @@ OM_INTEGRATION_MODULES=communication_channels,channel-imap,channel-gmail \
   yarn test:integration                      # email-foundation slice only
 ```
 
+## Inbound envelope reader
+
+`communication_channels.message.received` is identifier-only by design — a persistent event
+store must not hold raw PII. But Connect's ingest cannot classify a mail loop, hash an identity,
+or set a Case subject from identifiers alone, and it must not query peer tables to get them.
+
+Connect upstream Contract D (`.ai/specs/2026-08-21-connect-upstream-inbound-envelope.md`) is the
+bounded, server-only way across that gap.
+
+| DI key | Operations |
+|--------|-----------|
+| `communicationChannelsInboundEnvelopeReader` | `readEnvelope(container, tuple)`, `resolveReplyTarget(container, input)` |
+
+### Threat model, stated plainly
+
+Open Mercato modules share one trusted server process, and DI is **not** a sandbox against
+malicious installed code. This is a class (e) contract that deliberately enlarges the trusted
+computing base, and a caller-supplied module id would be theatre rather than authorization.
+Named maintainer/security approval of that threat model is required.
+
+What the contract *does* provide is that accidental misuse by a trusted module is structurally
+hard, and that the blast radius stays small:
+
+- the caller must present the **complete tuple** from one event (tenant, organization, channel,
+  conversation, message, external message, link). A mixed or partial tuple returns `missing`
+  **without saying which component failed**;
+- the projection is length- and enum-bounded and excludes raw headers, HTML, body, attachments,
+  credentials and ORM entities;
+- the sender handle is available only here. Connect encrypts or hashes it immediately, and it is
+  never logged or persisted in an event;
+- the reply address never crosses the boundary at all — only an opaque reference and a masked
+  label.
+
+### Event-time classification
+
+Each inbound link stores `projection_mode_at_ingest` and `traffic_enabled_at_ingest`. The reader
+classifies from that snapshot, never from the channel's current state, so a later reprovision,
+reconnect or cutover **cannot change how an already emitted event is classified**. Without it, a
+message ingested while a channel was legacy could later be handed to Connect (double projection)
+or vice versa (no projection at all). Rows written before this contract have no snapshot and are
+read as `legacy_customers` — which is what those channels were.
+
+Direction and historical ownership are likewise validated from the immutable ingest record, so
+deactivating a channel does not invalidate a legitimate past event.
+
+`readEnvelope` returns `found | missing | not_connect_managed | channel_disabled |
+transient_error | permanent_invalid`. A database blip is `transient_error` (retryable); an
+inbound record with no sender is `permanent_invalid` (it will never become resolvable).
+
+### Reply targets
+
+`found` carries an opaque `replyTargetRef` and a masked label such as `a…e@example.com`.
+`resolveReplyTarget` turns that reference back into an address at send enqueue and again at
+dispatch. It returns
+`resolved:{ kind: 'reply_to' | 'sender', canonicalRecipientInternal, maskedLabel } |
+transient_error | stale_or_wrong_ref | ambiguous_multi_party | unavailable`.
+
+- The reference is HMAC-signed (`OM_INBOUND_REPLY_REF_SECRET`, falling back to a
+  `KMS_MASTER_KEY`-derived subkey, fail-closed in production) and binds the tenant, organization,
+  channel, conversation and link plus a **source version**. Bumping the version when the
+  resolution policy changes means a stored reference can never quietly start meaning a different
+  address.
+- **Reply-To takes precedence over the sender** — that is what the sender asked for.
+- **Multiple Reply-To addresses are refused, not guessed.** Picking one on a customer's behalf is
+  a disclosure decision the hub is not entitled to make.
+- No outcome here is ever `unknown`; that status is reserved for a send that may have crossed
+  provider dispatch. Every failure except `transient_error` is definitive *before* any provider
+  call, and `transient_error` keeps the send queued for a bounded retry.
+- The browser never chooses an address: it only ever sees the masked label.
+
+## Authorized thread reader
+
+A downstream inbox module needs to render inbound thread bodies and direction. It cannot query
+hub tables directly, and a facade in `messages` cannot produce the projection because
+`communication_channels` owns the message-link direction and transport metadata.
+
+Connect upstream Contract C (`.ai/specs/2026-08-21-connect-upstream-thread-reader.md`) adds a
+narrow reader for exactly that. System-authored inbound rows fall outside the existing
+sender-or-recipient participant predicate, so this is a **class (e)** boundary change requiring
+named maintainer sign-off, and its narrowness is the whole compensating control.
+
+Existing participant-scoped message APIs are unchanged. This facade is the explicit, separately
+reviewed exception.
+
+| DI key | Shape |
+|--------|-------|
+| `communicationChannelsThreadReader` | `(container, actor, { channelId, externalConversationIds, pageSize?, cursor? }) => Promise<ThreadReaderResult>` |
+
+### What it will and will not do
+
+- **One channel per call**, authorized through Contract E (scope + active membership +
+  `communication_channels.shared_inbox.read`). Any membership assertion a caller sends is
+  ignored — membership is read from the source.
+- **An explicit conversation allowlist**, non-empty and capped at 200, every entry proven to
+  belong to that channel and scope. The allowlist *narrows* an already authorized channel; it is
+  never itself the grant. Entries that are not bound come back in `unboundConversationIds`
+  without any hint as to whether they exist elsewhere.
+- **Plain, bounded records.** No ORM entity, entity manager, query callback or cross-tenant error
+  distinction crosses DI. Pages are capped at 100 records; bodies at 20 000 characters with an
+  explicit `truncated` flag.
+- **Plain text only**, HTML converted and control characters stripped. Attachments project
+  `{ fileName, mimeType, fileSize }` — Phase 1 exposes **no download URL or handle at all**,
+  because a signed provider URL is itself a credential.
+- **No filter or query interface.** There is nothing for a caller to widen.
+
+### Unrenderable items
+
+A decrypt or render failure yields a stable-position placeholder rather than failing the page:
+
+```ts
+{ kind: 'unavailable', id, externalConversationId, code: 'content_unavailable', retryable: true, occurredAt }
+```
+
+Other items on the page and the cursor stay valid, so one bad row cannot blank a thread, and the
+Inbox can offer a per-item retry. The failure reason never crosses the boundary — it could
+distinguish "encrypted with a key we cannot load" from "malformed", which is source-internal
+detail. Ciphertext never leaves the source.
+
+### Cursors
+
+A cursor is not a bookmark; it is a claim about what the holder was authorized to read. It is
+HMAC-signed (`OM_THREAD_READER_CURSOR_SECRET`, falling back to a `KMS_MASTER_KEY`-derived
+subkey, fail-closed in production) and binds tenant, organization, channel, **authorization
+epoch**, normalized allowlist hash, page size and position.
+
+Continuation re-validates authorization from scratch and re-applies the *current* allowlist. A
+cursor is refused when the caller's membership changed (the epoch is derived from the membership
+row, so revoke-then-regrant invalidates it), when the allowlist changed, when the page size
+changed, or when anything in it was edited.
+
+Ordering is `(createdAt, id)` ascending — a deterministic total order, so paging cannot skip or
+repeat a record when two messages share a timestamp.
+
+Case transfer and cross-Case cursor policy belong to the Inbox wrapper: Contract C does not know
+Case identity.
+
+## Send correlation and delivery outcomes
+
+Email providers expose no idempotent-send key and no reliable "did message X send?" query. A
+caller that loses the response to a send therefore has only two bad options: resend (duplicate
+mail) or give up (lost mail). Connect upstream Contract A
+(`.ai/specs/2026-08-21-connect-upstream-send-contract.md`) adds the hub-side record that makes a
+third option possible — ask.
+
+Everything here is **opt-in and additive**. A send without a correlation behaves exactly as it
+did before.
+
+### Correlating a send
+
+Pass `correlation` to `sendAsUser` (DI: `communicationChannelsSendAsUser`) or to
+`POST /api/communication_channels/send-as-user`:
+
+```jsonc
+{
+  "userChannelId": "…",
+  "to": ["customer@example.com"],
+  "subject": "Re: your order",
+  "body": { "plain": "…" },
+  "correlation": {
+    "correlationId": "order-4711-reply",   // stable per logical send
+    "attemptId": "01J…",                   // immutable once bound
+    "fingerprint": "…"                     // optional; derived when omitted
+  }
+}
+```
+
+The binding happens **before** anything is composed or enqueued, and is stored in
+`channel_delivery_attempts`, unique per `(tenant, organization, channel, correlationId)`:
+
+| Resubmission | Result |
+|--------------|--------|
+| Same attempt + same fingerprint, already delivered | `202` with `duplicate: true` and the ORIGINAL `messageId` — nothing is re-enqueued |
+| Same attempt + same fingerprint, still in flight | `409 correlation_in_progress` — query the status instead of resubmitting |
+| Different attempt | `409 attempt_mismatch` — the binding is never overwritten |
+| Different content | `409 fingerprint_mismatch` — a correlation cannot be re-pointed at a different message |
+
+The fingerprint is a canonical hash of recipients (lower-cased and sorted, so ordering is
+irrelevant), subject, body and thread.
+
+### Outcome event
+
+`communication_channels.delivery.outcome_recorded` is persistent and is written **only** by the
+hub delivery worker:
+
+```ts
+{
+  tenantId, organizationId, channelId,
+  correlationId, attemptId,
+  deliveryRevision,            // monotonic per attempt
+  providerMessageId?,          // present on a confirmed send
+  status: 'sent' | 'failed' | 'unknown',
+  reasonCode?,                 // e.g. authorization_revoked, retries_exhausted
+  occurredAt,
+}
+```
+
+Subscribers **MUST** match the complete scope plus `attemptId` — `correlationId` is only unique
+within one tenant+organization+channel. The payload is identifier-only, so persistent event
+storage never holds recipients, subject or body.
+
+`sent` and `failed` are terminal and fenced: a late or duplicated outcome cannot regress them,
+and a fenced outcome emits nothing at all.
+
+### `unknown` is not a failure
+
+`unknown` means the request reached the network and then died without a response — the provider
+may or may not have accepted it. For an **uncorrelated** send the hub keeps its long-standing
+preference for a duplicate over a loss and retries. For a **correlated** send the caller asked
+for the opposite guarantee, so the attempt is recorded `unknown` and is **never retried
+automatically**. Resolving it is an explicit decision: reconcile against the provider, or send
+a new message.
+
+### Reading the outcome
+
+| DI key | Shape |
+|--------|-------|
+| `communicationChannelsSendStatusLookup` | `(container, actor, { channelId, correlationId, attemptId }) => Promise<SendStatusLookupResult>` |
+
+It never sends and never calls a side-effecting provider operation. It returns a conclusive
+`sent`/`failed`, or `unknown`, plus `providerEvidence: 'supported' | 'unsupported'` so a caller
+knows whether an `unknown` can ever be corroborated independently.
+
+Authorization mirrors the send path exactly: a shared inbox goes through Contract E (scope +
+active membership + `.send`), a personal mailbox is owner-only, and a legacy tenant-wide channel
+requires `communication_channels.manage`. A correlation in another tenant, in a sibling
+organization, or bound to a different attempt is reported as **missing** — saying "that exists
+but is not yours" would itself be a leak.
+
+### Dispatch-time re-authorization
+
+A queued send can sit for minutes. Immediately before the provider call, a shared-inbox send
+re-runs Contract E authorization against **current** membership and features. A membership
+revoked in between produces a definitive `failed:authorization_revoked` outcome with no provider
+call at all. The probe fails closed: if the actor's grants cannot be resolved, the send is
+refused rather than assumed still authorized.
+
+### Adapter surface
+
+`SendMessageInput.correlation` (`{ correlationId, attemptId }`) is threaded to adapters so a
+provider that *does* offer an idempotency key can use `attemptId` as one, and so provider-side
+logs join to the hub's record during reconciliation. It is additive: adapters that ignore it are
+unaffected, and the hub never requires an adapter to honour it.
+
 ## Shared inboxes (organization-owned team mailboxes)
 
 A **shared inbox** is a `CommunicationChannel` with `is_shared_inbox = true`, a non-null

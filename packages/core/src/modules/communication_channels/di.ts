@@ -1,6 +1,7 @@
 import { asValue } from 'awilix'
 import type { AppContainer } from '@open-mercato/shared/lib/di/container'
 import {
+  ChannelDeliveryAttempt,
   CommunicationChannel,
   ExternalConversation,
   ExternalMessage,
@@ -14,6 +15,9 @@ import { getChannelAdapterRegistry } from './lib/adapter-registry-singleton'
 import { ensureTestSeedAdapterRegistered } from './lib/test-seed'
 import { sendAsUser } from './lib/send-as-user'
 import { checkSharedInboxAuthorization } from './lib/shared-inbox-authorization'
+import { lookupSendStatus } from './lib/send-status-lookup'
+import { readAuthorizedThreads } from './lib/thread-reader'
+import { readInboundEnvelope, resolveInboundReplyTarget } from './lib/inbound-envelope'
 
 export function register(container: AppContainer) {
   // Test-only: register the network-free stub channel adapter when
@@ -32,6 +36,7 @@ export function register(container: AppContainer) {
     MessageReaction: asValue(MessageReaction),
     SharedChannelMembership: asValue(SharedChannelMembership),
     SharedInboxOAuthState: asValue(SharedInboxOAuthState),
+    ChannelDeliveryAttempt: asValue(ChannelDeliveryAttempt),
 
     // Channel adapter registry — process-wide singleton backed by globalThis so
     // the auth-less webhook route resolves the same registry as DI consumers.
@@ -48,5 +53,28 @@ export function register(container: AppContainer) {
     // envelope contracts so the rule has exactly one implementation.
     // See lib/shared-inbox-authorization.ts.
     communicationChannelsSharedInboxAuthorization: asValue(checkSharedInboxAuthorization),
+
+    // Read-only send-status reconciliation (Connect upstream Contract A). The
+    // sanctioned answer to "did my send happen?" for a caller that lost the
+    // original response — it never sends and never resends.
+    // See lib/send-status-lookup.ts.
+    communicationChannelsSendStatusLookup: asValue(lookupSendStatus),
+
+    // Authorized thread projection for downstream inbox modules (Connect
+    // upstream Contract C). Reads one Contract-E-authorized channel, narrowed to
+    // an explicit conversation allowlist, and returns plain bounded records —
+    // no ORM entity, entity manager or query callback crosses DI.
+    // See lib/thread-reader.ts.
+    communicationChannelsThreadReader: asValue(readAuthorizedThreads),
+
+    // Bounded inbound metadata projection for Connect ingest (Connect upstream
+    // Contract D). `readEnvelope` classifies one event's exact tuple;
+    // `resolveReplyTarget` turns an opaque reference back into a recipient at
+    // send time. The raw address never crosses the boundary.
+    // See lib/inbound-envelope.ts.
+    communicationChannelsInboundEnvelopeReader: asValue({
+      readEnvelope: readInboundEnvelope,
+      resolveReplyTarget: resolveInboundReplyTarget,
+    }),
   })
 }
