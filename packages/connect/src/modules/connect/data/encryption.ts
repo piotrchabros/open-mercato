@@ -32,6 +32,13 @@ export const defaultEncryptionMaps: ModuleEncryptionMap[] = [
     entityId: 'connect:connect_outbound_message',
     fields: [{ field: 'payload' }],
   },
+  {
+    // An operator's note about why an identity was linked or unlinked. It
+    // routinely names the customer and the mistake, so it is encrypted like any
+    // other free text about a person.
+    entityId: 'connect:connect_identity_link_audit',
+    fields: [{ field: 'reason' }],
+  },
 ]
 
 export default defaultEncryptionMaps

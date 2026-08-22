@@ -80,6 +80,12 @@ const events = [
     category: 'lifecycle',
     clientBroadcast: true,
   },
+  {
+    id: 'connect.projection.status_changed',
+    label: 'Customer Projection Status Changed',
+    entity: 'pending_projection',
+    category: 'lifecycle',
+  },
   /**
    * Emitted when a handle could not be matched to a customer with enough
    * confidence. Downstream matching/curation reacts to this; it deliberately

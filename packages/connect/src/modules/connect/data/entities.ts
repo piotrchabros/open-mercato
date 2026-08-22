@@ -323,6 +323,9 @@ export class ConnectContactIdentity {
     | 'confidence'
     | 'matchMethod'
     | 'handleDisplayLabel'
+    | 'associationEpoch'
+    | 'unlinkPendingSagaId'
+    | 'unlinkPendingEpoch'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -366,6 +369,25 @@ export class ConnectContactIdentity {
 
   @Property({ name: 'match_method', type: 'text', nullable: true })
   matchMethod?: string | null
+
+  /**
+   * Association epoch. Bumped on every link, so a projection created under one
+   * link belongs to a retraction group a LATER link's unlink cannot reach.
+   */
+  @Property({ name: 'association_epoch', type: 'int', default: 0 })
+  associationEpoch: number = 0
+
+  /**
+   * Unlink fence. While set, every ingest, link, resolve and projection writer
+   * refuses under the shared identity lock — otherwise a projection admitted
+   * mid-unlink would fall outside the inventory the saga already committed to,
+   * and would survive the retraction it should have been part of.
+   */
+  @Property({ name: 'unlink_pending_saga_id', type: 'text', nullable: true })
+  unlinkPendingSagaId?: string | null
+
+  @Property({ name: 'unlink_pending_epoch', type: 'int', nullable: true })
+  unlinkPendingEpoch?: number | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
@@ -1103,6 +1125,393 @@ export class ConnectUnknownDelivery {
 
   @Property({ name: 'acknowledge_reason', type: 'text', nullable: true })
   acknowledgeReason?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+// ── Customer projection ───────────────────────────────────────
+
+export type ConnectIdentityLinkAction = 'link' | 'unlink' | 'relink'
+
+/**
+ * Append-only record of every identity link change.
+ *
+ * The ONLY place a prior customer association survives an unlink. Clearing the
+ * association elsewhere is what makes unlink actually remove exposure; keeping
+ * the history here is what makes it auditable. Ordinary customer-context reads
+ * never touch this table, so an agent cannot recover the old association from
+ * the audit trail.
+ */
+@Entity({ tableName: 'connect_identity_link_audits' })
+@Index({
+  name: 'connect_identity_link_audits_identity_idx',
+  properties: ['tenantId', 'identityId', 'createdAt'],
+})
+@Check({
+  name: 'connect_identity_link_audits_action_chk',
+  expression: `"action" in ('link', 'unlink', 'relink')`,
+})
+export class ConnectIdentityLinkAudit {
+  [OptionalProps]?: 'createdAt' | 'fromCustomerKind' | 'fromCustomerId' | 'toCustomerKind' | 'toCustomerId' | 'reason'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'identity_id', type: 'uuid' })
+  identityId!: string
+
+  @Property({ name: 'action', type: 'text' })
+  action!: ConnectIdentityLinkAction
+
+  @Property({ name: 'actor_user_id', type: 'uuid' })
+  actorUserId!: string
+
+  @Property({ name: 'from_customer_kind', type: 'text', nullable: true })
+  fromCustomerKind?: 'person' | 'company' | null
+
+  @Property({ name: 'from_customer_id', type: 'uuid', nullable: true })
+  fromCustomerId?: string | null
+
+  @Property({ name: 'to_customer_kind', type: 'text', nullable: true })
+  toCustomerKind?: 'person' | 'company' | null
+
+  @Property({ name: 'to_customer_id', type: 'uuid', nullable: true })
+  toCustomerId?: string | null
+
+  /** Encrypted at rest — an operator's note about a customer. */
+  @Property({ name: 'reason', type: 'text', nullable: true })
+  reason?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+}
+
+export type ConnectManualMatchStatus = 'open' | 'resolved' | 'superseded'
+
+/**
+ * Work item for an unresolved identity.
+ *
+ * At most one OPEN task per identity: a customer writing five times should
+ * produce one thing to do, not five. Phase 1 has no assignee — the queue is an
+ * organization-wide, oldest-first list, because routing rules are a separate
+ * decision from having a queue at all.
+ */
+@Entity({ tableName: 'connect_manual_match_tasks' })
+@Index({
+  name: 'connect_manual_match_tasks_open_uq',
+  expression:
+    `create unique index "connect_manual_match_tasks_open_uq" on "connect_manual_match_tasks" ("tenant_id", "organization_id", "identity_id") where "status" = 'open'`,
+})
+@Index({
+  name: 'connect_manual_match_tasks_queue_idx',
+  properties: ['tenantId', 'organizationId', 'status', 'createdAt'],
+})
+@Check({
+  name: 'connect_manual_match_tasks_status_chk',
+  expression: `"status" in ('open', 'resolved', 'superseded')`,
+})
+export class ConnectManualMatchTask {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'status' | 'resolution' | 'resolvedAt' | 'sourceEventId'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'identity_id', type: 'uuid' })
+  identityId!: string
+
+  @Property({ name: 'status', type: 'text', default: 'open' })
+  status: ConnectManualMatchStatus = 'open'
+
+  @Property({ name: 'resolution', type: 'text', nullable: true })
+  resolution?: string | null
+
+  /** Idempotency key for the subscriber that opens the task. */
+  @Property({ name: 'source_event_id', type: 'text', nullable: true })
+  sourceEventId?: string | null
+
+  @Property({ name: 'resolved_at', type: Date, nullable: true })
+  resolvedAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+export type ConnectProjectionStatus = 'pending' | 'projected' | 'failed' | 'superseded'
+
+/**
+ * One Customer-timeline projection intent per resolved Case.
+ *
+ * The `projectionKey` is derived from the Case id and a projection VERSION, not
+ * from retry time, so a retry is byte-identical and the source can reconcile it
+ * as a duplicate. Relinking to a different customer bumps the version, which
+ * produces a new key rather than reviving the tombstoned one — the audit chain
+ * stays intact and old content is never resurrected.
+ */
+@Entity({ tableName: 'connect_pending_projections' })
+@Unique({ name: 'connect_pending_projections_key_uq', properties: ['tenantId', 'projectionKey'] })
+@Index({
+  name: 'connect_pending_projections_drain_idx',
+  properties: ['status', 'leaseExpiresAt'],
+})
+@Index({
+  name: 'connect_pending_projections_identity_idx',
+  properties: ['tenantId', 'organizationId', 'identityId', 'status'],
+})
+@Check({
+  name: 'connect_pending_projections_status_chk',
+  expression: `"status" in ('pending', 'projected', 'failed', 'superseded')`,
+})
+export class ConnectPendingProjection {
+  [OptionalProps]?:
+    | 'createdAt'
+    | 'updatedAt'
+    | 'status'
+    | 'lastError'
+    | 'leaseExpiresAt'
+    | 'attempts'
+    | 'projectedAt'
+    | 'identityId'
+    | 'customerKind'
+    | 'customerId'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'case_id', type: 'uuid' })
+  caseId!: string
+
+  @Property({ name: 'identity_id', type: 'uuid', nullable: true })
+  identityId?: string | null
+
+  /** Opaque reference only — never a copied name, email or phone number. */
+  @Property({ name: 'customer_kind', type: 'text', nullable: true })
+  customerKind?: 'person' | 'company' | null
+
+  @Property({ name: 'customer_id', type: 'uuid', nullable: true })
+  customerId?: string | null
+
+  /** Deterministic source key. Derived from Case id + version, never from time. */
+  @Property({ name: 'projection_key', type: 'text' })
+  projectionKey!: string
+
+  @Property({ name: 'projection_version', type: 'int' })
+  projectionVersion!: number
+
+  /** The retraction group this projection belongs to. */
+  @Property({ name: 'association_epoch', type: 'int' })
+  associationEpoch!: number
+
+  @Property({ name: 'status', type: 'text', default: 'pending' })
+  status: ConnectProjectionStatus = 'pending'
+
+  @Property({ name: 'last_error', type: 'text', nullable: true })
+  lastError?: string | null
+
+  @Property({ name: 'lease_expires_at', type: Date, nullable: true })
+  leaseExpiresAt?: Date | null
+
+  @Property({ name: 'attempts', type: 'int', default: 0 })
+  attempts: number = 0
+
+  @Property({ name: 'projected_at', type: Date, nullable: true })
+  projectedAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+export type ConnectRetractionPhase =
+  | 'pending_hide'
+  | 'committing'
+  | 'finalizing'
+  | 'completed'
+  | 'aborted'
+
+export type ConnectSagaDecision = 'undecided' | 'commit' | 'abort'
+
+/**
+ * The unlink coordinator's durable state.
+ *
+ * Unlink spans two modules, so neither a lost acknowledgement nor a coordinator
+ * crash may leave a customer's timeline half-cleared. The saga stores the exact
+ * inventory it intends to retract BEFORE calling the peer, and a monotonic
+ * decision, so recovery converges by reading both ledgers rather than guessing.
+ */
+@Entity({ tableName: 'connect_retraction_sagas' })
+@Unique({
+  name: 'connect_retraction_sagas_saga_uq',
+  properties: ['tenantId', 'organizationId', 'sagaId', 'epoch'],
+})
+@Index({
+  name: 'connect_retraction_sagas_recovery_idx',
+  properties: ['phase', 'leaseExpiresAt'],
+})
+@Check({
+  name: 'connect_retraction_sagas_phase_chk',
+  expression: `"phase" in ('pending_hide', 'committing', 'finalizing', 'completed', 'aborted')`,
+})
+@Check({
+  name: 'connect_retraction_sagas_decision_chk',
+  expression: `"decision" in ('undecided', 'commit', 'abort')`,
+})
+export class ConnectRetractionSaga {
+  [OptionalProps]?:
+    | 'createdAt'
+    | 'updatedAt'
+    | 'phase'
+    | 'decision'
+    | 'lastError'
+    | 'leaseExpiresAt'
+    | 'attempts'
+    | 'completedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'identity_id', type: 'uuid' })
+  identityId!: string
+
+  @Property({ name: 'saga_id', type: 'text' })
+  sagaId!: string
+
+  /** Monotonic fence. A stale recovery worker's lower epoch is rejected. */
+  @Property({ name: 'epoch', type: 'int' })
+  epoch!: number
+
+  @Property({ name: 'association_epoch', type: 'int' })
+  associationEpoch!: number
+
+  /** Complete, precommitted list of source keys this saga retracts. */
+  @Property({ name: 'inventory', type: 'jsonb' })
+  inventory!: string[]
+
+  @Property({ name: 'phase', type: 'text', default: 'pending_hide' })
+  phase: ConnectRetractionPhase = 'pending_hide'
+
+  @Property({ name: 'decision', type: 'text', default: 'undecided' })
+  decision: ConnectSagaDecision = 'undecided'
+
+  @Property({ name: 'actor_user_id', type: 'uuid' })
+  actorUserId!: string
+
+  @Property({ name: 'last_error', type: 'text', nullable: true })
+  lastError?: string | null
+
+  @Property({ name: 'lease_expires_at', type: Date, nullable: true })
+  leaseExpiresAt?: Date | null
+
+  @Property({ name: 'attempts', type: 'int', default: 0 })
+  attempts: number = 0
+
+  @Property({ name: 'completed_at', type: Date, nullable: true })
+  completedAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+export type ConnectPendingRetractionStatus = 'pending' | 'finalized' | 'failed'
+
+/** One finalize job per projection a saga hid. Bounded retry, never a delete. */
+@Entity({ tableName: 'connect_pending_retractions' })
+@Unique({ name: 'connect_pending_retractions_key_uq', properties: ['tenantId', 'projectionKey'] })
+@Index({
+  name: 'connect_pending_retractions_drain_idx',
+  properties: ['status', 'leaseExpiresAt'],
+})
+@Check({
+  name: 'connect_pending_retractions_status_chk',
+  expression: `"status" in ('pending', 'finalized', 'failed')`,
+})
+export class ConnectPendingRetraction {
+  [OptionalProps]?:
+    | 'createdAt'
+    | 'updatedAt'
+    | 'status'
+    | 'lastError'
+    | 'leaseExpiresAt'
+    | 'attempts'
+    | 'finalizedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'saga_id', type: 'text' })
+  sagaId!: string
+
+  @Property({ name: 'case_id', type: 'uuid' })
+  caseId!: string
+
+  @Property({ name: 'identity_id', type: 'uuid' })
+  identityId!: string
+
+  @Property({ name: 'projection_key', type: 'text' })
+  projectionKey!: string
+
+  /** The association that was cleared. Kept for audit, never read as active. */
+  @Property({ name: 'former_customer_kind', type: 'text', nullable: true })
+  formerCustomerKind?: 'person' | 'company' | null
+
+  @Property({ name: 'former_customer_id', type: 'uuid', nullable: true })
+  formerCustomerId?: string | null
+
+  @Property({ name: 'status', type: 'text', default: 'pending' })
+  status: ConnectPendingRetractionStatus = 'pending'
+
+  @Property({ name: 'last_error', type: 'text', nullable: true })
+  lastError?: string | null
+
+  @Property({ name: 'lease_expires_at', type: Date, nullable: true })
+  leaseExpiresAt?: Date | null
+
+  @Property({ name: 'attempts', type: 'int', default: 0 })
+  attempts: number = 0
+
+  @Property({ name: 'finalized_at', type: Date, nullable: true })
+  finalizedAt?: Date | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

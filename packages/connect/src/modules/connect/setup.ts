@@ -40,6 +40,8 @@ const RECEIPT_SWEEP_INTERVAL_SECONDS = 300
 const OUTBOUND_DISPATCH_SWEEP_INTERVAL_SECONDS = 60
 const RECONCILE_SWEEP_INTERVAL_SECONDS = 900
 const AUTO_CLOSE_SWEEP_INTERVAL_SECONDS = 3600
+const PROJECTION_DRAIN_SWEEP_INTERVAL_SECONDS = 120
+const PROJECTION_RECOVERY_SWEEP_INTERVAL_SECONDS = 300
 
 /**
  * `scheduled_jobs.id` is a uuid column, so a module-owned schedule's stable key
@@ -66,10 +68,17 @@ export const setup: ModuleSetupConfig = {
       'connect.cases.manage',
       'connect.inbox.recovery.view',
       'connect.inbox.recovery.acknowledge',
+      'connect.customer_match.read',
+      'connect.customer_match.link',
+      'connect.customer_match.unlink',
+      'connect.customer_match.recover',
     ],
     // A front-line agent handles their own work and claims from the unassigned
-    // queue. Deliberately no `cases.view.all`, `assign` or `manage`.
-    employee: ['connect.inbox.handle'],
+    // queue, and may match an identity to a customer. Deliberately no
+    // `cases.view.all`, `assign`, `manage`, `unlink`, `recover` or `audit`:
+    // taking an exposure back is a supervisory act, and reading historical
+    // associations is a restricted one.
+    employee: ['connect.inbox.handle', 'connect.customer_match.read', 'connect.customer_match.link'],
   },
 
   async seedDefaults({ container, organizationId, tenantId }) {
@@ -114,6 +123,22 @@ export const setup: ModuleSetupConfig = {
         seconds: RECONCILE_SWEEP_INTERVAL_SECONDS,
         description:
           'Re-checks deliveries whose outcome is unknown, using the read-only status lookup. Never resends.',
+      },
+      {
+        key: `connect:${organizationId}:projection-drain-sweep`,
+        name: 'Connect customer projection drain',
+        queue: CONNECT_QUEUES.projectionDrain,
+        seconds: PROJECTION_DRAIN_SWEEP_INTERVAL_SECONDS,
+        description:
+          'Materializes staged Customer 360 projections and finalizes hidden interactions after an unlink.',
+      },
+      {
+        key: `connect:${organizationId}:projection-recovery-sweep`,
+        name: 'Connect unlink saga recovery',
+        queue: CONNECT_QUEUES.projectionRecovery,
+        seconds: PROJECTION_RECOVERY_SWEEP_INTERVAL_SECONDS,
+        description:
+          'Converges unlink sagas after a lost acknowledgement or a coordinator crash, by reading the source ledger.',
       },
       {
         key: `connect:${organizationId}:case-auto-close-sweep`,
