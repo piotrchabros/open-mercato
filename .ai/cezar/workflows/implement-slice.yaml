@@ -8,7 +8,7 @@ description: >-
 steps:
   - id: setup
     name: Prepare the slice
-    command: "corepack yarn install-skills && mkdir -p .ai/analysis/impl-pipeline && rm -f .ai/analysis/impl-pipeline/HALT && echo '--- skills installed, gate state reset ---'"
+    command: "sh .ai/scripts/pipeline-setup.sh .ai/analysis/impl-pipeline --deps"
 
   - id: plan
     name: Plan the parallel work

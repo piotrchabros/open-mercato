@@ -122,9 +122,16 @@ line per gate and each unmet condition beneath it.
 ## 0. Pre-session
 
 ```bash
-corepack yarn install-skills     # BEFORE the session opens
+sh scripts/install-skills.sh     # BEFORE the session opens
 git add <the design prototype>   # first commit of the branch
 ```
+
+Invoke the installer as a script, not as `corepack yarn install-skills`. A cezar run starts in a
+fresh worktree with no `node_modules`, and Yarn 4 resolves `yarn <script>` through the install
+state, so the yarn form dies before the installer runs — with `Couldn't find the node_modules
+state file`, which reads like a broken installer rather than a missing install. The pipelines'
+`setup` steps call `.ai/scripts/pipeline-setup.sh`, which does this plus the gate-state reset,
+and installs dependencies too when the pipeline's later steps run yarn scripts (`--deps`).
 
 **The skill registry loads at session start.** Skills installed mid-session are invisible to the
 Skill tool — one package had to hand-execute three review passes by reading `SKILL.md` directly,
