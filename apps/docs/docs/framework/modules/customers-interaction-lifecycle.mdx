@@ -1,0 +1,138 @@
+---
+title: Customer Interaction Lifecycle
+description: Source-owned creation and retraction of projected Customer 360 interactions.
+---
+
+# Customer Interaction Lifecycle
+
+A module that resolves an identity — Connect matching an inbound email to a person, for
+example — wants to put that conversation on the customer's timeline. Creating the interaction is
+easy. **Taking it back is the hard part**, and it is the part that matters: a mistaken identity
+link puts someone else's conversation on a customer's record.
+
+Hard deletion would destroy audit evidence, and letting the downstream module write customer
+tables directly would violate the module boundary. So the `customers` module owns both
+directions. Connect upstream Contract B
+(`.ai/specs/2026-08-21-connect-upstream-customer-interaction-contract.md`).
+
+| DI key | Operations |
+|--------|-----------|
+| `customersInteractionLifecycle` | `resolveCustomerReference`, `createInteraction`, `beginRetractionSaga`, `listRetractions`, `commitRetractionSaga`, `abortRetractionSaga`, `finalizeRetractionSaga` |
+
+It is registered **beside** the legacy `customers.interactions.create` command, not instead of
+it: existing callers keep their signature and behaviour, and only a module that needs retractable
+projections opts in here.
+
+## Authorization
+
+Every operation requires a trusted server-side actor holding
+`customers.interactions.retract` (wildcard-aware). It is **not granted to any default role** — it
+is a service grant for a trusted projector, not a human capability, and there is no browser path
+to any operation.
+
+Creation requires it too. Granting create and retract separately would allow a projector that can
+put things on a customer's timeline but never take them back, which is precisely the failure this
+contract exists to prevent.
+
+## Validating a customer reference
+
+```ts
+const reference = await lifecycle.resolveCustomerReference({
+  kind: 'person',            // person | company only
+  id: customerId,
+  scope: { tenantId, organizationId },
+})
+```
+
+Returns `{ kind, id }` and **nothing else**. A projector does not need the customer's name or
+email just to link to them, so it does not receive them.
+
+Every negative answer is the same answer — `missing`. Wrong kind, deleted, sibling organization,
+foreign tenant: a caller must not be able to learn that a customer id exists somewhere it cannot
+see. A kind outside `person | company` is rejected without a query at all, because `deal` and
+`address` are real customer entities and silently widening the set would allow projections this
+contract was never reviewed for.
+
+## Creating a projection
+
+```ts
+await lifecycle.createInteraction({
+  scope, actor,
+  customer: { kind: 'person', id },
+  namespace: 'connect',
+  sourceKey: 'msg-4711',        // deterministic
+  identityId, associationEpoch, // the retraction group
+  payload: { interactionType: 'email', title, body },
+})
+```
+
+Creation is idempotent on `(namespace, sourceKey)`, enforced by a partial unique index:
+
+| Retry | Result |
+|-------|--------|
+| Identical payload and group | `duplicate` with the original id — nothing is written |
+| Changed payload | `conflict: payload_mismatch` |
+| Different identity or association epoch | `conflict: group_mismatch` |
+
+A changed payload is a conflict rather than an update because silently rewriting a customer's
+timeline entry is not something a *retry* should do. A different group is a conflict because a row
+adopted into the wrong group could never be reached by that group's retraction.
+
+## The retraction group
+
+`(namespace, identityId, associationEpoch)` is immutable per interaction and indexed. Unlinking an
+identity retracts exactly the members of one group, so a **later re-link (a new epoch) can never
+be retracted by an older unlink**.
+
+## The retraction saga
+
+Retraction is journaled by the source rather than driven by the caller, so it survives a lost
+acknowledgement in either direction.
+
+```
+begin ──▶ commit ──▶ finalize   (tombstoned)
+      └──▶ abort  ──▶ finalize   (restored)
+```
+
+**`beginRetractionSaga`** takes the caller's complete view of the group's active source keys and
+accepts it only when it **exactly equals** the source's stored set:
+
+- an omitted key would leave part of a mistaken link visible on the timeline;
+- an extra key means the caller's view is stale and the whole request is suspect.
+
+Either way the result is `inventory_conflict`, **nothing is hidden**, and the response carries
+`missingFromRequest` / `unknownInRequest` so the caller can see how its view drifted.
+
+**`commitRetractionSaga` / `abortRetractionSaga`** record a monotonic, mutually exclusive
+decision. Replaying the same decision is idempotent; the opposite one is refused, so a recovery
+worker cannot flip a settled saga.
+
+**`finalizeRetractionSaga`** applies the recorded decision. It is separate from the decision so a
+crash between deciding and applying is recoverable: a worker re-runs `finalize` and gets the same
+outcome, because the *decision* — not the caller's intent — is what is stored.
+
+**`listRetractions`** answers "what did my saga actually hide?" for a caller that never saw the
+`begin` response. Guessing would mean either re-hiding or assuming nothing happened.
+
+`epoch` fences stale workers: an operation carrying an older epoch than the stored one is rejected
+outright.
+
+## How hiding works
+
+A retraction sets `deleted_at` alongside `retraction_state`.
+
+That is deliberate. The module's soft-delete predicate is **already applied by every ordinary
+reader**, so routing retraction through it cannot be defeated by a reader that forgets a newly
+invented predicate — a real risk given how many read paths the customers module has.
+`retraction_state` (`pending_hidden` → `tombstoned`) is what lets a restricted audit reader tell a
+retraction from a user deletion, and what lets an abort restore precisely its own members.
+
+An abort restores only rows still marked `pending_hidden` by that saga. A row an operator deleted
+in the meantime stays deleted: an abort must undo the saga, not resurrect unrelated decisions.
+
+## Backward compatibility
+
+Every column is nullable and every index is partial on `source_namespace IS NOT NULL`, so
+hand-created interactions and all existing rows are untouched. The legacy
+`customers.interactions.create` command keeps its signature. Rolling back stops accepting new
+tombstones but must not automatically revive already tombstoned interactions.
