@@ -1,0 +1,15 @@
+{
+  "connect.errors.organizationRequired": "Selecciona primero una organización.",
+  "connect.errors.reopenWindowTooLong": "La ventana de reapertura no puede ser mayor que la de cierre automático.",
+  "connect.nav.group": "Integraciones",
+  "connect.nav.title": "Connect",
+  "connect.receipts.acknowledged": "Confirmado. El registro se conserva para auditoría.",
+  "connect.receipts.notReplayable": "Solo se puede reprocesar un mensaje en la cola de fallos.",
+  "connect.settings.attachWindowHours": "Ventana de asociación (horas)",
+  "connect.settings.autoCloseAfterDays": "Cierre automático tras (días)",
+  "connect.settings.identityMatchThreshold": "Umbral de coincidencia de identidad",
+  "connect.settings.reopenWindowDays": "Ventana de reapertura (días)",
+  "connect.settings.suppressionCount": "Mensajes antes de suprimir",
+  "connect.settings.suppressionWindowMinutes": "Ventana de supresión (minutos)",
+  "connect.settings.title": "Ajustes de recepción"
+}

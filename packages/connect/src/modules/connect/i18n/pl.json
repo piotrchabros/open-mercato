@@ -1,0 +1,15 @@
+{
+  "connect.errors.organizationRequired": "Najpierw wybierz organizację.",
+  "connect.errors.reopenWindowTooLong": "Okno ponownego otwarcia nie może być dłuższe niż okno automatycznego zamknięcia.",
+  "connect.nav.group": "Integracje",
+  "connect.nav.title": "Connect",
+  "connect.receipts.acknowledged": "Potwierdzono. Wpis zachowano na potrzeby audytu.",
+  "connect.receipts.notReplayable": "Tylko wiadomość odłożona jako nieprzetwarzalna może zostać ponowiona.",
+  "connect.settings.attachWindowHours": "Okno dołączania (godziny)",
+  "connect.settings.autoCloseAfterDays": "Automatyczne zamknięcie po (dniach)",
+  "connect.settings.identityMatchThreshold": "Próg dopasowania tożsamości",
+  "connect.settings.reopenWindowDays": "Okno ponownego otwarcia (dni)",
+  "connect.settings.suppressionCount": "Wiadomości przed wyciszeniem",
+  "connect.settings.suppressionWindowMinutes": "Okno wyciszenia (minuty)",
+  "connect.settings.title": "Ustawienia przyjmowania"
+}

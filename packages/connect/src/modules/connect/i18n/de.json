@@ -1,0 +1,15 @@
+{
+  "connect.errors.organizationRequired": "Wählen Sie zuerst eine Organisation aus.",
+  "connect.errors.reopenWindowTooLong": "Das Wiedereröffnungsfenster darf nicht länger sein als das Fenster für das automatische Schließen.",
+  "connect.nav.group": "Integrationen",
+  "connect.nav.title": "Connect",
+  "connect.receipts.acknowledged": "Bestätigt. Der Eintrag bleibt zur Nachvollziehbarkeit erhalten.",
+  "connect.receipts.notReplayable": "Nur eine als unzustellbar markierte Nachricht kann erneut verarbeitet werden.",
+  "connect.settings.attachWindowHours": "Zuordnungsfenster (Stunden)",
+  "connect.settings.autoCloseAfterDays": "Automatisch schließen nach (Tagen)",
+  "connect.settings.identityMatchThreshold": "Schwellenwert für Identitätszuordnung",
+  "connect.settings.reopenWindowDays": "Wiedereröffnungsfenster (Tage)",
+  "connect.settings.suppressionCount": "Nachrichten vor Unterdrückung",
+  "connect.settings.suppressionWindowMinutes": "Unterdrückungsfenster (Minuten)",
+  "connect.settings.title": "Eingangseinstellungen"
+}
