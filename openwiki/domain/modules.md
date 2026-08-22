@@ -232,6 +232,22 @@ Customer-facing identity and portal authentication. Fully separate from the inte
 | `customer_auth_token` | Signed JWT with claims | 8 hours |
 | `customer_session_token` | Raw session token | 30 days |
 
+### Session Revalidation & Token Lifecycle
+
+A signed `customer_auth_token` alone never authorizes a request. Every request revalidates the referenced session and user state before trusting the JWT:
+
+1. **Audience verification** — `verifyAudienceJwt(CUSTOMER_JWT_AUDIENCE, token)` (`lib/customerAuth.ts:115`). A staff-audience JWT replayed into the `customer_auth_token` cookie is rejected outright; the session check is never reached.
+2. **`sid` presence** — tokens without a `sid` claim are rejected, *unless* they are legacy tokens (below). Legacy/stolen sessionless tokens cannot survive this gate.
+3. **Session-liveness revalidation** — `assertSessionStillActive()` resolves `customerSessionService` from the request container and calls **`findActiveSessionForClaims({ sessionId, userId, tenantId, organizationId })`** (`services/customerSessionService.ts:109`), not the older id-only `findActiveSessionById`. The claims-scoped lookup matches the session row against the JWT's `sub`/`tenantId`/`orgId` *and* the soft-delete/expiry predicates, so a session id valid for one customer identity or scope is null for another. If the lookup throws (degraded backend), the request **fails closed** — the token is treated as revoked to prevent replay of leaked JWTs.
+4. **User-state validation** — `validateUserState()` (`lib/customerAuth.ts:59`) reloads `CustomerUser` from the DB and rejects soft-deleted, deactivated, or `sessionsRevokedAt`-stale users (a JWT minted before `sessionsRevokedAt` is dead).
+5. **DB-resolved features** — `resolvedFeatures`/`isPortalAdmin` come from `CustomerRbacService.loadAcl` + `getEffectiveFeatures`, **never** from the JWT claims. A token claiming `portal.admin.all` still only gets the features the DB grants.
+
+#### Legacy-token grace window
+
+Pre-migration customer tokens signed with the raw `JWT_SECRET` (no `aud`/`iss`, no `sid`) are accepted only while `verifyJwt` still considers them legacy — it owns the grace window (`JWT_LEGACY_GRACE_MINUTES` / `JWT_LEGACY_CUTOVER_AT`) and marks the payload with `_legacyToken === true`. A legacy token inside the window **bypasses** the session check (it has no `sid`); once the window passes, or when `JWT_LEGACY_GRACE_MINUTES=0`, the same token is rejected. This is the only path that skips `findActiveSessionForClaims`. The equivalent server-component entrypoints are `getCustomerAuthFromCookies` (`lib/customerAuthServer.ts:54`) and the host-aware `getCustomerAuthForHost` (`lib/customerAuthServer.ts:117`); see the [Custom Domain Lifecycle](#custom-domain-lifecycle) for how the latter binds a host-resolved `expectedTenantId` and rejects cross-host replay.
+
+The invariants above are pinned by the customer auth test suites — see [testing/guidance.md → Customer Portal Auth / Session Revocation](../testing/guidance.md#customer-portal-auth--session-revocation).
+
 ### RBAC Model (Two-Layer)
 1. **Role ACLs** (`CustomerRoleAcl`) — features assigned to roles
 2. **User ACLs** (`CustomerUserAcl`) — per-user overrides (takes precedence)
