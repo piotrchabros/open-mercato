@@ -3,182 +3,96 @@
 | Field | Value |
 |---|---|
 | Date | 2026-08-22 |
-| Status | Proposed; ready after prerequisite contracts |
-| Scope | `connect_sla` policies, calendars, generation-aware clocks, response stamping, reconciliation |
-| Depends on | Auth principal-kind contract; Connect Case re-parenting contract; Phase 1 Connect |
+| Status | Proposed; ready after prerequisite implementation and maintainer contract approval |
+| Scope | Optional `connect_sla` calendars, policies, clocks and reconciliation |
+| Depends on | Connect SLA source facts contract; Connect Case re-parenting contract |
 
 ## TLDR
 
-Add a separately activatable `connect_sla` module with versioned policies and timezone-correct business calendars. Each Case generation receives an immutable policy/calendar snapshot and deadlines. `responded_at` is stamped exactly once only from confirmed delivery with immutable evidence of a human author or human-accepted AI draft. Split inherits the parent's response clock; merge terminates the losing clock as `merged`. Enable-time reconciliation derives clocks from Phase 1 facts idempotently.
+Add the soft-optional `connect_sla` consumer. It owns immutable policy/calendar versions, independent response/resolution states, deadline workers and reconciliation. It consumes the separate Connect SLA source-facts contract and never infers from mutable Connect rows. Existing unverifiable sends arrive as `unknown` and never count.
 
-Out of scope: routing, offers, live channels, bots/AI generation, remote iCalendar synchronization, and changing Phase 1 Case API fields.
+Out of scope: routing, offers, bot generation, remote iCalendar sync, reporting and cost accounting.
 
-## Overview
+## Overview and Problem
 
-Phase 1 stores `ConnectCase.firstOutboundSentAt`, but it is not human-qualified and cannot be the canonical SLA response value. SLA therefore consumes identifier-only Connect events plus scoped source-owned readers; it never imports Connect or Auth ORM entities. Disabling the module removes its routes/navigation/workers while retaining data.
+Wall time cannot represent timezone business commitments, mutable policies must not rewrite history, and asynchronous facts must converge across duplicate/live/backfill races. The separate source contract supplies immutable evidence, generation and complete lifecycle facts.
 
-> **Market references:** Zammad makes calendars first-class SLA inputs with timezone, business hours, and holidays; Cal.com models timezone-bound weekly availability plus date overrides. We adopt those shapes and deterministic policy precedence. We reject runtime coupling to `planner`, whose fixed-millisecond recurrence is not DST-correct, and defer remote iCalendar sync because it adds SSRF, provenance, and retry semantics.
+The dependency direction is strict: SLA accesses Connect only through DI and scalar IDs. Missing facades make workers no-op with unhealthy state and routes return `503 dependency_unavailable`. Disabling SLA retains data and changes no Connect behavior.
 
-## Problem Statement
+## SLA Data Model and State Machines
 
-Elapsed wall time cannot represent support commitments across local working hours, holidays, and DST. A mutable deadline derived from today's policy would rewrite history. Concurrent delivery outcomes can also double-claim a first response, while missing/system authors must fail closed rather than count as human.
+All tables are plural snake-case with UUID, tenant, organization and created time. Peer links are scalar IDs.
 
-## Proposed Solution
+- `connect_sla_business_calendars`: name, default flag, current version, updated/deleted; scoped active-name unique and one active default; optimistic lock.
+- `connect_sla_business_calendar_versions`: calendar/version/timezone/publisher/published; scoped unique and immutable.
+- `connect_sla_business_windows`: version, weekday Sunday=0..Saturday=6, local start/end; publication normalizes overnight and rejects overlap.
+- `connect_sla_business_holidays`: version/date/encrypted nullable label; scoped unique. Label is in `connect_sla/encryption.ts`; reads use `findWithDecryption`.
+- `connect_sla_policies`: name, priority, active/current version, updated/deleted; optimistic lock.
+- `connect_sla_policy_versions`: policy/version, nullable channel, positive response/resolution target minutes, nonnegative warnings below targets, calendar version, effective/published metadata; immutable.
+- `connect_sla_case_clocks`: scoped unique case/generation; source/version IDs; immutable start/due values; independent response and resolution fields; pause/lineage; internal version and updated time.
+- receipts unique scoped source-event/consumer-version; rebuild runs unique scoped command key with watermark, three cursors, lease, status/counts/ProgressJob; append-only clock revision audit.
 
-- New module `packages/connect/src/modules/connect_sla` with its own entities, ACL, DI, APIs, workers, events, migrations, snapshot, and five locales.
-- Connect exposes `connectCaseSlaReader`; Auth exposes `authPrincipalKindReader`. Both return scoped plain values and are resolved softly through DI.
-- Policies and calendars are editable identities whose published versions are immutable. Clocks reference versions and snapshot computed targets.
-- Persistent subscribers install before reconciliation. Every source event is deduplicated; reconciliation paginates and upserts the same deterministic keys.
-- Business-time arithmetic operates on IANA zones/local dates, explicitly resolves DST gaps/folds, and never adds fixed UTC milliseconds.
+Policy match at start: active/effective exact Case channel before null wildcard, then ascending priority and policy UUID. No match creates an observable `no_policy` result and no clock. Referenced versions cannot delete. Publish inserts next immutable version; undo supersedes rather than edits history.
 
-## Architecture
+Response state is `open|met|breached|unknown`; resolution is `open|met|breached|merged|superseded`. Response never pauses. Due worker makes open→breached once; later response stores timestamp but remains breached. Unknown never stamps. Resolution breach likewise remains after late resolution. Merge changes only losing current open resolution to merged; prior generations/response remain. Rebuild creates an audited replacement revision and supersedes erroneous state rather than rewriting history.
 
-```text
-Auth principal reader ──┐
-Connect outbox events ──┼─> connect_sla subscribers -> clock/event receipt transaction
-Connect SLA reader  ────┘                 │
-policy + calendar versions ───────────────┘
-                                          └─> scoped SLA reader/API/optional UI injection
-```
+## Normative Business-Time Algorithm
 
-Policy precedence is ascending `priority`, then stable policy UUID. The first active matching policy wins. A clock snapshots the selected policy version and calendar version; later edits affect only new generations or an explicit guarded rebuild that creates a new versioned outcome, never historical values in place.
+Use existing `date-fns-tz`, no new dependency.
 
-Response clocks never pause. Resolution pause accrues only for a proven customer-wait interval; calendar closures already exclude non-business time and are never also added as pause seconds.
+1. Validate IANA zone with `Intl.DateTimeFormat`.
+2. Windows are local `[start,end)` at second precision; integer minutes become seconds; zero target returns input.
+3. Publication splits overnight windows across dates, merges adjacent segments, rejects overlap; a holiday removes segments whose local start date equals it.
+4. Resolve boundaries by round-trip local components. In a DST gap advance to first valid instant after the gap. In a fold choose earlier instant for start and later for end, counting the repeated interval once across full real duration.
+5. Iterate local dates, intersect resolved segments with cursor onward, consume real seconds. Bound search to 3,660 dates/10 years; no reachable time is `calendar_exhausted`; empty calendars cannot publish.
+6. Pause measurement intersects `[waitStart,waitEnd)` with the same business segments, so closed time is not double-counted. Recomputed due is addBusinessSeconds(start,target+businessPauseSeconds).
 
-## Data Models
+Tests pin gaps/folds, non-hour offsets, overnight/adjacent, holidays, leap day, exact boundaries, monotonicity and add/measure round trips. Persisted UTC deadlines do not change with future tzdata.
 
-Every row has UUID `id`, non-null `tenant_id` and `organization_id`, `created_at`; editable identities also have optimistic-lock `updated_at` and nullable `deleted_at`.
+## Commands, Events, Workers and Reconciliation
 
-### `connect_sla_business_calendar`
+Strict Zod/inferred commands: policy/calendar create/update/delete/publish; internal clock apply-source/evaluate-due/reparent/rebuild. User CRUD uses canonical logs and `extractUndoPayload`; unsafe referenced publication/delete rejects. Internal facts are idempotent, not user undo. Rebuild has reason, guards, optimistic run version and revision audit.
 
-`name`, `timezone` (validated IANA), `is_default`, `published_version`, lifecycle columns. At most one active default per organization.
+SLA events: `connect_sla.clock.started|responded|response_breached|resolved|resolution_breached|merged|superseded`, exact V1 payload `{schemaVersion,clockId,caseId,generation,responseState,resolutionState,occurredAt,sourceEventId}`. Receipt, conditional clock update and outbox event share one transaction.
 
-### Immutable calendar versions
+Queues are `connect_sla.deadline_sweep` and `connect_sla.rebuild`. One-minute sweep claims ≤100 due open clocks by `(next_due_at,id)` with `FOR UPDATE SKIP LOCKED`; conditional transitions converge. Warning is derived presentation; v1 adds no notification ID.
 
-`connect_sla_business_calendar_version`: `(calendar_id, version)`, timezone snapshot, publisher/time. Children are non-overlapping `connect_sla_business_window` rows (weekday `0..6`, local start/end) and unique-date `connect_sla_business_holiday` rows. Holiday label is operator free text and is encrypted through `connect_sla/encryption.ts`; reads use `findWithDecryption`.
+Enable/rebuild: verify Auth remediation and facade schema plus Connect reader v1; install persistent subscribers; create run and capture watermark; page all three streams through it; upsert deterministic case/generation and receipts; treat pre-evidence rows as unknown; commit each cursor with its page. Live events ≤watermark converge by keys; >watermark are subscriber-only. One scoped/range lease; same key replays, overlap is 409; expired lease reclaims; cancel preserves applied facts and retry resumes.
 
-### Policy and version
+Split copies parent response facts/policy/calendar/start/due into child same-number generation; only future resolution pause diverges. Merge marks losing current resolution merged. Undo creates audited clock revision only when lineage version proves safety; otherwise manual review. Reconciliation uses the reparenting reader.
 
-`connect_sla_policy`: `name`, `priority`, `is_active`, `current_version`, lifecycle columns. Immutable `connect_sla_policy_version`: `(policy_id, version)`, optional scalar `channel_id`, response/resolution target business minutes, warning minutes, calendar-version ID, effective/published metadata.
+## API, ACL and UI Contracts
 
-### `connect_sla_case_clock`
+Canonical collection/item routes for policies and calendars, plus `[id]/publish`; clocks GET; guarded `POST /api/connect-sla/clocks/rebuild`; rebuild status GET. Every route exports OpenAPI/per-method metadata. `makeCrudRoute` handles identity CRUD; publish/rebuild use mutation guards plus legacy bridge. Exact errors: field 400, hidden 404, optimistic/overlap 409, dependency 503. Clock read calls Connect `canReadCase`. Lists are cursor ≤100.
 
-Unique `(tenant_id, organization_id, case_id, generation)`; policy/calendar version IDs; `started_at`, `response_due_at`, nullable immutable `responded_at`, `resolution_due_at`, `response_paused_seconds = 0`, `resolution_paused_seconds`, `resolved_at`, `outcome = open|met|breached|merged|superseded`, nullable `superseded_by_case_id`, `response_evidence = human|human_accepted_ai|unknown`, optimistic version.
+ACL IDs: `connect_sla.policy.view|manage`, `connect_sla.calendar.view|manage`, `connect_sla.clock.view|rebuild`; setup syncs administrator grants for new/existing tenants and wildcard tests. Workers use scoped system authority.
 
-### Idempotency state
+UI uses DataTable, CrudForm, apiCall, guarded mutations, shared conflict/loading/error/empty primitives, StatusBadge, semantic tokens, keyboard controls and accessible icon labels. Additive host `connect:inbox:case-detail:sla` carries `{caseId,clockId,responseState,resolutionState,responseDueAt,resolutionDueAt,retryLastMutation?}`; Connect never imports SLA. Keys ship en/de/es/ko/pl.
 
-`connect_sla_event_receipt` stores a scoped unique source-event ID; `connect_sla_rebuild_checkpoint` stores a resumable page watermark. No message body, address, handle, subject, or customer identity enters SLA storage/events.
+## Migration, Phasing and Tests
 
-## Commands and Events
+Deploy order: approved Connect SLA source facts and reparenting contracts; SLA schema disabled; then scoped enable/reconcile. Generate/review intended SLA SQL/snapshot; remove unrelated drift; never automate `db:migrate`.
 
-All mutations use commands; CRUD commands provide audit/undo for identity edits while published versions are superseded, never altered.
+Phases/files: create `connect_sla` discovery/ACL/setup/DI/events, data/validators/encryption/migration, business-time, commands/subscribers, deadline/rebuild/schedule workers, APIs/UI/locales/tests. No Connect source file is modified by this spec except the separately approved injection host integration. Run generate, focused DB/concurrency/integration/browser tests, package build/typecheck, decoupling, i18n advisory checks and standalone harness refresh.
 
-- `connect_sla.policy.create|update|delete|publish`
-- `connect_sla.business_calendar.create|update|delete|publish`
-- internal `connect_sla.clock.start|stamp_response|resolve|reparent|rebuild`
+Self-contained tests create API fixtures and clean in `finally`: all principal/evidence variants; distinct-attempt race; generations/late delivery/wait boundaries; DST/property cases; policy matching/version deletion/locking; watermark crash/live races/leases/unknown history; split/merge/undo; tenant/org/worker/cursor/ACL/dependency/PII; every API and accessible UI/locales.
 
-Events declared through `createModuleEvents` are identifier-only: `connect_sla.clock.started`, `.responded`, `.resolved`, `.breached`, `.merged`. Subscribers to `connect.case.opened|reopened|resolved`, `connect.outbound.status_changed`, `connect.case.split`, and `connect.case.merged` are persistent and idempotent.
+## Risks and Backward Compatibility
 
-Stamping uses a conditional update under a transaction (`responded_at IS NULL`) plus receipt uniqueness. Human evidence is snapshotted by Connect when enqueueing and emitted only when delivery is confirmed. `system_bot`, `integration`, missing/deleted/cross-tenant principals, sentinel IDs, and unknown values never stamp. A human-accepted AI draft requires non-null, same-scope `acted_by_user_id` independently resolved as human.
+Critical risks—false human, wrong generation, missing pause—are mitigated by immutable evidence, enqueue generation and complete facts. High risks—DST and backfill races—use normative arithmetic and subscriber-first watermark. Medium risks—due contention/dependency absence—use bounded indexed claims and explicit health/503.
 
-Split creates the child's generation with the parent's policy/calendar version, response due/value, and generation; only resolution may restart. Merge marks every losing open clock `merged`, sets `superseded_by_case_id`, and excludes it from attainment. The winning Case clock is unchanged.
-
-## API Contracts
-
-All route files export OpenAPI and per-method metadata.
-
-- `GET|POST|PUT|DELETE /api/connect-sla/policies` — `makeCrudRoute`, `connect_sla.policies.view/manage`, `updatedAt`, conflict 409.
-- `GET|POST|PUT|DELETE /api/connect-sla/calendars` — canonical CRUD and version publication.
-- `GET /api/connect-sla/clocks?caseId&cursor` — `connect_sla.clocks.view`; source-owned Case access is rechecked; foreign scope returns 404.
-- `POST /api/connect-sla/clocks/rebuild` — guarded custom update, bounded organization/date/cursor request, shared ProgressJob, returns 202.
-
-Lists use cursor pagination and page size ≤100. Invalid timezone/windows return field-level 400; missing dependency returns explicit 503; overlapping rebuild returns 409.
-
-## UI/UX and i18n
-
-Settings pages use `DataTable` and `CrudForm`. Inbox SLA state arrives through an optional injection host/read facade; Connect never imports SLA UI. Status uses `StatusBadge`, async states use shared detail/empty primitives, dialogs support Cmd/Ctrl+Enter and Escape, and icon-only actions have labels. All strings ship in `en`, `de`, `es`, `ko`, and `pl`.
-
-## Enablement and Backfill
-
-Auth and Connect evidence migrations land first. SLA installs subscribers, then paginates `connectCaseSlaReader`. Historical outbound rows carry `actor_user_id`; the reader resolves their same-tenant principal kind after auth backfill. Missing/deleted authors remain unknown, never guessed human. A watermark plus unique clock/receipt keys makes enable, retry, crash recovery, and live-event races converge.
-
-## Integration Test Coverage
-
-- Human, bot, integration, sentinel, deleted, malformed, cross-tenant and accepted-AI evidence; concurrent sends produce one stamp.
-- DST spring gap/fall fold, holidays, overnight/adjacent windows, timezone versions and monotonic deadlines.
-- Duplicate/out-of-order events, live/backfill races, split inheritance and merge loser closure.
-- Tenant/org/API/worker/cursor isolation, ACL wildcards, dependency absence, disable/enable and PII scans.
-- Optimistic-lock update/delete conflicts, accessible CRUD/Inbox state and complete locales.
-
-## Migration & Backward Compatibility
-
-All schemas, APIs, ACLs, events, DI services and injection hosts are additive. Existing `connect.*` contracts remain unchanged. New event IDs and API fields become frozen/stable on publication. No migration is applied by automation; `yarn db:generate` is a diff probe and the module snapshot ships with intended SQL only.
-
-## Risks & Impact Review
-
-#### Incorrect business-time deadline
-- **Scenario:** DST or overlapping windows shift a due date.
-- **Severity:** High
-- **Affected area:** SLA attainment and warnings.
-- **Mitigation:** IANA-zone algorithm, validated immutable versions, transition-boundary property tests.
-- **Residual risk:** Timezone database updates may change future, never historical, calculations.
-
-#### False human response
-- **Scenario:** Missing/system principal is treated as human or two sends race.
-- **Severity:** Critical
-- **Affected area:** Compliance reporting.
-- **Mitigation:** Fail-closed reader, immutable evidence, conditional stamp, scoped receipt uniqueness.
-- **Residual risk:** Pre-contract deleted authors remain explicitly unknown.
-
-#### Reconciliation overload
-- **Scenario:** Enablement scans millions of Cases or races live events.
-- **Severity:** Medium
-- **Affected area:** Database load and completeness.
-- **Mitigation:** Cursor batches, bounded workers, checkpoints and idempotent upserts.
-- **Residual risk:** Large tenants expose progress until complete.
-
-## Implementation Plan
-
-1. **SLA-DATA:** scaffold, ACL/setup/DI, entities, encryption, migration/snapshot.
-2. **SLA-CAL:** timezone calendar engine and policy/version commands with property tests.
-3. **SLA-CLOCK:** scoped readers, subscribers, conditional stamping, re-parenting and events.
-4. **SLA-BACKFILL:** resumable worker, progress and enablement reconciliation.
-5. **SLA-API/UI:** APIs, settings pages, optional Inbox widget and five locales.
-6. **SLA-TEST:** integration/browser isolation, concurrency, DST, locking and accessibility.
+All 13 surfaces are additive: discovery files; exact SLA types/functions; no import moves; new SLA event IDs; new widget host; new API URLs; additive SLA schema; new SLA DI keys; six ACL IDs; no notifications; no CLI; additive generated registries. Connect source contracts belong exclusively to the prerequisite spec. New identifiers require named maintainer approval and freeze on release.
 
 ## Final Compliance Report — 2026-08-22
 
-### AGENTS.md Files Reviewed
+Scope cohesion passes after owner-selected split: this spec owns only the optional SLA consumer. Isolation/scoping, deterministic calendar, canonical commands/undo, guarded APIs/locking, encryption/PII, idempotent workers/rebuild, UI/DS/i18n and all 13 BC categories pass at contract level.
 
-- `AGENTS.md`, `.ai/specs/AGENTS.md`, `packages/core/AGENTS.md`, `packages/core/src/modules/auth/AGENTS.md`
-- `packages/events/AGENTS.md`, `packages/queue/AGENTS.md`, `packages/ui/AGENTS.md`, `packages/ui/src/backend/AGENTS.md`, `packages/cli/AGENTS.md`
+## Review — 2026-08-22
 
-### Compliance Matrix
-
-| Rule | Status | Notes |
-|---|---|---|
-| Module isolation and organization scoping | Compliant | Scalar IDs, scoped DI readers, 404 isolation |
-| Canonical CRUD/HTTP/guards/locking | Compliant | Factory, guarded rebuild, `CrudForm`, `updatedAt` |
-| Events/workers idempotent | Compliant | Persistent receipts and standard workers |
-| Encryption and PII minimization | Compliant | Holiday-label map; no message/customer content |
-| Design system/i18n/accessibility | Compliant | Shared primitives, semantic tokens, five locales |
-| Additive compatibility | Compliant | New module/surfaces only |
-
-### Internal Consistency Check
-
-| Check | Status | Notes |
-|---|---|---|
-| Models match APIs/UI | Pass | Editable identities and read-only clocks align |
-| Commands cover mutations | Pass | CRUD/version/rebuild/clock commands named |
-| Risks cover writes/backfill | Pass | Concurrency, DST and scan load covered |
-| Cache strategy | Pass | No cache in v1 |
-
-### Verdict
-
-Fully compliant and ready after prerequisite contracts and readiness audit.
+Owner selected SPLIT. Source facts moved to the Connect-owned prerequisite; this consumer retains only calendars/policies/clocks/reconciliation. Verdict: ready after named maintainer approval and prerequisite implementation.
 
 ## Changelog
 
-### 2026-08-22
-
-- Initial successor specification; owner chose a `connect_sla`-owned calendar and separate Auth/Connect prerequisites.
+- 2026-08-22: Initial successor spec; calendar owned by optional SLA and Auth/reparenting split.
+- 2026-08-22: Remediated all readiness blockers with exact Connect source facts and SLA contracts.
+- 2026-08-22: Owner selected SPLIT; moved all Connect source-fact ownership to `2026-08-22-connect-sla-source-contract.md` and narrowed this spec to the optional consumer.

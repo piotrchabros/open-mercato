@@ -131,15 +131,16 @@ The existing `connect_cases_assignee_idx` supports the scope/assignee/status acc
 
 ### Reconciliation Algorithm
 
-1. Resolve `connectCurrentCaseCountReader`; if unavailable, return `dependency_unavailable` without writing.
-2. Read grouped counts for one explicit tenant and organization.
-3. In a routing-owned transaction, lock existing presence rows for that same scope.
-4. Upsert returned assignees with their absolute counts, preserving all operator/live-state fields.
-5. Set `current_case_count = 0` on existing scoped rows absent from the authoritative result.
-6. Set `count_reconciled_at` and increment `count_generation` for every changed row.
-7. Commit, then emit structured completion telemetry. A retry repeats the computation and converges.
+1. Validate the trusted scope and upsert its checkpoint to `pending` in a short committed transaction. This durable marker survives a later crash and is the retry source of truth; it never makes routing eligible.
+2. Resolve `connectCurrentCaseCountReader`; if unavailable, set that same checkpoint to `dependency_unavailable` with machine code `connect_reader_unavailable`, preserve its last completed generation/version/timestamp, and return without touching presence rows.
+3. Read grouped counts for exactly that tenant and organization. A failure after this point records `failed` plus a bounded machine code in a separate best-effort transaction while preserving the last completed generation/version/timestamp; the original error remains retryable.
+4. Start the projection transaction, execute `set local lock_timeout = '5s'`, then acquire `pg_advisory_xact_lock(hashtextextended(?, 0))` with the exact key `connect-routing-capacity:${tenantId}:${organizationId}`. A timeout rolls back projection work, records retryable `failed` / `scope_lock_timeout` through step 3's separate failure update, and preserves the last completion fields.
+5. Lock existing presence rows for that same scope and upsert returned assignees with their absolute counts, preserving all operator/live-state fields.
+6. Set `current_case_count = 0` on existing scoped rows absent from the authoritative result.
+7. In the same projection transaction, advance the scope checkpoint generation, set `foundation_version = '2026-08-22-v1'`, `state = 'completed'`, and `completed_at = now()`. This occurs even when the organization is empty or no count changed.
+8. Commit, then emit structured completion telemetry. A retry repeats the computation and converges.
 
-The operation is serialized per `(tenant_id, organization_id)` using the platform's database/advisory-lock convention selected during implementation. It processes only one scope per job; no global reconciliation transaction is allowed.
+Only reconcilers share this transaction-scoped lock; it does not claim to serialize Case assignment writes. The fixed string prefix plus both canonical UUIDs makes the hash input scope-specific. One job processes one scope and lock acquisition always precedes presence-row locks, so there is no global transaction or inverted lock order.
 
 ## Data Models
 
@@ -153,18 +154,35 @@ The operation is serialized per `(tenant_id, organization_id)` using the platfor
 | `user_id` | UUID | Logical auth user ID; no cross-module ORM relation |
 | `status` | text | `offline` in Phase 2; reserved Phase 3 values `available`, `busy`, `away`, `offline` |
 | `current_case_count` | integer | Required, default `0`, check `>= 0`; system-derived |
-| `count_generation` | integer | Required, default `0`, check `>= 0`; increments on changed reconciliation |
-| `count_reconciled_at` | timestamptz | Nullable until a successful scoped reconciliation |
 | `created_at` | timestamptz | Required |
 | `updated_at` | timestamptz | Required optimistic-lock/version timestamp for future user-editable presence state |
-| `deleted_at` | timestamptz | Nullable soft-delete lifecycle |
 
 Constraints and indexes:
 
 - Unique `(tenant_id, organization_id, user_id)`.
 - Index `(tenant_id, organization_id, status)` for future candidate lookup.
 - Check `status in ('available', 'busy', 'away', 'offline')`.
-- Check both count fields are non-negative.
+- Check `current_case_count between 0 and 2147483647`.
+
+Presence rows are durable projection identities and are not soft-deleted. Reconciliation retains rows and sets absent assignees to zero; Phase 3 may change liveness status but must not delete/recreate the identity. This makes the unconditional unique key and upsert semantics unambiguous.
+
+### `ConnectRoutingCapacityCheckpoint` (table `connect_routing_capacity_checkpoints`)
+
+| Column | Type | Rules |
+|---|---|---|
+| `id` | UUID | Primary key, generated |
+| `tenant_id` | UUID | Required scope |
+| `organization_id` | UUID | Required authorization boundary |
+| `state` | text | `pending`, `completed`, `dependency_unavailable`, or `failed`; default `pending` |
+| `foundation_version` | text | Nullable; set to `2026-08-22-v1` only by successful completion |
+| `generation` | bigint | Required, default `0`, check `>= 0`; increments on every successful run, including empty/no-op runs |
+| `last_attempt_at` | timestamptz | Required once setup/worker/CLI attempts the scope |
+| `completed_at` | timestamptz | Nullable; set atomically with completed projection writes |
+| `last_error_code` | text | Nullable bounded machine code; no raw exception or identifiers |
+| `created_at` | timestamptz | Required |
+| `updated_at` | timestamptz | Required |
+
+Unique `(tenant_id, organization_id)`. The checkpoint is never deleted. Starting an attempt durably sets `pending`, attempt time, and a null error without changing the last completed generation/version; dependency absence changes state to `dependency_unavailable`. Projection writes and the next completed generation/version/timestamp commit atomically. Thus empty and unchanged organizations have positive evidence, while crashes and failed dependencies fail closed.
 
 Rows contain no PII, names, contact data, message content, or credentials. `user_id` is an authorization-sensitive logical identifier but does not require field encryption. Reads remain scoped and no public read exists in this phase.
 
@@ -188,7 +206,9 @@ const reconcileCapacityPayloadSchema = z.object({
 
 Worker queue: `connect.routing_capacity.reconcile`.
 
-Worker outcomes are structured internal results: `reconciled` with examined/created/updated/zeroed counts, `dependency_unavailable`, or a thrown retryable failure. Payload scope is validated with Zod before resolution or database access.
+Worker metadata is fixed as `{ queue: 'connect.routing_capacity.reconcile', id: 'connect-routing:reconcile-capacity', concurrency: 3 }`. It is database-heavy, stays within the queue package's 3–5 guidance and worker connection budget, and accepts only trusted setup/CLI-produced organization-scoped jobs.
+
+Worker outcomes are structured internal results: `reconciled` with examined/created/updated/zeroed counts and checkpoint generation, `dependency_unavailable`, or a thrown retryable failure. Payload scope is validated with Zod before resolution or database access. The input types are `z.infer` derivatives, not duplicated interfaces.
 
 Any future HTTP trigger/status endpoint is Phase 3 scope and must export `metadata`, `openApi`, feature guards, mutation guards for writes, and organization-scoped responses.
 
@@ -205,10 +225,11 @@ Not applicable. This phase adds no navigation, page, form, dialog, toast, or use
 ## Performance, Scheduling, and Operations
 
 - Reader query cardinality is one row per assignee, not one row per Case; no N+1 lookup occurs.
-- Each worker handles one organization. Large organizations may be processed in a single grouped scan; the subsequent upsert/zeroing work is batched at at most 500 rows per statement while retaining one transaction.
-- `seedDefaults` performs the bounded reconciliation directly only when the scoped Case cardinality is below the implementation's measured foreground threshold. Above it, setup enqueues the scoped worker and reports initialization pending; the exact threshold is documented from benchmark evidence and must not exceed 1,000 mutated rows without worker use.
-- Setup must not fail all tenant initialization solely because the reader, scheduler, or queue is unavailable. It logs the scope and dependency state without user IDs.
-- Phase 2 does not register an endless periodic schedule. The worker exists for setup retry and explicit orchestration. Phase 3 owns the reconciliation cadence because only Phase 3 can define routing freshness SLOs.
+- Each worker handles one organization. The grouped reader returns at most one row per assignee in deterministic `assignee_user_id` order. SQL `count(*)` values are parsed from driver bigint/string form and rejected unless they are safe integers in `0..2147483647`; invalid/overflow results throw `case_count_out_of_range` before projection writes.
+- Presence upserts are batched at at most 500 rows per statement while retaining one transaction. The foreground threshold is exactly **500 authoritative assignee rows** (the grouped result length), not raw Case cardinality or inferred mutation count. The implementation benchmark records wall time and peak RSS for 500 rows; changing the threshold is a later reviewed spec change.
+- `seedDefaults` attempts reconciliation synchronously for at most 500 assignee rows. Above 500 it first persists the checkpoint as pending and enqueues the scoped worker. If the queue is unavailable, it runs the same reconciler synchronously with 500-row statements rather than abandoning the safety backfill. A failure remains durably pending/failed and is retryable by rerunning idempotent setup or the operator CLI command `mercato connect-routing reconcile-capacity --tenant-id <uuid> --organization-id <uuid>`; the CLI derives no scope from stored rows and uses the same Zod schema/service.
+- Reader absence is different from queue absence: it records `dependency_unavailable`, performs no zeroing, and returns without failing all tenant initialization. Setup logs scope and machine error code without user IDs.
+- Phase 2 does not register an endless periodic schedule. The worker and CLI are explicit retry primitives; Phase 3 owns the reconciliation cadence because only Phase 3 can define routing freshness SLOs.
 - No cache is used. The count is safety-sensitive derived state, reads are infrequent in Phase 2, and cache invalidation would add a second stale projection.
 
 Operational telemetry fields: tenant ID, organization ID, duration, authoritative-assignee count, created/updated/zeroed row counts, outcome, and error code. User IDs and Case IDs are excluded from logs.
@@ -220,17 +241,17 @@ Operational telemetry fields: tenant ID, organization ID, duration, authoritativ
 - Do not rename or remove existing Connect tables, columns, APIs, ACL IDs, event IDs, or metric formulas.
 - The migration creates empty storage only; the setup/reconciliation path performs the idempotent data backfill. Do not encode cross-module `INSERT ... SELECT connect_cases` SQL in the migration because it would bypass module isolation and fail when Connect is absent.
 - `yarn db:generate` is a diff probe. Keep only the intended migration and update `connect_routing/migrations/.snapshot-open-mercato.json`; never apply it with `yarn db:migrate` through automation.
-- Rollback disables the new module/worker and leaves its table intact. Existing Connect behavior is byte-for-byte unchanged except for the additive read service.
-- Phase 3 activation gate: every organization must have a successful reconciliation recorded after the latest Phase 2 migration, then offer evaluation recomputes the candidate count before its first offer. A missing/stale reconciliation fails routing closed; it never assumes zero.
+- Generated migrations include normal `down()` statements that drop only the two new routing tables/indexes/checks. Operational code rollback instead disables the module/worker/CLI and intentionally leaves migrated tables/data intact; schema rollback is an explicit operator migration action, never performed by application disablement. Existing Connect behavior is byte-for-byte unchanged except for the additive read service.
+- Phase 3 activation gate resolves a routing-owned checkpoint reader and requires `state = 'completed'`, `foundation_version = '2026-08-22-v1'`, `generation > 0`, and non-null `completed_at`; then offer evaluation recomputes the candidate count before its first offer. Missing, pending, failed, dependency-unavailable, or stale-version checkpoints fail routing closed and never imply zero.
 
 ## Testing Strategy and Integration Coverage
 
 ### Unit Tests
 
 - Reader includes `new`, `in_progress`, and `waiting_customer`; excludes `resolved`, `closed`, soft-deleted, and unassigned Cases.
-- Reconciler creates missing rows, updates changed absolute counts, zeroes absent assignees, preserves status and timestamps unrelated to count, and makes a second run a data no-op.
+- Reconciler creates missing rows, updates changed absolute counts, zeroes absent assignees, preserves status, and advances the checkpoint even when a second run changes no presence row.
 - Reader unavailable returns `dependency_unavailable` with no writes.
-- Negative counts and invalid status/payload values fail validation/constraints.
+- Negative, unsafe, overflowing, and non-integral counts plus invalid status/payload values fail validation/constraints.
 
 ### Integration Tests
 
@@ -244,6 +265,12 @@ Operational telemetry fields: tenant ID, organization ID, duration, authoritativ
 - **CAP-INT-008:** a large scoped fixture follows the worker/batching path within the benchmarked query and memory budget.
 - **CAP-INT-009:** module decoupling test proves `connect_routing` has no Connect entity import, ORM relation, or hard module requirement.
 - **CAP-INT-010:** Phase 3 activation-gate contract fails closed for missing/stale reconciliation and accepts a fresh completed generation.
+- **CAP-INT-011:** empty and unchanged scopes still atomically advance a completed checkpoint; a crash after pending but before projection commit never advances version/generation/completion.
+- **CAP-INT-012:** retained zero-count presence identity proves the unconditional unique key never conflicts with delete/recreate semantics.
+- **CAP-INT-013:** queue-unavailable setup completes synchronously; an injected synchronous failure leaves a durable retryable checkpoint and the CLI retry converges it.
+- **CAP-INT-014:** lock timeout returns `scope_lock_timeout`, same-scope retries serialize, and sibling scopes remain independent.
+- **CAP-INT-015:** local and async queue strategies both validate/redeliver the same job idempotently; declared concurrency fits the configured worker DB connection budget.
+- **CAP-INT-016:** aggregate string/bigint conversion accepts both bounds and rejects overflow before any projection write.
 
 There is no browser coverage because this specification adds no UI path. Integration fixtures create and clean up their own Cases and presence rows; they never rely on demo/seed data.
 
@@ -257,25 +284,26 @@ There is no browser coverage because this specification adds no UI path. Integra
 
 ### Phase 2 — Routing-Owned Projection
 
-1. Add the minimal presence entity, checks, indexes, migration, and snapshot.
+1. Add the minimal presence and organization-checkpoint entities, checks, indexes, migration, and snapshot.
 2. Implement transactional absolute reconciliation with scoped serialization.
 3. Add the validated worker and setup invocation/deferred path.
 
 ### Phase 3 — Verification and Activation Contract
 
 1. Add isolation, concurrency, crash/retry, scale, and module-absence integration coverage.
-2. Publish the internal freshness/activation result consumed by Phase 3 routing.
+2. Publish the routing-owned checkpoint reader consumed by Phase 3 routing.
 3. Run generation and the smallest complete validation gate.
 
 ## Implementation Plan
 
 - **CAP-CON-01:** Create `connect/lib/current-case-count-reader.ts` with typed contract, grouped scoped query, and unit tests.
 - **CAP-CON-02:** Register `connectCurrentCaseCountReader` additively in `connect/di.ts`; add module-decoupling coverage.
-- **CAP-DATA-01:** Create `ConnectAgentPresence`, validators, intended SQL migration, indexes/checks, and snapshot.
+- **CAP-DATA-01:** Create `ConnectAgentPresence` and `ConnectRoutingCapacityCheckpoint`, validators, intended SQL migration, indexes/checks, and snapshot.
 - **CAP-REC-01:** Implement a routing-owned reconciliation service with per-scope serialization, transaction, absolute upsert/zeroing, generation, and structured result.
-- **CAP-WRK-01:** Register `connect.routing_capacity.reconcile` with validated payload, bounded concurrency, retry-safe behavior, and structured logs.
-- **CAP-SETUP-01:** Invoke/defer reconciliation from idempotent `seedDefaults`; absence of optional infrastructure is explicit and non-destructive.
-- **CAP-TEST-01:** Ship CAP-INT-001 through CAP-INT-010 in the same change.
+- **CAP-WRK-01:** Register the pinned queue/worker ID at concurrency 3 with validated payload, retry-safe behavior, structured logs, and local/async strategy coverage.
+- **CAP-SETUP-01:** Invoke/defer reconciliation from idempotent `seedDefaults`; queue absence falls back synchronously and reader absence records a non-destructive dependency state.
+- **CAP-CLI-01:** Add the trusted, organization-explicit `connect-routing reconcile-capacity` retry command over the same schema/service.
+- **CAP-TEST-01:** Ship CAP-INT-001 through CAP-INT-016 in the same change.
 - **CAP-VAL-01:** Run `yarn generate`, the Connect workspace tests/typecheck/build, relevant integration tests, `yarn typecheck`, and `yarn lint`; probe migrations with `yarn db:generate` but do not apply them.
 
 ### File Manifest
@@ -288,6 +316,7 @@ There is no browser coverage because this specification adds no UI path. Integra
 | `packages/connect/src/modules/connect_routing/index.ts` | Create | Early module metadata with no UI/API |
 | `packages/connect/src/modules/connect_routing/di.ts` | Create | Register presence entity and reconciliation service |
 | `packages/connect/src/modules/connect_routing/setup.ts` | Create | Idempotent enable-time reconciliation/defer logic |
+| `packages/connect/src/modules/connect_routing/cli.ts` | Create | Explicit trusted retry command for pending scopes |
 | `packages/connect/src/modules/connect_routing/data/entities.ts` | Create | Minimal routing-owned presence projection |
 | `packages/connect/src/modules/connect_routing/data/validators.ts` | Create | Worker and internal input schemas |
 | `packages/connect/src/modules/connect_routing/lib/reconcile-capacity.ts` | Create | Transactional absolute reconciliation |
@@ -332,7 +361,7 @@ There is no browser coverage because this specification adds no UI path. Integra
 - **Scenario**: A large organization blocks tenant setup or exhausts memory while materializing Cases.
 - **Severity**: Medium
 - **Affected area**: Deployment and tenant initialization
-- **Mitigation**: Database-side grouped count, one result per assignee, measured foreground threshold, worker deferral, bounded batches, per-scope jobs.
+- **Mitigation**: Database-side grouped count, deterministic 500-assignee foreground threshold, worker deferral, synchronous queue-unavailable fallback, bounded statements, per-scope jobs, and explicit CLI retry.
 - **Residual risk**: A pathological number of assignees can still make reconciliation slow; telemetry and retry isolate it to one organization.
 
 #### Premature interpretation as live presence
@@ -346,8 +375,15 @@ There is no browser coverage because this specification adds no UI path. Integra
 - **Scenario**: Schema creation succeeds but setup/backfill crashes midway.
 - **Severity**: Medium
 - **Affected area**: One organization's readiness
-- **Mitigation**: Migration has no cross-module data copy, reconciliation is transactional and idempotent, and missing `count_reconciled_at` fails activation closed.
-- **Residual risk**: Manual/automated retry is required; existing Connect inbox behavior remains unaffected.
+- **Mitigation**: Migration has no cross-module data copy; the durable checkpoint records pending before projection work; counts and completion commit atomically; setup rerun and the CLI use the same idempotent service.
+- **Residual risk**: A persistent database/Connect failure requires operator retry after repair; the checkpoint remains visibly non-completed and existing Connect inbox behavior remains unaffected.
+
+#### Empty or unchanged organization
+- **Scenario**: No presence row changes, so row-local timestamps could not prove that reconciliation ran after the foundation migration.
+- **Severity**: High
+- **Affected area**: Phase 3 activation safety
+- **Mitigation**: Organization checkpoint advances version/generation/completion atomically on every successful run, including empty and unchanged scopes.
+- **Residual risk**: None beyond the separately documented assignment-snapshot race; Phase 3 still recomputes the candidate.
 
 ## Final Compliance Report — 2026-08-22
 
@@ -358,6 +394,8 @@ There is no browser coverage because this specification adds no UI path. Integra
 - `packages/core/AGENTS.md`
 - `packages/core/src/modules/customers/AGENTS.md`
 - `packages/cli/AGENTS.md`
+- `packages/queue/AGENTS.md`
+- `.ai/qa/AGENTS.md`
 - `BACKWARD_COMPATIBILITY.md`
 - `.ai/skills/om-spec-writing/SKILL.md` and required checklist/template references
 
@@ -372,8 +410,9 @@ There is no browser coverage because this specification adds no UI path. Integra
 | root AGENTS.md | Preserve gated-off API/navigation behavior | Compliant | No page, route, or ACL surface ships |
 | core AGENTS.md | DI and optional-module coupling | Compliant | Consumer soft-resolves an additive reader and degrades explicitly |
 | core AGENTS.md | Commands/guards for user writes | N/A | No user-triggered mutation or API exists |
-| customers AGENTS.md | Standard lifecycle/version columns | Compliant | Entity includes UUID, scope, timestamps, and soft deletion |
+| customers AGENTS.md | Standard lifecycle/version columns | Compliant | Both internal entities include UUID, dual scope, and timestamps; durable projection identities explicitly do not use deletion lifecycle |
 | CLI AGENTS.md | Generated discovery and migration snapshots | Compliant | New conventional files run through generation; intended migration and snapshot only |
+| queue AGENTS.md | Idempotency, metadata, strategies, connection budget | Compliant | Queue/worker ID and concurrency 3 are pinned; local and async tests plus budget verification are required |
 | BACKWARD_COMPATIBILITY.md | Database schema additive-only | Compliant | New table/indexes/checks only |
 | BACKWARD_COMPATIBILITY.md | DI keys are stable | Compliant | New reader key and contract are declared additive and stable |
 | root Design System/UI rules | Canonical UI, i18n, accessibility | N/A | No UI or user-facing string |
@@ -382,7 +421,7 @@ There is no browser coverage because this specification adds no UI path. Integra
 
 | Check | Status | Notes |
 |---|---|---|
-| Data model matches reconciliation contract | Pass | One scoped row per user holds absolute derived count and freshness metadata |
+| Data model matches reconciliation contract | Pass | Per-user rows hold absolute counts; an organization checkpoint proves empty, unchanged, pending, failed, and completed states |
 | API contracts match UI/UX | Pass | Neither API nor UI is introduced |
 | Risks cover all write operations | Pass | Concurrent, interrupted, absent-dependency, migration, and scale cases covered |
 | Commands defined for all mutations | Pass | System-only reconciliation service/worker owns the sole mutation; no user command exists |
@@ -395,20 +434,21 @@ None.
 
 ### Verdict
 
-- **Fully compliant**: Approved — ready for pre-implementation audit.
+- **Fully compliant**: Approved — ready for implementation after the completed pre-implementation re-audit.
 
 ## Changelog
 
 ### 2026-08-22
 
 - Initial implementation-ready specification: routing-owned presence storage, Connect-owned scoped count reader, idempotent enable-time reconciliation, and explicit exclusion of Phase 3 routing behavior.
+- Remediated pre-implementation audit findings: added atomic organization checkpoints, durable no-queue retry/CLI, unambiguous retained presence identity, exact lock/count/threshold/worker contracts, migration rollback semantics, and CAP-INT-011 through CAP-INT-016.
 
 ### Review — 2026-08-22
 
-- **Reviewer**: Agent; scope-cohesion adversarial review still required by the spec workflow before implementation.
+- **Reviewer**: Agent; independent pre-implementation audit remediated and rechecked against actual Connect/setup/queue conventions.
 - **Security**: Passed — mandatory dual scope and no PII/public surface.
-- **Performance**: Passed — grouped query, bounded per-scope work, thresholded worker deferral.
+- **Performance**: Passed — grouped query, exact 500-assignee threshold, bounded 500-row statements, concurrency 3 and connection-budget gate.
 - **Cache**: Passed — no-cache safety decision.
 - **Commands**: Passed — one system reconciliation operation; no user writes.
 - **Risks**: Passed — concurrency, drift, absence, isolation, scale, and deployment covered.
-- **Verdict**: Approved for pre-implementation audit after independent scope-cohesion review.
+- **Verdict**: Ready for implementation after audit remediation; no critical or important readiness gaps remain.

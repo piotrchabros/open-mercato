@@ -2,9 +2,9 @@
 
 ## Executive Summary
 
-The specification is not ready to implement. Its additive public surfaces are broadly backward-compatible, but three critical design gaps remain: reparenting does not coordinate with the identity-binding lock that actually decides future inbound attachment; child Case numbering reuses the existing unlocked `max(number)+1` allocator and can race inbound creation; and the proposed undo endpoint is not integrated with the platform command/undo contract. Several important contract details—exact undo snapshots, audit encryption/query behavior, integration test granularity, and merged/split read projections—also need to be made implementation-exact before code begins.
+The remediated specification is ready for implementation, subject to maintainer approval of its new frozen identifiers. Its public surfaces remain additive, and the revised design now coordinates reparenting with inbound through a shared Conversation lock and Conversation-first attach rule, serializes all Case numbers through one scope sequence, uses one registered `CommandHandler` with canonical `undo()`/`extractUndoPayload`, and defines exact bounded persistence, API, event, DI, downstream-consumer, migration, and test contracts.
 
-Recommendation: update the specification first, rerun this audit, and only then enter implementation. This report verified the actual Phase 1 Connect entities, commands, APIs, events, outbox, DI, encryption map, migrations, tests, and all thirteen `BACKWARD_COMPATIBILITY.md` categories.
+This re-audit verified the revised text against the actual Phase 1 Connect entities, commands, APIs, events, outbox, DI, encryption map, migrations, tests, command-bus undo contract, and all thirteen `BACKWARD_COMPATIBILITY.md` categories. No implementation code was used as evidence; readiness means the contract is implementable and internally consistent, not that code exists.
 
 ## Evidence Reviewed
 
@@ -20,27 +20,27 @@ Recommendation: update the specification first, rerun this audit, and only then 
 
 ### Violations Found
 
-No removal, rename, narrowing, or semantic repurposing of an existing contract is proposed. The new surfaces are additive, but the warnings below must be resolved before their first release because they become frozen/stable contracts immediately.
+No removal, rename, narrowing, or semantic repurposing of an existing contract is proposed. All new surfaces are additive and fully inventoried; maintainer review is still required before their first release because they become frozen/stable contracts immediately.
 
 | # | Surface | Issue | Severity | Proposed Fix |
 |---|---|---|---|---|
-| 1 | Auto-discovery file conventions | New routes/entities/events/commands use recognized locations, but the spec never states how command files are auto-loaded and registered with `registerCommand`. A plain exported function, as several current Connect commands use, does not satisfy the proposed public command IDs by itself. | Warning | Specify command-handler exports/registration using the canonical registry and verify `yarn generate` discovers the files. |
-| 2 | Type definitions & interfaces | `ConnectCaseReparentingEvent`, reader projections, cursor/page types, snapshot shapes, item projections, and result unions are described but not fully defined. The facade text still says `clock instruction` although the event was narrowed to `lineageInstruction`. | Warning | Define exact exported structural types, field optionality, cursor encoding, error unions, and use `lineageInstruction` consistently before freezing. |
-| 3 | Function signatures | The DI facade signatures refer to undefined `Scope`, `ReparentingProjection`, `ReparentingCursor`, `ReparentingPage`, and `CaseLineageProjection`. Command handler signatures/context and undo handler signature are not specified. | Warning | Add exact TypeScript contracts and handler signatures, including command runtime context and undo log entry. |
-| 4 | Import paths | No existing import moves are proposed. New public types/facade imports are not assigned stable package export paths. | Warning | Name the intended `@open-mercato/connect/...` export paths or explicitly keep the contract DI-only and non-importable. Do not move them after release without bridges. |
-| 5 | Event IDs | Three additive IDs do not collide with current `connect/events.ts`. Payload versioning is present, but payload optionality and undo reference (`reversesReparentingId`) are not included in the declared event type. | Warning | Add the missing inverse reference and exact per-event schemas; freeze fields only after consumer review. Existing event IDs remain unchanged. |
+| 1 | Auto-discovery file conventions | Additive recognized paths; one registered handler is explicitly required and generated discovery is verified. | None | Preserve existing conventions and run `yarn generate`. |
+| 2 | Type definitions & interfaces | Exact event, facade, cursor/page, snapshot, item, undo, and result contracts are additive. | None | Freeze only after maintainer review. |
+| 3 | Function signatures | Exact `CommandHandler`, `undo()`, and DI reader signatures are specified additively. | None | Preserve after release. |
+| 4 | Import paths | No existing path moves; facade is DI-only and types remain module-local unless a later explicit export is added. | None | No bridge required. |
+| 5 | Event IDs | Three additive non-colliding IDs; version, inverse reference, and required fields are exact. | None | Preserve payload fields after release. |
 | 6 | Widget injection spot IDs | No widget or spot ID is changed or added. | None | N/A. UI is deferred. |
-| 7 | API route URLs | Five additive routes do not collide with current Connect routes. Response schemas are prose-only, and the existing `/api/connect/cases` and `/api/connect/inbox` projections are not updated to expose merged/split state despite the promise that historical sources remain understandable. | Warning | Add exact zod/OpenAPI response schemas and specify additive lineage fields or redirect/canonical-target fields on existing Case reads. Preserve all existing response keys. |
-| 8 | Database schema | Changes are additive, but `source_before`/`destination_before` schemas, item-table columns/constraints, active-binding uniqueness, and deployment-safe DDL are incomplete. | Warning | Specify full entities/checks/indexes, including one-active-binding enforcement and exact migration order. Keep existing tables/columns/status meanings intact. |
-| 9 | DI service names | `connectCaseReparentingReader` is additive and does not collide with current `connectCapabilityReporter` or entity keys. Its semantics are not complete enough to freeze. | Warning | Define complete projection/error/authorization semantics and add DI collision/disabled-module tests before first release. |
+| 7 | API route URLs | Additive non-colliding routes with exact schemas; existing Case responses gain nullable lineage keys without removing fields. | None | Preserve URLs/keys after release. |
+| 8 | Database schema | Additive columns/tables/constraints with exact V1 schemas, sequence seed, duplicate-binding preflight, and safe DDL order. | None | Keep existing status/table/column meanings unchanged. |
+| 9 | DI service names | Additive non-colliding `connectCaseReparentingReader` with exact DI-only projection contract and absent-module tests. | None | Preserve key/semantics after release. |
 | 10 | ACL feature IDs | Four additive IDs do not collide with current Connect features and setup grants are planned. | None | Run the idempotent ACL sync for existing tenants and test wildcard grants. |
 | 11 | Notification type IDs | No notification types are proposed. | None | N/A. |
 | 12 | CLI commands | No CLI command is proposed or changed. | None | N/A. |
-| 13 | Generated file contracts | No generated export is renamed. New entities/routes/events/ACL/DI registrations will alter generated registries additively. | Warning | Run `yarn generate`; inspect generated registries and module facts; never hand-edit generated output. Refresh standalone harness coverage if the public extension/contract inventory requires it. |
+| 13 | Generated file contracts | No generated export is renamed; new registrations are additive. | None | Run `yarn generate`, inspect registries/module facts, and refresh standalone harness coverage. |
 
 ### Missing BC Section
 
-The specification contains a substantive `Migration & Backward Compatibility` section and a public-surface inventory. It is not missing. It should be expanded with the exact type/import-path decisions and existing Case response additions described above.
+The specification contains a substantive `Migration & Backward Compatibility` section, exact type/DI boundary decisions, existing Case response additions, and a public-surface inventory. It is not missing.
 
 ## Spec Completeness
 
@@ -50,36 +50,17 @@ None of the mandatory top-level sections is absent. UI is explicitly and reasona
 
 ### Incomplete Sections
 
-| Section | Gap | Recommendation |
-|---|---|---|
-| Architecture — inbound coordination | Actual ingest chooses a Case while holding `ConnectIdentityCaseBinding`, then updates `ConnectConversation` afterward. The reparent design locks Conversations/bindings only and falsely states this serializes with inbound. | Define a shared serialization point and attach rule for reparenting. See Critical Gap 1. |
-| Architecture — number allocation | Split creates a new numbered Case but does not address the existing `max(number)+1` allocator in `ingest-inbound-message.ts`, which is not serialized and is protected only by a unique constraint. | Introduce/reuse an atomic per-organization sequence allocator shared by ingest and split, with retry semantics. |
-| Commands & undo | Two function-like commands are named, but there is no `registerCommand`, `CommandHandler`, `UndoPayload`, `extractUndoPayload`, audit-log undo/redo policy, or explicit no-redo decision. | Specify canonical command-bus handlers. Either make the reparent command's `undo()` use the central payload or document why the domain inverse route is separate and how audit undo is disabled without creating two undo paths. |
-| Data Models | `source_before`, `destination_before`, and `ConnectCaseReparentingItem` lack exact typed schemas; no maximum snapshot size; no CHECK tying operation to reversal fields; no unique active binding constraint. | List every persisted property and constraint. Prefer typed scalar snapshot columns where possible over opaque JSON. |
-| Case lifecycle | Split child copies the source `channelId`, but a Case may contain Conversations from several channels. The selected child may not originate on that channel. | Define channel derivation (for example earliest selected Conversation) or make the field nullable/add a tested invariant; do not copy an unrelated channel. |
-| API Contracts | Requests are mostly prose and success/error response bodies lack exact schemas. `allowCustomerMismatch` behavior differs between split (where child necessarily shares source snapshot) and merge. | Provide zod schemas per route, remove irrelevant split override input, and specify standard conflict bodies exactly. |
-| Encryption | The spec encrypts reason and JSON snapshots but does not state how canonical idempotency fingerprints are computed relative to encryption, nor whether snapshots contain PII. | Minimize snapshots to non-PII scalar lifecycle fields; encrypt only required free text. Compute the fingerprint from canonical validated plaintext before encryption and never log it with payload content. |
-| Testing | Eleven behaviors are packed into one proposed Playwright file, contrary to the QA convention of one scenario per test file. There is no fixture-helper manifest or route activation metadata. | Split into `TC-CONNECT-REP-001...` files, add module-local fixtures/cleanup and discovery metadata as needed. |
-| Operational detection | Risks mention metrics/logging but define no concrete logger fields, latency metric, reconciliation signal, or operator query for stuck consumers. | Define non-PII structured diagnostics and measurable thresholds, or explicitly defer observability with an owner. |
-| Final Compliance Report | It says fully compliant although canonical command undo and the actual inbound serialization seam are unresolved. | Change verdict to blocked until critical remediation is incorporated and independently re-audited. |
+None remain after remediation. Mandatory sections and implementation contracts are complete; optional UI remains explicitly deferred.
 
 ## AGENTS.md Compliance
 
 ### Violations
 
-| Rule | Location | Fix |
-|---|---|---|
-| Domain writes use canonical commands; undoable commands reuse `extractUndoPayload` | Proposed Solution, Commands, File Manifest | Define registered `CommandHandler`s and central `UndoPayload` extraction, or explicitly declare the command non-audit-undoable and make the guarded inverse command the only undo surface with rationale. Avoid two competing undo mechanisms. |
-| Preserve real call-site behavior and find root cause | Architecture / concurrency test claim | Reparent and ingest do not share the asserted lock. Update the attach algorithm and both call sites, not just the test. |
-| Every query after scalar mutation must respect atomic-flush rules | Deterministic locking step 5 says flush once “where practical” | State the exact flush/query ordering. Reparenting performs multiple reads after Case/Conversation scalar changes; use `withAtomicFlush`, explicit flush boundaries, or raw conditional writes consistent with Core guidance. |
-| Integrations tests are self-contained and one scenario per `.spec.ts` | File Manifest / Testing Strategy | Replace the single `case-reparenting.spec.ts` with separately named TC files and module-local helpers; create/cleanup every fixture in `finally`. |
-| Encryption maps and decrypted reads must be implementation-exact | Sensitive data | Define exact entity property/map field names and all encrypted read paths, including list/detail facade projections and command undo reads. |
-| Existing and new default-role feature gates must match setup grants | Access Control | Planned correctly; add setup/ACL sync tests and explicitly run `auth sync-role-acls` after implementation. |
-| Backward-compatible public contracts must be complete before first ship | Public surfaces | Resolve undefined facade/event/API types before freezing IDs and paths. |
+None remain in the revised specification. Implementation must follow the specified command registration/undo extraction, Conversation locking, atomic flush ordering, reason-only encryption, setup grants, and isolated integration tests.
 
 ## Actual-Code Findings
 
-### Critical Finding 1 — Reparenting does not control the next inbound attachment
+### Resolved Critical Finding 1 — Reparenting controls the next inbound attachment
 
 `ingest-inbound-message.ts` makes its attach decision under a pessimistic lock on `ConnectIdentityCaseBinding` (`currentCaseId`, `version`). It does not lock or consult `ConnectConversation.currentCaseId` when selecting the Case. Only after the Case transaction commits does `upsertConversation()` update the Conversation pointer and binding interval.
 
@@ -90,15 +71,19 @@ The proposed reparent command locks `ConnectConversation` and `ConnectConversati
 3. The next inbound for C selects A under the identity lock.
 4. `upsertConversation()` moves C back to A and closes the split binding, silently defeating the correction.
 
-This also invalidates the proposed test claim that “identity/conversation locks serialize.” The spec must choose and implement one authoritative rule. Options include adding a conversation-first attach decision under a shared lock, or defining a per-Conversation routing/reparent override consulted by ingest. Updating the one identity binding to B is unsafe when the same identity legitimately owns Conversations remaining in A.
+**Resolution verified in the revised spec:** ingest and reparent now share a scoped `ConnectConversation` write lock; an existing live Conversation's `currentCaseId` wins over the identity binding; pointer/binding/receipt/Case/outbox writes move into one transaction; a partial split does not rewrite the identity binding. The spec also defines lock order and tests both the first inbound after split and a new Conversation for the same identity.
 
-### Critical Finding 2 — Split Case numbering races the existing inbound allocator
+### Resolved Critical Finding 2 — Case numbering is serialized
 
-`nextCaseNumber()` currently executes `select coalesce(max(number), 0) + 1` without a scope-level lock or sequence. `connect_cases_number_uq` prevents duplicates but does not retry them. A split and an inbound open in the same organization can allocate the same number, causing one valid operation to fail unpredictably. Reparenting cannot become implementation-ready without a single atomic allocator used by both paths (for example a locked organization-scoped sequence row/numbering service) and a real concurrency test.
+`nextCaseNumber()` currently has the recorded race. **Resolution verified in the revised spec:** `ConnectCaseNumberSequence` is uniquely scoped by tenant/organization; a parameterized upsert plus `FOR UPDATE` allocator is the sole writer for both inbound open and split; migration seeds with the greater existing maximum; unique Case number remains the final invariant; concurrency and migration tests are explicit.
 
-### Critical Finding 3 — Undo contract conflicts with the platform command model
+### Resolved Critical Finding 3 — Undo uses the platform command model
 
-The spec calls `connect.case.reparent.undo` a separate command and action route, but does not define `registerCommand`, command-bus execution, `UndoPayload`, `extractUndoPayload`, `undo()`/`redo()`, or how the audit-log generic undo route treats `connect.case.reparent`. This creates the possibility of two undo paths with different authorization and TOCTOU behavior, or a public command ID that is never registered. The spec must select one canonical model and test its audit/undo authorization and conflict semantics.
+**Resolution verified in the revised spec:** only `connect.case.reparent` is registered; APIs use `commandBus`; `buildLog` persists a bounded `ReparentUndoPayload`; `undo()` uses `extractUndoPayload`, performs Connect ACL/scope/fingerprint checks, and appends the inverse audit; the existing audit-log undo URL is the sole HTTP path; no second command or route exists; redo explicitly rejects.
+
+### Resolved Critical Finding 4 — Undo snapshot/fingerprint schema is exact
+
+The revised spec enumerates `ReparentCaseSnapshotV1`, `ReparentItemSnapshotV1`, and `ReparentUndoPayload`, bounds parent snapshots to 4 KiB, normalizes unbounded items, defines pre/post version fields, and specifies canonical plaintext fingerprint inputs/exclusions. Sensitive free-text `reason` alone is encrypted; snapshots exclude PII and remain deterministic.
 
 ## Risk Assessment
 
@@ -111,7 +96,7 @@ The spec calls `connect.case.reparent.undo` a separate command and action route,
 | Ambiguous undo mechanism | Audit UI may expose unsafe or broken undo; permissions can diverge | Use one registered command/undo contract and central `extractUndoPayload`, or explicitly suppress generic undo and document the sole guarded inverse route. |
 | Wrong-customer supervisory override | Authorized mistake exposes another customer's thread | Keep dedicated override feature, require reason, minimize visibility, and make safe undo immediately available. Consider whether override should be excluded from MVP. |
 | Large merge lock duration | Inbound/reply actions on affected Cases block or time out | Measure actual cardinality; lock deterministically; consider a documented hard bound or prepared background workflow rather than an unbounded interactive transaction. |
-| Missing exact active-binding constraint | Bugs can create two open intervals for one Conversation | Add a partial unique index on scoped Conversation where `unbound_at IS NULL`, after checking/backfilling existing duplicates. |
+| Active-binding migration encounters existing duplicates | New partial unique index cannot be created | Migration preflight aborts with an actionable error; remediate duplicates before retry-safe index creation. |
 
 ### Medium Risks
 
@@ -119,9 +104,9 @@ The spec calls `connect.case.reparent.undo` a separate command and action route,
 |---|---|---|
 | Child `channelId` copied from unrelated source origin | Incorrect filtering/reporting and reply context | Derive from selected Conversations using a specified deterministic rule. |
 | Opaque encrypted JSON snapshots | Schema drift, hard-to-query undo, oversized ciphertext | Define typed, versioned, bounded snapshot structure; store scalar undo tokens where possible. |
-| Existing Case/inbox reads hide canonical lineage | Operators open a merged historical Case without knowing target | Add stable additive fields/lineage links to existing Case projections or an explicit canonical response. |
-| Event contract incompleteness | Optional consumers cannot reconcile undo deterministically | Include `reversesReparentingId`, exact event-specific required fields, and reconciliation cursor semantics. |
-| Existing customer-context metrics count merged source | Open/resolved counts can double-count or misstate latest status | Audit `readCustomerContexts`, operational metrics, projection, auto-close, inbox, and cases queries for `mergedIntoCaseId`; define whether historical merged sources are excluded. |
+| Existing Case/inbox reads expose stale canonical state if implementation misses a call site | Operators open a merged historical Case without knowing target | Required impact matrix and `REP-INT-012` cover Case, Inbox, thread, reply, and access commands. |
+| Optional consumer reconciliation lags | Derived state temporarily misses lineage | Versioned events include inverse reference and stable source ID; exact keyset facade supports recovery. |
+| Existing customer-context metrics count merged source | Open/resolved counts can double-count or misstate latest status | Required impact matrix excludes merged sources from active context without rewriting immutable Phase 1 facts; integration coverage pins behavior. |
 | Migration index creation on a populated binding table | Existing duplicate active bindings can make migration fail | Add a preflight query/remediation and retry-safe index migration; do not rely on `IF NOT EXISTS` after an interrupted concurrent build. |
 
 ### Low Risks
@@ -136,20 +121,11 @@ The spec calls `connect.case.reparent.undo` a separate command and action route,
 
 ### Critical Gaps (Block Implementation)
 
-- **Future inbound ownership after split/merge**: define the authoritative conversation-aware attach rule, its persisted override/lineage state, and a lock shared with ingest.
-- **Atomic Case number allocation**: specify and use one allocator for both inbound `openCase()` and split child creation.
-- **Canonical command/undo integration**: define registered handlers, command-bus invocation, central undo payload extraction, audit visibility, redo policy, and one authorization path.
-- **Exact undo snapshot/fingerprint schema**: enumerate all fields and postconditions needed to prove safe undo; “lifecycle snapshot” is not implementable enough.
+None remain after remediation.
 
 ### Important Gaps (Should Address)
 
-- Add exact `ConnectCaseReparentingItem` entity definition and active-binding uniqueness constraint.
-- Define channel/customer/timestamp derivation for a child from selected Conversations.
-- Define how merged sources affect Inbox, Case reads, customer context, metrics, projections, auto-close, search, and reply eligibility.
-- Add exact zod/OpenAPI request/response/error schemas and `reversesReparentingId` to the event/facade contract.
-- Reconcile encryption-map property names and decrypted read paths; minimize encrypted JSON.
-- Split integration coverage into independently discoverable module-local TC files with helpers and cleanup.
-- Correct the spec's Final Compliance verdict after remediation.
+None remain in the implementation contract. The revised spec defines the item entity/indexes, active-binding constraint/preflight, child channel/timestamp/customer rules, all existing reader/metrics/projection effects, exact API/event/DI types, reason-only encryption/decryption, thirteen isolated TC files, and a corrected compliance review.
 
 ### Nice-to-Have Gaps
 
@@ -161,13 +137,7 @@ The spec calls `connect.case.reparent.undo` a separate command and action route,
 
 ### Before Implementation (Must Do)
 
-1. **Repair the aggregate boundary**: design the Conversation-specific post-reparent attach rule and update the ingest/reparent lock order so a later inbound cannot reverse a split.
-2. **Specify atomic numbering**: introduce a shared organization-scoped Case number allocator and include both split-vs-open and open-vs-open concurrency tests.
-3. **Choose one undo architecture**: integrate with `registerCommand`/`UndoPayload`/`extractUndoPayload`, or explicitly make generic audit undo unavailable and justify the sole domain inverse command.
-4. **Complete persistence schemas**: define every reparenting/item/snapshot field, check, unique/partial index, encryption field, and migration preflight.
-5. **Audit existing consumers**: state exact behavior for cases/inbox/customer-context/metrics/projections/auto-close/reply/search when `mergedIntoCaseId` or `splitFromCaseId` is set.
-6. **Complete public contracts**: exact exported types, DI signatures, event payloads, API schemas, response additions, and stable import paths.
-7. **Change readiness verdict and rerun pre-implementation analysis**.
+1. **Maintainer contract approval**: approve the additive command, event, API, DI, ACL, entity, and schema identifiers before their first release.
 
 ### During Implementation (Add to Spec)
 
@@ -183,6 +153,20 @@ The spec calls `connect.case.reparent.undo` a separate command and action route,
 2. Measure merge cardinality/lock latency before introducing background preparation.
 3. Update changelog with implementation evidence; move to `implemented/` only after deployment evidence and maintainer approval.
 
+## Re-Audit Closure Matrix
+
+| Original blocker / important gap | Revised spec evidence | Status |
+|---|---|---|
+| Identity-binding/inbound race | Authoritative Conversation-first attach, shared Conversation lock, atomic ingest transaction, explicit identity-binding semantics and race tests | Resolved |
+| Case number race | `ConnectCaseNumberSequence`, shared allocator, safe seed migration, concurrent allocation tests | Resolved |
+| Parallel/noncanonical undo | One registered `connect.case.reparent` handler, `buildLog`, `extractUndoPayload`, handler `undo()`, existing audit-log URL only, redo rejection | Resolved |
+| Vague snapshots/fingerprint | Exact V1 types, normalized items, bounds, canonical fingerprint inputs and exclusions | Resolved |
+| Downstream behavior | Explicit Case/Inbox/thread/reply/customer-context/metrics/projection/auto-close/search/ingest matrix | Resolved |
+| Child channel derivation | Earliest selected Conversation by `(createdAt,id)` | Resolved |
+| Encryption ambiguity | Reason-only encryption map; PII-free deterministic snapshots; scoped decrypted detail read | Resolved |
+| API/event/DI incompleteness | Exact facade types, inverse reference, request/response/error/cursor contracts, additive Case projections | Resolved |
+| Integration granularity | Thirteen separate `TC-CONNECT-REP` files plus module-local fixtures and cleanup | Resolved |
+
 ## Recommendation
 
-**Needs spec updates first.** The public additions are compatible in principle, but implementation must not begin until the inbound ownership, number allocation, undo architecture, and exact persistence contracts are resolved and the revised spec passes a fresh readiness audit.
+**Ready to implement after maintainer approval of the new frozen contract identifiers.** All original blockers and important gaps are resolved in the specification, all thirteen backward-compatibility categories remain additive, and remaining items are implementation evidence/validation tasks rather than design gaps.

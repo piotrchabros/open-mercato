@@ -39,13 +39,13 @@ The upstream contract must also remain safe for existing installations and third
 
 ## Proposed Solution
 
-Add an additive database-backed discriminator and expose tenant-scoped classification through the existing Auth principal service. Do not add public mutation fields or token claims.
+Add an additive database-backed discriminator, expose organization-scoped classification through the existing Auth principal service, and add a separate trusted Auth-owned provisioning/remediation seam. Do not add public mutation fields or token claims.
 
 ### Invariants
 
 1. Every persisted `users` row has exactly one supported `principal_kind` value.
 2. Existing rows and callers that omit the field resolve to `human` through both ORM and database defaults.
-3. Only an active same-tenant row whose stored value is exactly `human` is positive evidence of a human principal.
+3. Only an active row in the requested tenant+organization scope whose stored value is exactly `human` is positive evidence of a human principal.
 4. Missing, deleted, cross-tenant, malformed, null, or unsupported rows resolve to no result and therefore never count as human.
 5. Every read and write is scoped by both tenant and organization. An organization-scoped principal lookup accepts the current organization plus `organization_id IS NULL` system principals, matching the existing Auth principal-service predicate. A same-tenant principal assigned to a different organization is indistinguishable from missing.
 6. The contract never infers kind from email, password, roles, organization assignment, channel ownership, or UUID shape.
@@ -148,15 +148,26 @@ Add a second narrow shared interface and DI registration, `authPrincipalProvisio
 ```ts
 export type NonHumanAuthUserPrincipalKind = Exclude<AuthUserPrincipalKind, 'human'>
 
-export type EnsureNonHumanPrincipalInput = {
-  scope: PrincipalScope
-  kind: NonHumanAuthUserPrincipalKind
-  identity:
-    | { userId: string }
-    | { email: string; name?: string | null }
-  source: string
-  reason: string
-}
+export const ensureNonHumanPrincipalInputSchema = z.object({
+  scope: z.object({
+    tenantId: z.string().uuid(),
+    organizationId: z.string().uuid(),
+  }).strict(),
+  kind: z.enum(['system_bot', 'integration']),
+  identity: z.discriminatedUnion('type', [
+    z.object({ type: z.literal('user_id'), userId: z.string().uuid() }).strict(),
+    z.object({
+      type: z.literal('email'),
+      email: z.string().email(),
+      name: z.string().trim().min(1).max(120).nullable().optional(),
+    }).strict(),
+  ]),
+  source: z.string().regex(/^[a-z0-9._:-]+$/).min(1).max(100),
+  reasonCode: z.string().regex(/^[a-z0-9._:-]+$/).min(1).max(100),
+  referenceId: z.string().regex(/^[A-Za-z0-9._:-]+$/).max(160).optional(),
+}).strict()
+
+export type EnsureNonHumanPrincipalInput = z.infer<typeof ensureNonHumanPrincipalInputSchema>
 
 export type EnsureNonHumanPrincipalResult = {
   userId: string
@@ -170,17 +181,17 @@ export interface AuthPrincipalProvisioningService {
 }
 ```
 
-The shared contract exports a strict discriminated Zod schema beside these types, and `EnsureNonHumanPrincipalInput` is `z.infer`-derived from it. Shared imports no Core/domain code; Core consumes the schema in the Auth implementation. The schema requires UUID scope/ID, a valid email, `kind` in `system_bot|integration`, `source` 1-100 characters, and `reason` 1-500 characters. It rejects `human`, unknown fields, blank strings, and both/neither identity variants. Internal validation failures use a typed `[internal]` error and never reveal whether a foreign user exists.
+Shared imports no Core/domain code; Core consumes this schema in the Auth implementation. It rejects `human`, unknown fields, blank strings, and ambiguous identity variants. `source`, `reasonCode`, and optional `referenceId` are bounded non-PII operational tokens, not free text. Internal validation failures use a typed `[internal]` error and never reveal whether a foreign user exists.
 
 `ensureNonHumanPrincipal` runs in one Auth-owned transaction and is idempotent:
 
-1. Resolve by `userId`, or by the existing tenant-scoped email/email-hash logic used by `auth.users.create`; always use `findOneWithDecryption` and the exact tenant plus `organization_id IS NULL OR scope.organizationId` predicate.
+1. Resolve by `userId`, or by the existing tenant-scoped email/email-hash logic used by `auth.users.create`; always use `findOneWithDecryption` and the exact tenant plus `organization_id IS NULL OR scope.organizationId` predicate. An existing target row is locked for update before comparing or changing kind, so concurrent exact-ID classifications serialize.
 2. If `userId` is missing/deleted/foreign scope, return the same internal not-found result. Never create when a requested ID misses.
-3. If email misses, create a disabled, non-login-capable Auth row (`passwordHash = null`, `isConfirmed = false`) in `scope.tenantId` and `scope.organizationId`, using `TenantDataEncryptionService`/`computeEmailHash` through Auth-owned helpers, and store the requested kind. The existing tenant/email-hash unique index is the concurrency winner; on a unique race, reload and continue.
+3. If email misses, create a disabled, non-login-capable Auth row (`passwordHash = null`, `isConfirmed = false`) in `scope.tenantId` and `scope.organizationId`, using `TenantDataEncryptionService`/`computeEmailHash` through Auth-owned helpers, and store the requested kind. The existing tenant/email-hash unique index is the concurrency winner. A unique violation aborts that transaction; the service retries the complete command once in a fresh transaction, reloads the winner, and applies the collision/convergence rules. It never queries again inside an aborted transaction.
 4. If a matching row already has the requested non-human kind, return it with `created:false, changed:false`.
 5. If a matching row is `human` or the other non-human kind, change it only when the caller supplies the exact user ID. Email-only calls never reclassify an existing row; they fail with an ambiguous/existing-principal result. This prevents a convention-email collision from converting a human.
-6. Record an Auth audit entry containing user ID, tenant/organization, before/after kind, `source`, and `reason`, but never email or credentials. Creation and classification use the existing command/audit infrastructure with singular command ID `auth.user.ensure_non_human`; retrying an already-converged call records no second mutation event.
-7. Flush classification and audit atomically using the canonical command transaction seam. A failure rolls back both.
+6. In the same transaction, append an Auth-owned `PrincipalKindChange` ledger row containing user ID, tenant/organization, before/after kind, `source`, `reasonCode`, and optional `referenceId`, but never email, name, credentials, or free text. Creation and classification also publish the usual command action-log metadata under singular command ID `auth.user.ensure_non_human`; the Auth ledger is the atomic source of truth because the generic action-log service runs after command execution. A converged retry writes neither ledger nor action log (`skipLog:true`).
+7. Flush user and ledger atomically using the canonical command transaction seam. A failure rolls back both. Undo appends an inverse ledger record instead of deleting history.
 
 The command is registered for internal/system-actor execution only and rejects ordinary session/API-key invocation even if the caller has `auth.users.edit`. The DI service invokes that command with trusted server context. No new ACL is introduced because there is no public/admin authorization path. A future public operation needs a separate immutable ACL, UI/API spec, optimistic lock, and explicit reclassification policy.
 
@@ -194,7 +205,7 @@ The optional consumer owns the glue. It resolves `authPrincipalService` and, whe
 
 There is no new user-triggered mutation. Migration is an additive schema transformation; ordinary creation retains current command behavior through the default. The internal `auth.user.ensure_non_human` command is the only supported non-human creation/reclassification path and owns validation, encryption, transaction, and audit behavior.
 
-No public CRUD event is emitted for migration backfill or defaulted ordinary creation. The internal command emits/audits only a real creation or kind transition; a converged retry is a no-op. Undo for a created non-human row soft-deletes it only if no downstream reference exists; otherwise undo is rejected. Undo for classification restores the snapshotted prior kind. Migration rollback drops only the new column/constraint and cannot restore downstream facts; dependent consumers must be disabled or rolled back first.
+No public CRUD event is emitted for migration backfill or defaulted ordinary creation. The internal command audits only a real creation or kind transition; a converged retry is a no-op. Undo for a created non-human row soft-deletes it only if no downstream reference exists; otherwise undo is rejected. Undo for classification restores the snapshotted prior kind and appends an inverse ledger row. Migration rollback drops the ledger table then the new column/constraint and cannot restore downstream facts; dependent consumers must be disabled or rolled back first.
 
 ## Data Models
 
@@ -214,6 +225,23 @@ principalKind: AuthUserPrincipalKind = 'human'
 The type and constants come from the shared Auth principal contract, avoiding duplicate literals between entity, service, and consumers. This low-sensitivity operational discriminator is not PII and is not added to `auth/encryption.ts`. Existing encrypted email behavior is unchanged.
 
 No index is added: expected reads already constrain the `users` primary key with a bounded ID set and tenant/deleted predicates. An index on a three-value discriminator would not help this access pattern.
+
+### PrincipalKindChange (new append-only Auth ledger)
+
+| Field | Storage | Required | Notes |
+|---|---|---:|---|
+| `id` | UUID PK | Yes | `gen_random_uuid()` |
+| `userId` / `user_id` | UUID scalar | Yes | No ORM relation; Auth-owned user ID snapshot |
+| `tenantId` / `tenant_id` | UUID | Yes | Exact command scope |
+| `organizationId` / `organization_id` | UUID | Yes | Exact command scope |
+| `beforeKind` / `before_kind` | text nullable | No | Null only for creation; closed kind CHECK when present |
+| `afterKind` / `after_kind` | text | Yes | Closed kind CHECK |
+| `source` | text | Yes | Bounded token, no PII |
+| `reasonCode` / `reason_code` | text | Yes | Bounded token, no free text |
+| `referenceId` / `reference_id` | text nullable | No | Bounded opaque correlation token |
+| `createdAt` / `created_at` | timestamptz | Yes | Append timestamp |
+
+The ledger is append-only and not user-editable, so `updated_at`, `deleted_at`, optimistic locking, CRUD routes, search, custom fields, and encryption maps do not apply. It has indexes on `(tenant_id, organization_id, user_id, created_at)` and `(tenant_id, source, reference_id)` for forensic lookup and correlation. No API exposes it in this contract.
 
 ## API Contracts
 
@@ -251,7 +279,7 @@ N/A. The users list/edit form is intentionally unchanged. A later administration
 
 ### Forward migration
 
-The module-scoped migration adds the column and constraint atomically:
+The module-scoped migration adds the column/constraint and `auth_principal_kind_changes` ledger table with its checks/indexes atomically:
 
 ```sql
 alter table "users"
@@ -260,20 +288,22 @@ alter table "users"
 alter table "users"
   add constraint "users_principal_kind_check"
   check ("principal_kind" in ('human', 'system_bot', 'integration'));
+
+-- create auth_principal_kind_changes as defined in Data Models
 ```
 
 PostgreSQL applies the default to existing rows, so there is no application-level backfill and no unbounded ORM loop. The default remains after deployment for compatibility with direct SQL and older module code.
 
 ### Rollback
 
-Rollback first requires dependent consumers that read or persist kind-based facts to be disabled/rolled back. The Auth migration then drops `users_principal_kind_check` and `principal_kind`. Existing users otherwise retain their prior fields and behavior. Consumer snapshots intentionally remain historical evidence and are not rewritten.
+Rollback first requires dependent consumers that read or persist kind-based facts to be disabled/rolled back. The Auth migration then drops `auth_principal_kind_changes`, `users_principal_kind_check`, and `principal_kind` in dependency order. Existing users otherwise retain their prior fields and behavior. Consumer snapshots intentionally remain historical evidence and are not rewritten.
 
 ### Compatibility analysis
 
-- **Database schema:** additive column with default is explicitly allowed by `BACKWARD_COMPATIBILITY.md` §8.
+- **Database schema:** additive defaulted column and new table/indexes are explicitly allowed by `BACKWARD_COMPATIBILITY.md` §8.
 - **Exported entity:** adding a property is additive; existing construction remains valid because both ORM and database supply a default.
 - **Exported types/interfaces:** the new type exports are additive. The service method remains optional, so existing implementations compile and run.
-- **DI:** existing `authPrincipalService` key and methods remain unchanged; adding an optional method is allowed.
+- **DI:** existing `authPrincipalService` key and methods remain unchanged; its optional method and new `authPrincipalProvisioningService` key are additive.
 - **API/token/session:** byte-for-byte shape remains unchanged.
 - **Auto-discovery, routes, event IDs, ACL IDs, notification IDs, CLI commands:** unchanged.
 - **Behavior:** all existing rows become `human`, matching the prior effective assumption for ordinary Auth users. Only new consumers that explicitly use this contract gain fail-closed semantics.
@@ -285,7 +315,7 @@ This core contract change requires maintainer approval before implementation. Th
 The migration itself never guesses which legacy rows are automation. Before enabling any kind-sensitive consumer:
 
 1. The consumer produces a bounded dry-run inventory of the exact principal IDs it already uses as known bots/integrations, sourced from its own durable configuration/evidence. Auth performs no global scan and no email heuristic.
-2. For each exact ID, the consumer calls `ensureNonHumanPrincipal` with trusted tenant+organization scope, desired kind, stable `source` (for example `connect_sla.enablement`), and a reason referencing the rollout. Missing/foreign/ambiguous rows fail the run.
+2. For each exact ID, the consumer calls `ensureNonHumanPrincipal` with trusted tenant+organization scope, desired kind, stable `source` (for example `connect_sla.enablement`), a bounded `reasonCode`, and optional opaque rollout `referenceId`. Missing/foreign/ambiguous rows fail the run.
 3. For a bot that does not yet have a row, the consumer may call the email identity branch; Auth creates the disabled row or fails if that email already exists. A collision requires operator review and a subsequent exact-ID call; it is never auto-converted.
 4. The action is rerunnable: converged entries return `changed:false`; failures remain listed. The report contains counts and IDs but no email/PII.
 5. Enablement is a hard gate: zero unresolved known principals, provisioning service present, and a verification read returning the expected non-human kind in the same `PrincipalScope`. Otherwise the consumer remains disabled and emits an operational error.
@@ -298,7 +328,7 @@ This is the executable bridge between the default-human backfill and Connect's r
 
 1. Add shared constants/types and the optional `AuthPrincipalService.resolveUserPrincipalKinds` signature.
 2. Add `User.principalKind` with the shared union type and default.
-3. Implement the bounded tenant-scoped method on `DefaultAuthPrincipalService`.
+3. Implement the bounded tenant+organization-scoped method on `DefaultAuthPrincipalService`.
 4. Generate/review the single Auth migration and update the Auth ORM snapshot. Do not apply it locally without explicit approval.
 5. Add unit tests for defaults, classification, tenant+organization scoping, invalid/missing rows, empty input, deduplication, and the 1,000-ID bound.
 
@@ -307,7 +337,7 @@ This is the executable bridge between the default-human backfill and Connect's r
 1. Add the strict shared Zod schema/types and new optional `AuthPrincipalProvisioningService` contract.
 2. Register `authPrincipalProvisioningService` in Auth DI and implement `auth.user.ensure_non_human` with system-actor-only execution.
 3. Reuse Auth encryption/email-hash and tenant-email uniqueness mechanisms for safe disabled-row creation.
-4. Add atomic before/after audit snapshots, idempotent retry behavior, collision handling, and undo constraints.
+4. Add the Auth-owned append-only kind-change ledger in the same transaction, generic command-log snapshots, idempotent retry behavior, collision handling, and undo constraints.
 5. Add unit/command tests for create, exact-ID remediation, convergence, foreign/deleted/cross-org denial, email collision, unique race, rollback, audit redaction, and rejection of session/API-key callers.
 
 Exit criterion: Auth builds and tests pass; schema diff is clean for Auth; existing implementations of `AuthPrincipalService` still compile.
@@ -328,23 +358,23 @@ Exit criterion: all API, setup, migration, isolation, and backward-compatibility
 | File | Action | Purpose |
 |---|---|---|
 | `packages/shared/src/lib/auth/principal-service.ts` | Modify | Add kind constants/types and optional batched service method. |
-| `packages/core/src/modules/auth/data/entities.ts` | Modify | Add mapped `principalKind` property and ORM default. |
+| `packages/core/src/modules/auth/data/entities.ts` | Modify | Add mapped `principalKind` property/default and append-only `PrincipalKindChange` entity. |
 | `packages/core/src/modules/auth/services/principalService.ts` | Modify | Implement bounded active tenant+organization-scoped lookup. |
 | `packages/core/src/modules/auth/services/principalProvisioningService.ts` | Create | Auth-owned idempotent non-human creation/remediation implementation. |
 | `packages/core/src/modules/auth/commands/principals.ts` | Create | Register internal `auth.user.ensure_non_human` command, audit snapshots, undo, and system-actor guard. |
 | `packages/core/src/modules/auth/di.ts` | Modify | Register the new server-only provisioning service under an additive key. |
-| `packages/core/src/modules/auth/migrations/Migration<timestamp>_auth.ts` | Create | Add/backfill/default/check `users.principal_kind`; reversible down SQL. |
+| `packages/core/src/modules/auth/migrations/Migration<timestamp>_auth.ts` | Create | Add/backfill/default/check `users.principal_kind`, create ledger/checks/indexes; reversible down SQL. |
 | `packages/core/src/modules/auth/migrations/.snapshot-open-mercato.json` | Modify | Record post-migration Auth schema. |
 | `packages/core/src/modules/auth/services/__tests__/principalService.test.ts` | Modify | Unit coverage for resolution, isolation, normalization, and bounds. |
 | `packages/core/src/modules/auth/services/__tests__/principalProvisioningService.test.ts` | Create | Zod, creation/remediation, scoping, collision/race, idempotency, and redaction coverage. |
-| `packages/core/src/modules/auth/commands/__tests__/principals.test.ts` | Create | System-actor guard, atomic audit/undo, and retry coverage. |
+| `packages/core/src/modules/auth/commands/__tests__/principals.test.ts` | Create | System-actor guard, atomic user+ledger write, command-log metadata, undo, and retry coverage. |
 | `packages/core/src/modules/auth/__tests__/cli-setup-demo-users.test.ts` | Modify | Prove every derived/primary demo user is human. |
 | `packages/core/src/modules/auth/api/__tests__/users.route.test.ts` | Modify | Prove field is not writable/exposed through current admin API. |
 | `packages/core/src/modules/auth/__integration__/TC-AUTH-063-principal-kind.spec.ts` | Create | Migration/default/check, tenant isolation, and trusted explicit-kind integration coverage. |
 | `packages/core/src/modules/auth/migrations/__tests__/principal-kind.migration.test.ts` | Create | Pre-column schema, migration up/default/CHECK, and down verification in a dedicated DB harness. |
 | `packages/core/src/__tests__/module-decoupling.test.ts` | Modify only if required by harness | Prove Auth does not depend on Connect and consumer absence remains valid; prefer a consumer-local test if generic coverage already suffices. |
 
-No generated registry is expected to change because no auto-discovery file or entity class is added, but `yarn generate` remains a required verification.
+The generated entity registry is expected to add `PrincipalKindChange` because a new entity class is exported from an existing auto-discovery file. No generated export name or bootstrap shape changes. Run `yarn generate`, review the narrow registry delta, and rebuild packages.
 
 ### Testing strategy
 
@@ -352,7 +382,7 @@ No generated registry is expected to change because no auto-discovery file or en
 |---|---|
 | Entity/unit | Omitted value is `human`; explicit three values persist; unsupported value is rejected by DB. |
 | Principal service | Empty; duplicate IDs; valid human/bot/integration; missing; deleted; wrong tenant; same-tenant wrong organization; organization-null; null/malformed mock; >1,000; exactly one bounded query. |
-| Provisioning service/command | Strict Zod; session/API-key rejection; create disabled row; exact-ID classification; collision; unique race; converged retry; atomic audit; redaction; create/classification undo. |
+| Provisioning service/command | Strict Zod; session/API-key rejection; create disabled row; exact-ID classification; collision; unique race; converged retry; atomic user+ledger; action-log metadata; redaction; create/classification undo with inverse ledger. |
 | Setup/CLI | Primary/admin/employee are human; rerun/reuse does not overwrite an explicitly non-human existing principal. |
 | Admin API | POST payload containing `principalKind` cannot create non-human; PUT cannot change it; GET and auth session shapes omit it. |
 | Migration DB harness | Pre-column legacy rows become human; omitted direct insert defaults human; check rejects invalid; down drops constraint/column. |
@@ -388,7 +418,7 @@ Both facades require `PrincipalScope`, filter tenant and `organization_id IS NUL
 
 ### Performance and cache
 
-The access pattern is a bounded primary-key lookup of at most 1,000 rows in one query. No extra index or cache is justified. Avoiding cache prevents stale kind results if a future audited transition is introduced; current kinds are creation-time stable.
+The access pattern is a bounded primary-key lookup of at most 1,000 rows in one query. No extra index or cache is justified. Avoiding cache prevents stale results after the audited classification operation; consumers persist immutable event-time snapshots where historical meaning depends on the value.
 
 ### Operational detection
 
@@ -436,13 +466,13 @@ Migration/check failures are visible in the normal migration job. Consumer-side 
 - **Severity:** Critical
 - **Affected area:** Authentication identity, audit, and compliance attribution.
 - **Mitigation:** Email identity may create or converge only on an already matching non-human kind; it never reclassifies. Any existing human/other-kind collision fails and requires operator review plus exact user ID. Ordinary sessions/API keys cannot invoke the command.
-- **Residual risk:** A trusted operator can explicitly choose the wrong exact ID; audit records source/reason and before/after kind, while downstream immutable snapshots prevent retroactive rewriting.
+- **Residual risk:** A trusted operator can explicitly choose the wrong exact ID; the ledger records source/reason code/reference and before/after kind, while downstream immutable snapshots prevent retroactive rewriting.
 
 #### Provisioning partially commits user and audit
 - **Scenario:** User creation/classification succeeds but audit persistence fails, or two callers race.
 - **Severity:** High
 - **Affected area:** Auth data integrity and forensic traceability.
-- **Mitigation:** One canonical command transaction covers row and audit; the tenant/email-hash unique index selects the race winner; the loser reloads and converges; retry is a no-op without duplicate audit.
+- **Mitigation:** One canonical command transaction covers the user row and Auth-owned provenance ledger; the generic action log is secondary. The tenant/email-hash unique index selects the race winner; the loser reloads and converges; retry is a no-op without duplicate ledger or command log.
 - **Residual risk:** Database outage fails the whole operation and blocks consumer enablement.
 
 #### Existing non-human convention rows backfill as human
@@ -456,7 +486,7 @@ Migration/check failures are visible in the normal migration job. Consumer-side 
 - **Scenario:** A later feature changes a principal from human to bot and reports recompute old events from current Auth state.
 - **Severity:** High
 - **Affected area:** Audit and historical SLA/analytics.
-- **Mitigation:** This contract has no update command; consumers must snapshot kind at the event and never recompute settled facts from current state.
+- **Mitigation:** Reclassification exists only through the audited internal command; consumers must snapshot kind at the event and never recompute settled facts from current state.
 - **Residual risk:** Future reclassification requires a separate reviewed spec and may expose legacy unsnapshotted data limitations.
 
 #### Large lookup degrades Auth database

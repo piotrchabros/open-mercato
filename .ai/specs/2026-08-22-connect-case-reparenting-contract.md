@@ -183,7 +183,6 @@ type ReparentCaseInput =
       expectedSourceUpdatedAt: string
       clientCommandKey: string
       reason: string
-      allowCustomerMismatch?: boolean
       actor: ScopedCaseActor
     }
   | {
@@ -199,13 +198,13 @@ type ReparentCaseInput =
     }
 ```
 
-The zod schema requires UUIDs, non-empty trimmed reason (maximum 500 characters), a command key of 1–128 safe characters, unique Conversation IDs, and at most 100 Conversations per split request. `allowCustomerMismatch` is accepted only for a caller with `connect.cases.reparent.override`.
+The zod schema requires UUIDs, non-empty trimmed reason (maximum 500 characters), a command key of 1–128 safe characters, unique Conversation IDs, and at most 100 Conversations per split request. `allowCustomerMismatch` exists only on merge and is accepted only for a caller with `connect.cases.reparent.override`; a split child always inherits the source customer snapshot.
 
 Result union: `reparented`, `idempotent_replay`, `not_found`, `forbidden`, `invalid_state`, `customer_mismatch`, `conflict`, or `command_key_conflict`. Successful results return `reparentingId`, source/target/child IDs, moved Conversation IDs, and current `updatedAt` tokens.
 
 The file exports and registers one `CommandHandler<ReparentCaseInput, ReparentCaseResult>` with `id: 'connect.case.reparent'`, `isUndoable: true`, `execute`, `buildLog`, and `undo`. APIs execute it through the DI-resolved `commandBus`; they do not call a helper directly. `buildLog` returns the scoped actor/resource metadata and stores `{ undo: ReparentUndoPayload }` in command payload. `undo()` calls `extractUndoPayload<ReparentUndoPayload>(logEntry)` and fails closed if it is absent or invalid.
 
-The canonical audit-log undo endpoint is the only HTTP undo surface. The successful reparent response returns the command bus `undoToken`; there is no `/api/connect/case-reparentings/[id]/undo` route and no `connect.case.reparent.undo` command ID. Generic undo authorization (`audit_logs.undo_self` / `audit_logs.undo_tenant`) is intersected with a command `beforeUndo` check for `connect.cases.reparent.undo`, same tenant/organization, and normal Case visibility. Redo is explicitly unsupported: the handler defines `redo()` that rejects with `409 reparent_redo_unsupported`, because replay after subsequent activity is not equivalent to a new reviewed reparent.
+The canonical audit-log undo endpoint is the only HTTP undo surface. The successful reparent response returns the command bus `undoToken`; there is no `/api/connect/case-reparentings/[id]/undo` route and no `connect.case.reparent.undo` command ID. Generic undo authorization (`audit_logs.undo_self` / `audit_logs.undo_tenant`) is intersected inside the handler's `undo()` with wildcard-aware `connect.cases.reparent.undo`, same tenant/organization, and normal Case visibility checks before locks or writes. Redo is explicitly unsupported: the handler defines `redo()` that rejects with `409 reparent_redo_unsupported`, because replay after subsequent activity is not equivalent to a new reviewed reparent.
 
 Undo behavior:
 
@@ -222,7 +221,7 @@ Undo is unavailable when any moved Conversation received later activity, changed
 2. Sort Conversation IDs lexicographically; lock each `ConnectConversation` and its active binding in that order.
 3. Re-read state after locks.
 4. Compare `expectedUpdatedAt` tokens and audit post-fingerprints.
-5. Perform all writes inside the same transaction and flush once at the transaction boundary where practical.
+5. Persist/flush the newly created split child before any query needing its ID. Thereafter, do not run an ORM `find` after mutating a locked Case or Conversation: all required rows are loaded first, then scalar/entity writes are staged and flushed once with audit/outbox writes. If implementation requires a later query, wrap the mutation/query segment with `withAtomicFlush` or add an explicit flush before that query.
 
 The command must not perform an unlocked `find` between scalar mutation and flush. Raw conditional updates, if used, are parameterized and remain inside the transaction.
 
@@ -297,10 +296,10 @@ The implementation MUST update and test these real call sites; lineage columns a
 | `api/inbox/route.ts` | Exclude `mergedIntoCaseId != null` from active/triage views even if a stale status exists; closed-history queries may include it with canonical target fields. Split child appears normally. |
 | `api/cases/[id]/thread/route.ts` and reply | Merged source cannot read/reply through Conversations now owned by target. Return `409 case_merged` with canonical target only after normal visibility checks. Split/source thread reads follow current binding ownership. |
 | `lib/customer-context.ts` and response enrichers | Do not count a merged source as an open Case or latest active Case. Historical totals, if exposed later, count the canonical target once. |
-| operational metrics | Reparenting emits no synthetic opened/resolved/reopened facts. Add immutable `case_split`, `case_merged`, and `case_reparent_undone` facts only if analytics needs them; Phase 1 volume denominators remain unchanged. Existing response/resolution facts are never rewritten. |
+| operational metrics | Reparenting emits no synthetic opened/resolved/reopened operational facts and adds no Phase 1 metric fact types. Phase 1 volume denominators and existing response/resolution facts remain unchanged. Analytics consumes the new lineage events under its own spec. |
 | customer projection/retraction | Do not create, hide, or move a `CustomerInteraction` merely because Cases reparent. A future consumer may project lineage from events; current pending projections retain their original Case/projection keys. |
 | `workers/auto-close-cases.ts` | Exclude merged sources. Split children follow their own status/timestamps after creation. |
-| search/query index | Reindex source and destination/child after commit using the canonical command side-effect path so lineage/status filters are current. No message body is reindexed. |
+| search/query index | Connect currently declares no `search.ts` Case index, so implementation performs no invented indexing call. The command log/outbox events are sufficient for a future optional index consumer; no message body is indexed. |
 | Case access/assign/transition | A merged source is read-only. Assign, priority, resolve, reopen, close, and outbound commands reject it with `409 case_merged` and canonical target after access checks. |
 | ingest | Uses the Conversation-first rule above; selected moved Conversations stay with their destination on later inbound. |
 
@@ -493,7 +492,6 @@ Request:
   "expectedUpdatedAt": "2026-08-22T12:00:00.000Z",
   "clientCommandKey": "uuid-or-client-token",
   "reason": "Incorrectly grouped conversations",
-  "allowCustomerMismatch": false
 }
 ```
 
@@ -558,7 +556,7 @@ This API-first contract introduces no required UI. Any later UI must add keys in
 
 ## UI/UX Boundary
 
-UI is deliberately deferred to a successor change. The APIs expose `canUndo` and standard conflicts so a later Inbox action can use `useGuardedMutation`, `apiCall`, `useConfirmDialog`, and the unified conflict bar. Any dialog must support Cmd/Ctrl+Enter and Escape, use semantic status tokens and shared primitives, and provide `aria-label` for icon-only controls. No raw `fetch`, raw form, inline SVG, arbitrary Tailwind values, or hard-coded user strings are permitted.
+UI is deliberately deferred to a successor change. The APIs expose the action-log `undoToken` and standard conflicts so a later Inbox action can use `useGuardedMutation`, `apiCall`, `useConfirmDialog`, and the unified conflict bar. Any dialog must support Cmd/Ctrl+Enter and Escape, use semantic status tokens and shared primitives, and provide `aria-label` for icon-only controls. No raw `fetch`, raw form, inline SVG, arbitrary Tailwind values, or hard-coded user strings are permitted.
 
 Because this spec does not add or change a Next.js page or client component, a Frontend Architecture Contract is N/A.
 
@@ -569,7 +567,7 @@ This change is additive:
 - Existing Case status values, routes, commands, event IDs, and widget IDs are unchanged.
 - New nullable lineage columns and a defaulted integer column permit a rolling deployment.
 - The new entity, routes, command IDs, ACL IDs, DI name, and event IDs become public contract surfaces at first release and must be reviewed before merge.
-- No historical backfill is required. Existing Cases start with `lineage_version=0` and null lineage fields.
+- No lineage-history backfill is required. Existing Cases start with `lineage_version=0` and null lineage fields. The number-sequence migration performs the bounded grouped seed from existing Case maxima described above; it does not rewrite Case rows.
 - Migration adds constraints and indexes without rewriting encrypted content. The defaulted lineage column must use a deployment-safe approach for the supported PostgreSQL version; if table size makes an immediate NOT NULL validation unsafe, add nullable/default, backfill in bounded batches, then validate/set NOT NULL.
 - Update `packages/connect/src/modules/connect/migrations/.snapshot-open-mercato.json` with only intended Connect changes. Run `yarn db:generate` as a schema-diff probe; never apply `yarn db:migrate` without explicit approval.
 - Rollback before any reparent rows exist may drop new tables/columns. After use, application rollback leaves additive data intact; down migration must not destroy reparent history automatically.
@@ -578,13 +576,13 @@ This change is additive:
 
 | Surface | Additive contract |
 |---|---|
-| Entity IDs | `connect:connect_case_reparenting`, `connect:connect_case_reparenting_item` |
+| Entity IDs | `connect:connect_case_number_sequence`, `connect:connect_case_reparenting`, `connect:connect_case_reparenting_item` |
 | Command IDs | `connect.case.reparent` (registered, undoable; no separate undo ID) |
 | Event IDs | `connect.case.split`, `connect.case.merged`, `connect.case.reparenting_undone` |
 | API URLs | Split, merge, audit detail/list, and lineage routes above; undo reuses the stable audit-log URL |
 | DI key | `connectCaseReparentingReader` |
 | ACL IDs | Four features above |
-| DB schema | Additive Case columns and two tables |
+| DB schema | Additive Case columns and three tables |
 
 ## Implementation Plan
 
@@ -630,7 +628,7 @@ Working result: the full API contract is usable, documented, isolated, and consu
 |---|---|---|
 | `packages/connect/src/modules/connect/data/entities.ts` | Modify | Case lineage fields and reparenting entities. |
 | `packages/connect/src/modules/connect/data/validators.ts` | Modify | Reparent and undo zod schemas. |
-| `packages/connect/src/modules/connect/data/encryption.ts` | Modify | Encrypt audit reason/snapshots. |
+| `packages/connect/src/modules/connect/data/encryption.ts` | Modify | Encrypt reparenting audit reason only. |
 | `packages/connect/src/modules/connect/commands/reparent-case.ts` | Create | Atomic split/merge command. |
 | `packages/connect/src/modules/connect/lib/case-reparenting.ts` | Create | Pure invariant and fingerprint helpers. |
 | `packages/connect/src/modules/connect/lib/case-number.ts` | Create | Atomic scope-number allocator shared by ingest and split. |
@@ -657,7 +655,7 @@ Working result: the full API contract is usable, documented, isolated, and consu
 | `packages/connect/src/modules/connect/commands/__tests__/reparent-case.test.ts` | Create | Command and locking tests. |
 | `packages/connect/src/modules/connect/lib/__tests__/case-reparenting.test.ts` | Create | Pure invariant tests. |
 | `packages/connect/src/modules/connect/__integration__/helpers/reparentingFixtures.ts` | Create | API-created fixtures and finally-safe cleanup. |
-| `packages/connect/src/modules/connect/__integration__/TC-CONNECT-REP-001..011.spec.ts` | Create | One independently discoverable API/concurrency scenario per file. |
+| `packages/connect/src/modules/connect/__integration__/TC-CONNECT-REP-001..013.spec.ts` | Create | One independently discoverable API/concurrency scenario per file. |
 | `packages/core/src/__tests__/module-decoupling.test.ts` | Modify | Optional-consumer/disabled-module proof. |
 
 ## Testing Strategy
@@ -671,12 +669,16 @@ Working result: the full API contract is usable, documented, isolated, and consu
 - Earlier/later timestamp folding and lineage-version increments.
 - Undo fingerprint acceptance and every later-change rejection.
 - Event payload minimization: assert no subject, wrap-up, handle, body, customer label, or decrypted value.
+- Command registry: the generated loader registers exactly `connect.case.reparent`; `buildLog` stores a valid `ReparentUndoPayload`; `undo()` uses `extractUndoPayload`; no second undo command exists; redo rejects predictably.
+- Existing readers: merged source exclusion/canonical-target behavior across Inbox, Case mutation, thread, reply, customer context, metrics, projection, auto-close, and search indexing.
 
 ### Transaction and concurrency tests
 
 - Two simultaneous splits of the same Conversation: one commits, one conflicts; one active binding remains.
 - Opposing merge A→B and B→A: deterministic locking prevents deadlock and only one valid operation commits.
-- Inbound attach racing split/merge: the identity/conversation locks serialize; the inbound belongs to exactly one Case.
+- Inbound attach racing split/merge: the shared Conversation lock serializes; inbound belongs to exactly one Case.
+- First inbound after a completed split stays on the child because Conversation-specific ownership wins over the identity binding; a new Conversation for the same identity still follows the existing identity/customer attach rule.
+- Split child creation racing inbound Case opening and two simultaneous inbound opens allocate distinct monotonically increasing Case numbers through `ConnectCaseNumberSequence`.
 - Undo racing new inbound/outbound activity: undo returns `409` and preserves later work.
 - Retried request after lost response returns the original result and creates no duplicate binding, transition, audit, or event.
 - Simulated failure after each write stage rolls back all aggregate and outbox changes.
@@ -687,7 +689,7 @@ Working result: the full API contract is usable, documented, isolated, and consu
 |---|---|
 | `REP-INT-001` | Split success; source and child lists, bindings, transitions, audit, and event agree. |
 | `REP-INT-002` | Merge success; source remains historical/closed, target remains canonical. |
-| `REP-INT-003` | Safe split undo and merge undo append inverse audit rows. |
+| `REP-INT-003` | Safe split/merge undo through the existing audit-log undo URL appends inverse audit rows and requires both audit and Connect undo features. |
 | `REP-INT-004` | Unsafe undo after later activity returns standard `409`. |
 | `REP-INT-005` | Cross-tenant and sibling-organization IDs return identical `404` on every route. |
 | `REP-INT-006` | Missing feature is denied; override requires its dedicated feature. |
@@ -696,8 +698,10 @@ Working result: the full API contract is usable, documented, isolated, and consu
 | `REP-INT-009` | `connect_sla` absent: all Connect operations still succeed and no hard dependency resolves. |
 | `REP-INT-010` | Audit keyset pagination has no duplicates or omissions under concurrent inserts. |
 | `REP-INT-011` | OpenAPI exposes all routes and documented response statuses. |
+| `REP-INT-012` | Existing Case/Inbox/thread/reply/customer-context/metrics/projection/auto-close/search behavior matches the downstream impact table. |
+| `REP-INT-013` | Number sequence migration seeds from existing maxima and concurrent split/inbound allocations never collide. |
 
-Fixtures create their tenant, organization, users, Cases, Conversations, and bindings through APIs/commands where possible and clean them in `finally`; no seeded/demo data is assumed.
+Each row is a separate `TC-CONNECT-REP-###.spec.ts` file. Module-local helpers create the tenant, organization, users, Cases, Conversations, and bindings through APIs/commands where possible and clean them in `finally`; no seeded/demo data is assumed. Tests import shared helpers from `@open-mercato/core/helpers/integration/*`, declare Connect module metadata if needed, and are listed with `npx playwright test --config .ai/qa/tests/playwright.config.ts --list` before execution.
 
 ## Risks & Impact Review
 
@@ -717,6 +721,20 @@ Fixtures create their tenant, organization, users, Cases, Conversations, and bin
 - **Mitigation**: Optimistic Case tokens plus deterministic pessimistic locks on Cases, Conversations, and active bindings; database constraints and concurrency tests.
 - **Residual risk**: One operator must reload and retry after a legitimate conflict.
 
+#### Later inbound reverses a correction
+- **Scenario**: A moved Conversation receives a new inbound while its identity binding still names the former Case.
+- **Severity**: Critical
+- **Affected area**: Case isolation, Inbox, and customer disclosure
+- **Mitigation**: Ingest and reparent share the scoped Conversation write lock; existing Conversation ownership wins over identity binding; pointer, interval, receipt, Case decision, and outbox fact commit atomically.
+- **Residual risk**: A brand-new Conversation for the identity still follows the identity/customer attach rule by design.
+
+#### Concurrent Case-number allocation
+- **Scenario**: Split and inbound opening allocate the same human-facing Case number.
+- **Severity**: High
+- **Affected area**: Split and inbound Case creation
+- **Mitigation**: Both paths use the locked `ConnectCaseNumberSequence`; migration seeds from the greatest existing number; the Case unique constraint remains a final guard.
+- **Residual risk**: Allocation serializes briefly within one organization, which is acceptable and measured.
+
 #### Unsafe undo overwrites later work
 - **Scenario**: An undo moves a Conversation after new inbound traffic or agent action occurred.
 - **Severity**: Critical
@@ -728,7 +746,7 @@ Fixtures create their tenant, organization, users, Cases, Conversations, and bin
 - **Scenario**: A Case with many Conversations creates an unbounded JSON/array row or event.
 - **Severity**: High
 - **Affected area**: Database row size, event transport, worker memory
-- **Mitigation**: Normalized item rows, bounded event chunks, facade reconciliation, `pageSize<=100`.
+- **Mitigation**: Normalized item rows, count-only event payloads, facade reconciliation, `pageSize<=100`.
 - **Residual risk**: Very large merges take longer while locks are held; operational UI should warn and a later worker-based preparation flow may be warranted from measured cardinality.
 
 ### Cascading Failures & Side Effects
@@ -801,6 +819,7 @@ Fixtures create their tenant, organization, users, Cases, Conversations, and bin
 
 - `AGENTS.md` (root)
 - `.ai/specs/AGENTS.md`
+- `.ai/qa/AGENTS.md`
 - `packages/core/AGENTS.md`
 - `packages/cli/AGENTS.md`
 - `BACKWARD_COMPATIBILITY.md`
@@ -818,11 +837,12 @@ Fixtures create their tenant, organization, users, Cases, Conversations, and bin
 | Core API Routes | Every route exports `openApi` and metadata | Compliant | Required for all five routes. |
 | Core Events | Use `createModuleEvents`; stable singular IDs | Compliant | Three identifier-only outbox events are declared. |
 | Core Cross-Module Coupling | Optional consumer owns glue and degrades when absent | Compliant | Connect has no consumer dependency; consumer uses persistent subscriber and `tryResolve`. |
-| Core Encryption | Sensitive fields use encryption map and decrypted reads | Compliant | Audit reason/snapshots use Connect encryption map. |
+| Core Encryption | Sensitive fields use encryption map and decrypted reads | Compliant | Only audit `reason` is sensitive/encrypted; typed identifier/timestamp snapshots exclude PII. |
+| Shared command contract | Undoable writes use a registered handler and `extractUndoPayload` | Compliant | One `connect.case.reparent` handler owns execute/undo; generic audit-log undo is the only HTTP inverse. |
 | CLI migrations | Generate, review, and update module snapshot; do not migrate | Compliant | Migration workflow is explicit. |
 | Backward compatibility | Existing frozen surfaces unchanged; new surfaces inventoried | Compliant | All additions listed for pre-merge review. |
 | UI/DS rules | Canonical primitives/tokens and guarded mutations | N/A | No UI file is added or changed; successor UI constraints are recorded. |
-| Integration testing | Self-contained fixtures and all affected paths | Compliant | Eleven integration cases cover writes, reads, tenancy, guards, events, and OpenAPI. |
+| Integration testing | Self-contained fixtures and all affected paths | Compliant | Thirteen separate TC files cover writes, reads, downstream consumers, tenancy, guards, events, numbering, and OpenAPI. |
 
 ### Internal Consistency Check
 
@@ -831,7 +851,7 @@ Fixtures create their tenant, organization, users, Cases, Conversations, and bin
 | Data models match API contracts | Pass | Parent/item audit and lineage fields support every response and undo predicate. |
 | API contracts match UI/UX section | Pass | API-first; UI explicitly deferred. |
 | Risks cover all write operations | Pass | Split, merge, undo, event publication, and migration failures are covered. |
-| Commands defined for all mutations | Pass | Reparent and undo are the only mutations. |
+| Commands defined for all mutations | Pass | One registered reparent handler owns execute and the sole canonical undo. |
 | Cache strategy covers all read APIs | Pass | Direct indexed reads; conditional invalidation if existing Case cache is present. |
 | Undo matches execute | Pass | Exact binding/lifecycle snapshots and post-fingerprints are specified. |
 | Optional consumer semantics are non-circular | Pass | Events flow outward; facade is read-only; Connect never resolves consumer code. |
@@ -849,6 +869,7 @@ None identified.
 ### 2026-08-22
 
 - Initial implementation-ready specification for Connect-owned split, merge, conditional undo, and optional clock-consumer lineage semantics.
+- Remediated pre-implementation blockers: Conversation-first inbound serialization, shared atomic Case numbering, canonical registered `CommandHandler.undo()` with `extractUndoPayload`, exact bounded snapshot/item/fingerprint schemas, deterministic child channel derivation, encrypted reason-only audit storage, complete API/event/DI types, downstream reader/metrics/projection behavior, and thirteen isolated integration scenarios.
 
 ### Review — 2026-08-22
 
@@ -856,7 +877,7 @@ None identified.
 - **Security**: Passed — scope, mismatch, PII minimization, and access rules explicit
 - **Performance**: Passed — deterministic locks, normalized items, keyset pagination, and bounded batches
 - **Cache**: Passed — no correctness dependency; conditional scoped invalidation documented
-- **Commands**: Passed — every mutation and inverse is command-owned
+- **Commands**: Passed — one registered handler owns execute and `undo()`; no parallel undo command/route exists
 - **Risks**: Passed — critical partial-write, disclosure, concurrency, and unsafe-undo scenarios covered
 - **Verdict**: Approved after narrowing the optional-consumer section to a generic Connect lineage contract; SLA-owned clock mutation was moved back to the SLA spec boundary
 
