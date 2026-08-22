@@ -35,6 +35,46 @@ export type ConnectCaseStatus =
 
 export type ConnectCasePriority = 'low' | 'normal' | 'high' | 'urgent'
 
+export type ConnectPrincipalKind = 'human' | 'system_bot' | 'integration'
+
+@Entity({ tableName: 'connect_principal_classifications' })
+@Unique({
+  name: 'connect_principal_classifications_scope_user_uq',
+  properties: ['tenantId', 'organizationId', 'userId'],
+})
+@Index({
+  name: 'connect_principal_classifications_scope_user_idx',
+  properties: ['tenantId', 'organizationId', 'userId'],
+})
+@Check({
+  name: 'connect_principal_classifications_kind_chk',
+  expression: `"kind" in ('human', 'system_bot', 'integration')`,
+})
+export class ConnectPrincipalClassification {
+  [OptionalProps]?: 'createdAt' | 'updatedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'user_id', type: 'uuid' })
+  userId!: string
+
+  @Property({ name: 'kind', type: 'text' })
+  kind!: ConnectPrincipalKind
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
 @Entity({ tableName: 'connect_cases' })
 @Unique({ name: 'connect_cases_number_uq', properties: ['tenantId', 'organizationId', 'number'] })
 // The attach rule enumerates eligible legacy candidates by

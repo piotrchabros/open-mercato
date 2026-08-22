@@ -1,4 +1,5 @@
-import { asValue } from 'awilix'
+import type { EntityManager } from '@mikro-orm/postgresql'
+import { asFunction, asValue } from 'awilix'
 import type { AppContainer } from '@open-mercato/shared/lib/di/container'
 import {
   ConnectCase,
@@ -24,8 +25,10 @@ import {
   ConnectRetractionSaga,
   ConnectOperationalFact,
   ConnectMetricDaily,
+  ConnectPrincipalClassification,
 } from './data/entities'
 import { createCapabilityReporter } from './lib/activation'
+import { createDefaultConnectPrincipalKindReader } from './lib/principal-classification'
 
 export function register(container: AppContainer) {
   container.register({
@@ -53,6 +56,10 @@ export function register(container: AppContainer) {
     ConnectRetractionSaga: asValue(ConnectRetractionSaga),
     ConnectOperationalFact: asValue(ConnectOperationalFact),
     ConnectMetricDaily: asValue(ConnectMetricDaily),
+    ConnectPrincipalClassification: asValue(ConnectPrincipalClassification),
+    connectPrincipalKindReader: asFunction(({ em }: { em: EntityManager }) =>
+      createDefaultConnectPrincipalKindReader(em, container),
+    ).scoped(),
 
     // Read by `communication_channels` Contract E before it lets an
     // administrator cut a shared channel over to Connect projection. Connect

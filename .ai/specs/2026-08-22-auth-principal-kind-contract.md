@@ -124,6 +124,12 @@ Validation: `yarn db:generate`, `yarn generate`, targeted Connect tests, Connect
 | Stale soft reference | High | Provisioning validates active scoped user; no cascade/peer mutation. |
 | Core boundary regression | High | Connect-only manifest and decoupling test. |
 
+## Implementation Status — 2026-08-22
+
+- Implemented the Connect-owned entity, scoped DI reader, fail-closed Auth-facade intersection, isolated migration/snapshot, focused reader and migration tests, and self-cleaning integration coverage.
+- Verified with Node 24: generation, 10 focused tests, Connect build, Connect typecheck, and `git diff --check` pass. Playwright discovery timed out without an active ephemeral environment; the integration spec is typechecked and awaits CI execution against a migrated database.
+- No Core, Shared, UI, Auth, app-runtime, API, ACL, event, or public-contract file changed.
+
 ## Final Compliance Report — 2026-08-22
 
 | Check | Status | Evidence |
