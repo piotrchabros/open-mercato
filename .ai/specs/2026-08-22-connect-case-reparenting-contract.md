@@ -316,6 +316,19 @@ type ConnectCaseReparentingReader = {
   getCaseLineage(scope: ConnectReparentingScope, caseId: string): Promise<ConnectCaseLineageProjection | null>
 }
 
+type ConnectContactDenominatorReader = {
+  countCanonicalRoots(input: Readonly<{
+    tenantId: string
+    organizationId: string
+    from: string
+    to: string
+  }>): Promise<Readonly<{
+    contractVersion: 'connect.contact_root_created.v1'
+    generatedAt: string
+    count: number
+  }>>
+}
+
 type ConnectReparentingScope = Readonly<{ tenantId: string; organizationId: string }>
 type ConnectReparentingCursor = Readonly<{ occurredAt: string; id: string }>
 type ConnectReparentingProjection = Readonly<{
@@ -348,6 +361,8 @@ type ConnectCaseLineageProjection = Readonly<{
 ```
 
 `limit` is capped at 100. The projection contains identifiers, operation, versions, lifecycle snapshots, `lineageInstruction`, event ID, and timestamps only. It excludes subject, wrap-up, display label, handles, message data, and actor display data. All methods require tenant and organization and query both predicates.
+
+Register `connectContactDenominatorReader` beside the lineage reader. It validates a non-empty half-open UTC range capped at 366 days and counts scoped, non-deleted roots whose own `created_at` is in `[from,to)` and `split_from_case_id IS NULL`. It returns only the versioned scalar above, uses the partial root/date index, and exposes no Case identifiers. Split descendants never increase the denominator; merge semantics are intentionally excluded from v1.
 
 ## Data Models
 
@@ -633,6 +648,7 @@ Working result: the full API contract is usable, documented, isolated, and consu
 | `packages/connect/src/modules/connect/lib/case-reparenting.ts` | Create | Pure invariant and fingerprint helpers. |
 | `packages/connect/src/modules/connect/lib/case-number.ts` | Create | Atomic scope-number allocator shared by ingest and split. |
 | `packages/connect/src/modules/connect/lib/case-reparenting-reader.ts` | Create | Scoped plain-projection DI facade. |
+| `packages/connect/src/modules/connect/lib/contact-denominator-reader.ts` | Create | Scoped bounded canonical-root count contract. |
 | `packages/connect/src/modules/connect/events.ts` | Modify | Frozen identifier-only events. |
 | `packages/connect/src/modules/connect/di.ts` | Modify | Entity and facade registrations. |
 | `packages/connect/src/modules/connect/acl.ts` | Modify | Reparent features. |
@@ -654,9 +670,10 @@ Working result: the full API contract is usable, documented, isolated, and consu
 | `packages/connect/src/modules/connect/migrations/.snapshot-open-mercato.json` | Modify | Post-change module schema. |
 | `packages/connect/src/modules/connect/commands/__tests__/reparent-case.test.ts` | Create | Command and locking tests. |
 | `packages/connect/src/modules/connect/lib/__tests__/case-reparenting.test.ts` | Create | Pure invariant tests. |
+| `packages/connect/src/modules/connect/lib/__tests__/contact-denominator-reader.test.ts` | Create | Root cohort, scope, range, and privacy tests. |
 | `packages/connect/src/modules/connect/__integration__/helpers/reparentingFixtures.ts` | Create | API-created fixtures and finally-safe cleanup. |
 | `packages/connect/src/modules/connect/__integration__/TC-CONNECT-REP-001..013.spec.ts` | Create | One independently discoverable API/concurrency scenario per file. |
-| `packages/core/src/__tests__/module-decoupling.test.ts` | Modify | Optional-consumer/disabled-module proof. |
+| `packages/connect/src/modules/connect/__tests__/module-decoupling.test.ts` | Create | Package-local optional-consumer/disabled-module proof without changing platform code. |
 
 ## Testing Strategy
 

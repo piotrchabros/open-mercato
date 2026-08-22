@@ -45,6 +45,7 @@ Page `/backend/connect/analytics/sla`, metadata auth/adapter view, group `connec
 3. Add guarded/OpenAPI `api/report/route.ts`.
 4. Add backend page/meta, one client component and five locales.
 5. Add package-local integration/browser tests and run generate, focused tests, package/root typecheck/build/lint/i18n/DS/harness with recorded runner.
+6. Install `{ id: 'connect_sla_reporting', from: '@open-mercato/connect' }` in the host app's `modules.ts`, run `yarn template:sync:fix`, and verify generated/live enable-disable behavior. These two composition-file edits are installation wiring; all feature runtime code remains inside the external package.
 
 No file under `connect_sla` is modified by this spec.
 

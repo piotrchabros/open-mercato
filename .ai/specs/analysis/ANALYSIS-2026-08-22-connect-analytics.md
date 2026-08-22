@@ -149,3 +149,6 @@ No further spec remediation required. Implement the pinned phases/contracts with
 - **ACL/module boundaries**: Pass — inert agent grant deferred; source-owned DI reader retained.
 - **UI**: Pass — Metrics coexistence, exact page metadata/components, accessibility and performance gates pinned.
 - **Verdict**: Ready to implement.
+## External-Extension Re-Audit — 2026-08-22
+
+Ready. All reporting runtime remains under `@open-mercato/connect`; host-app and create-app-template `modules.ts` entries are installation composition only and are synchronized by the required template command.

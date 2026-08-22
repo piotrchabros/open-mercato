@@ -1,120 +1,48 @@
-# Pre-Implementation Analysis: Auth Non-Human Principal Provisioning Contract
+# Pre-Implementation Analysis: Connect Principal Classification Provisioning
 
 ## Executive Summary
 
-**Ready to implement after the principal-kind classification contract.** Actual Auth command context supports the specified `systemActor` gate, Auth already owns encrypted email/hash and tenant uniqueness behavior, and the new contract fully specifies trusted creation/remediation, operation idempotency, fresh-transaction collision retry, atomic ledger, redacted command log, constrained undo, and the consumer enablement gate. It duplicates no classification responsibility.
+**Ready after classification.** The contract provides exact-user remediation, idempotency, atomic Connect ledger, optimistic locking, redacted audit, constrained undo, and hard enablement while leaving Auth and platform packages unchanged.
 
-## Evidence Reviewed
+## Boundary and Compatibility
 
-Full revised provisioning/classification specs; `BACKWARD_COMPATIBILITY.md`; root/spec/core/auth/customers/CLI/shared/QA guidance; actual `CommandRuntimeContext.systemActor`, Auth user commands, encryption/email-hash/uniqueness behavior, principal service/DI, entity/migration conventions, and integration discovery.
+Only `packages/connect/**` may change. Additions are Connect-local command/entity/DI/database contracts plus an additive trusted Connect CLI command. No platform type, import, API, Auth schema/session/token behavior, event/widget, ACL, notification, or existing CLI contract changes.
 
-## Backward Compatibility
+## Architecture and Security
 
-### Violations Found
+- System-actor-only internal command; no public entry point.
+- Exact UUID only; no email creation or Auth mutation.
+- Existing `authPrincipalService` is `tryResolve<unknown>`-resolved and structurally narrowed to the exact existing `principalExists` function. It is called once per requested mutation with `type:'user'` and exact scope; Auth's tenant-wide organization-null semantics are documented.
+- Classification+ledger and undo+inverse are atomic.
+- Existing changes use `updated_at` optimistic locking.
+- Logs/ledger/errors contain no PII.
+- No Auth import/table query/migration/ORM relation.
 
-None.
+## Completeness and Collision Review
 
-| # | Surface | Result |
-|---:|---|---|
-| 1 | Auto-discovery | Existing convention files retained; additive ledger entity export only. |
-| 2 | Types/interfaces | Strict schema/result/interface are additive. |
-| 3 | Function signatures | Existing signatures unchanged. |
-| 4 | Import paths | Unchanged. |
-| 5 | Event IDs | No event added/changed. |
-| 6 | Widget spots | Unchanged. |
-| 7 | API URLs/shapes | No HTTP mapping or response change. |
-| 8 | Database | New append-only ledger table/checks/indexes only. |
-| 9 | DI keys | New `authPrincipalProvisioningService` key only. |
-| 10 | ACL IDs | None added/changed; system actor is not an ACL substitute reachable from HTTP. |
-| 11 | Notification IDs | Unchanged. |
-| 12 | CLI commands | Unchanged. |
-| 13 | Generated contracts | Additive ledger entity registry entry; no export/bootstrap shape change. |
+Strict Zod ensure/undo inputs and results, operation fingerprint/replay, advisory serialization, fresh-transaction race retry, scoped validation, create/equal/change outcomes, atomic ledger, and two-pass enablement are pinned. Tombstone inverse rows require nullable `after_kind` under a named iff CHECK and replay the nullable result deterministically.
 
-### Missing BC Section
-
-None. Prerequisite/migration order, schema versus operational rollback, audit retention, all 13 surfaces, and stability of the new DI/type contracts are explicit.
-
-## Spec Completeness
-
-No required section is missing. API/UI are explicitly N/A. The implementation plan maps every schema, service, command, ledger, DI, migration, unit, harness, and integration responsibility to a concrete file.
-
-## AGENTS.md Compliance
-
-No violation found.
-
-- Input is strict Zod with `z.infer`; Shared imports no Core code.
-- Auth owns every User/email/hash/encryption mutation and performs scoped decryption reads.
-- Command rejects all but `systemActor:true` with `auth:null`; actual `CommandRuntimeContext` contains this trusted flag and HTTP must not set it.
-- User+ledger and undo+inverse ledger are atomic; `extractUndoPayload` is mandatory.
-- No cross-module ORM/import, public API, ACL, token/session, UI, cache, search, event, worker, or notification surface.
-- Migration is additive, generated/reviewed, snapshot-synchronized, and never applied without approval.
-- Executable test is package-local rather than under `.ai/qa/tests`.
+The production path is no longer test-only: an auto-discovered trusted Connect CLI defaults to dry-run, requires `--apply` to mutate, imports a strict exact-ID manifest, and invokes the same service. Durable manifest rows support restart-safe backfill/reconciliation and explicit future registration, rotation, retirement, and unavailable-user handling without scans or inference; CLI or Connect lifecycle calls reuse the service without adding a worker.
 
 ## Risk Assessment
 
-### High
+| Risk | Severity | Mitigation |
+|---|---|---|
+| Wrong user classified | Critical | Exact ID, scoped validation, ledger/undo. |
+| Classification without ledger | Critical | Single transaction. |
+| Stale overwrite | High | Required version/conflict. |
+| Retry duplicate | High | Lock/fingerprint/unique/fresh retry. |
+| Cross-scope disclosure | High | Exact scope and redaction. |
+| Inventory drift/future users | High | Durable exact-ID manifest, reconciliation, hard enablement gate. |
 
-| Risk | Mitigation |
-|---|---|
-| Email collision converts human | Email path never reclassifies; exact-ID and system-only remediation; indistinguishable failure. |
-| User without ledger | One Auth transaction and failure-injection test. |
-| Retry duplicates state/audit | Exact transaction advisory operation lock, scoped unique/fingerprint/result, tenant-email unique winner, and fresh whole-command retry. |
-| Undo breaks automation | Version/security/Auth-dependency/later-transition gates, soft delete/inverse ledger, consumer disable-first rule. |
-| Cross-scope mutation | Trusted explicit scope and existing Auth tenant+organization/null predicate. |
-| Legacy automation remains human | Exact consumer inventory/remediation and hard verification gate; no heuristic migration. |
+## Split Verification
 
-### Medium
+Provisioning creates/changes only Connect extension rows and depends on, but does not redefine, classification storage/read. Its CLI, manifest, ledger, undo, and lifecycle remain one cohesive trusted-mutation capability. The two specs remain independently reviewable.
 
-| Risk | Mitigation |
-|---|---|
-| Same operation ID reused differently | Exact scoped advisory lock then fingerprint conflict with no mutation; no provisional ledger row. |
-| Two different operations race on email | DB unique winner; loser retries fresh and converges/fails safely. |
-| Ledger grows | Narrow append-only indexed rows, no PII/free text; retention is Auth audit policy. |
+## Intentional Change from Rejected Design
 
-### Low
-
-Generated registry/snapshot additions require expected test updates; generation and exact diff review cover them.
-
-## Gap Analysis
-
-### Critical Gaps
-
-None.
-
-### Important Gaps
-
-None.
-
-### Nice-to-Have
-
-A future operator UI/CLI for inventory may be specified separately; the current consumer-owned orchestration is executable and intentionally non-public.
-
-## Split and Contract Verification
-
-| Requirement | Verified Contract |
-|---|---|
-| Trusted provisioning/remediation | Server-only DI invokes system-actor command; email create/exact-ID remediation rules pinned. |
-| Command | Exact ID, validation, context authority, transaction, result, log rules pinned. |
-| Ledger | Scoped operation identity/fingerprint/result, transition data, inverse linkage, indexes/checks. |
-| Collision/retry | Scoped 5-second transaction advisory lock; no provisional ledger; aborted transaction discarded; complete command retries once fresh; deterministic replay. |
-| Audit/undo | Redacted log, strict undo payload, create/change constraints, atomic inverse ledger. |
-| Enablement gate | Consumer inventory, deterministic operations, verification read, zero unresolved/matching kinds. |
-| Classification separation | Depends on field/type/read; does not redefine migration/default/resolver. |
-
-## Remediation Plan
-
-### Before Implementation
-
-Implement/deploy the classification contract first; no further spec remediation is required.
-
-### During Implementation
-
-Follow the manifest and collision/atomicity/privacy/undo test matrix; inspect additive generated diffs and never apply migrations without approval.
-
-### Post-Implementation
-
-Each kind-sensitive consumer ships its own inventory/verification gate and immutable event-kind snapshot coverage.
+The command never creates, reclassifies, disables, or deletes Auth users. Operators use Auth-owned workflows first, then classify the exact UUID in Connect. Claiming equivalent Auth provisioning from an extension would violate module ownership.
 
 ## Recommendation
 
-**Ready to implement after classification.** All 13 BC categories and actual command/Auth assumptions are verified; no critical or important gap remains.
+**Ready to implement after classification.** No critical or important gap remains.

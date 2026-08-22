@@ -234,6 +234,8 @@ Add exact page metadata, server-first shared-component page, client date island,
 | `packages/connect/src/modules/connect_analytics/components/OperationalReport.client.tsx` | Create |
 | `packages/connect/src/modules/connect_analytics/i18n/{en,de,es,ko,pl}.json` | Create |
 | `packages/connect/src/modules/connect_analytics/__integration__/TC-CONNECT-ANALYTICS-OPERATIONAL.spec.ts` | Create |
+| `apps/mercato/src/modules.ts` | Modify with host-app `connect_analytics` installation entry |
+| `packages/create-app/template/src/modules.ts` | Modify through `yarn template:sync:fix` for scaffold parity |
 
 ## Risks & Impact Review
 

@@ -170,3 +170,6 @@ None remain in the implementation contract. The revised spec defines the item en
 ## Recommendation
 
 **Ready to implement after maintainer approval of the new frozen contract identifiers.** All original blockers and important gaps are resolved in the specification, all thirteen backward-compatibility categories remain additive, and remaining items are implementation evidence/validation tasks rather than design gaps.
+## External-Extension Re-Audit — 2026-08-22
+
+Ready. Runtime and tests remain package-local. The reparenting slice now explicitly publishes the bounded `connectContactDenominatorReader` required by cost reporting; this is a source-owned scalar projection, not a new consumer concern.

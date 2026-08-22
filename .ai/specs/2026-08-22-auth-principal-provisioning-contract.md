@@ -1,234 +1,228 @@
-# Auth Non-Human Principal Provisioning Contract
+# Connect Principal Classification Provisioning Contract
 
 ## TLDR
 
-Add one server-only Auth provisioning/remediation service and internal command that idempotently creates or explicitly reclassifies `system_bot` and `integration` users, records an append-only Auth ledger, handles email/operation races without converting humans heuristically, supports constrained undo, and provides an executable consumer enablement gate. It depends on the separate principal-kind classification contract and adds no public HTTP/UI/ACL surface.
+Add a server-only Connect command/service that idempotently creates or changes Connect-owned classification rows for existing scoped Auth user IDs, records an append-only Connect ledger, handles retries without heuristics, supports constrained undo, and gates kind-sensitive Connect behavior. It never mutates Auth and changes nothing in Core, Shared, or UI.
 
-## Overview
+## Dependency and Scope
 
-Defaulting every legacy user to `human` is backward compatible but cannot identify known automation. Consumers need a trusted, source-owned way to create or remediate exact non-human principals before enabling kind-sensitive behavior. This contract owns those mutations without broadening `auth.users.edit` or letting consumers import/update `User` directly.
+`2026-08-22-auth-principal-kind-contract.md` lands first. This contract consumes only its Connect-local entity/type/reader. Classification remains independently deployable; provisioning fails closed if its storage/reader or the existing sanctioned Auth validation facade is unavailable. All implementation is under `packages/connect`.
 
-### Dependency and delivery order
-
-`.ai/specs/2026-08-22-auth-principal-kind-contract.md` must be implemented first in the same release. This spec consumes its shared kinds, `User.principalKind`, CHECK/default, and scoped read method. Classification remains independently deployable; provisioning fails closed if the column/method is absent. Migration order is principal-kind column first, provisioning ledger second. Rollback order is consumers, provisioning, then classification.
-
-## Problem Statement
-
-Auth migration cannot safely infer legacy bots from email, password, role, name, or UUID. Consumer-side direct writes would bypass Auth encryption, tenant/email uniqueness, command/audit behavior, and organization isolation. Concurrent retries also need one deterministic result and ledger record.
-
-## Proposed Solution
-
-Publish a narrow shared Zod contract and register `authPrincipalProvisioningService` in Auth. It dispatches the internal command `auth.user.ensure_non_human` with `systemActor: true`, `auth: null`, explicit tenant+organization scope, and a required idempotency operation ID. HTTP request paths and authenticated session/API-key contexts can never set this trusted invocation.
-
-### Shared contract
+## Connect-Local Input and Service
 
 ```ts
-export type NonHumanAuthUserPrincipalKind = Exclude<AuthUserPrincipalKind, 'human'>
-
-export const ensureNonHumanPrincipalInputSchema = z.object({
-  scope: z.object({
-    tenantId: z.string().uuid(),
-    organizationId: z.string().uuid(),
-  }).strict(),
+export const ensureConnectPrincipalClassificationInputSchema = z.object({
+  tenantId: z.string().uuid(),
+  organizationId: z.string().uuid(),
   operationId: z.string().uuid(),
-  kind: z.enum(['system_bot', 'integration']),
-  identity: z.discriminatedUnion('type', [
-    z.object({ type: z.literal('user_id'), userId: z.string().uuid() }).strict(),
-    z.object({
-      type: z.literal('email'),
-      email: z.string().trim().email().max(320),
-      name: z.string().trim().min(1).max(120).nullable().optional(),
-    }).strict(),
-  ]),
+  userId: z.string().uuid(),
+  kind: z.enum(['human', 'system_bot', 'integration']),
   source: z.string().regex(/^[a-z0-9._:-]{1,100}$/),
   reasonCode: z.string().regex(/^[a-z0-9._:-]{1,100}$/),
   referenceId: z.string().regex(/^[A-Za-z0-9._:-]{1,160}$/).optional(),
+  expectedUpdatedAt: z.string().datetime().optional(),
 }).strict()
-
-export type EnsureNonHumanPrincipalInput = z.infer<typeof ensureNonHumanPrincipalInputSchema>
-
-export type EnsureNonHumanPrincipalResult = {
+export type EnsureConnectPrincipalClassificationInput =
+  z.infer<typeof ensureConnectPrincipalClassificationInputSchema>
+export type EnsureConnectPrincipalClassificationResult = {
+  classificationId: string
   userId: string
-  kind: NonHumanAuthUserPrincipalKind
+  kind: ConnectPrincipalKind
   created: boolean
   changed: boolean
   replayed: boolean
-}
-
-export interface AuthPrincipalProvisioningService {
-  ensureNonHumanPrincipal(input: EnsureNonHumanPrincipalInput): Promise<EnsureNonHumanPrincipalResult>
+  updatedAt: string
 }
 ```
 
-Shared imports no Core/domain code. Tokens are bounded operational identifiers, never free text/PII. The service is a new stable DI key; it has no API mapping.
+The Connect-local `connectPrincipalClassificationProvisioningService` exposes `ensure(input)` and dispatches `connect.principal_classification.ensure`. Callers cannot provide command context.
 
-### Command, collision, and retry algorithm
+It resolves `authPrincipalService` via local `tryResolve<unknown>`, then structurally narrows the value to an object whose `principalExists` property is a function before calling exactly:
 
-`auth.user.ensure_non_human` uses the canonical command bus/transaction seam and rejects unless `ctx.systemActor === true && ctx.auth == null`. The DI service constructs that context internally; callers cannot pass a context/system flag.
+```ts
+principalExists({
+  type: 'user',
+  id: input.userId,
+  scope: { tenantId: input.tenantId, organizationId: input.organizationId },
+})
+```
 
-1. Strict-parse input. Begin an Auth transaction, execute `set local lock_timeout = '5s'`, then acquire `pg_advisory_xact_lock(hashtextextended(?, 0))` for the exact key `auth-principal-provision:${tenantId}:${organizationId}:${source}:${operationId}`. Timeout throws retryable `[internal] auth_principal_operation_lock_timeout`. This serializes the operation without inserting an incomplete append-only ledger row.
-2. Load the ledger by unique identity `(tenant_id, organization_id, source, operation_id)`. If a completed/inverse row exists, compare its stored request fingerprint (SHA-256 of canonical non-secret request fields). A match returns its stored result with `replayed:true` and `skipLog:true`; mismatch returns typed `[internal] auth_principal_operation_conflict`. Thus an operation ID can never mean two requests. The database unique key remains defense in depth against lock-key misuse.
-3. Resolve exact `user_id`, or normalized email using the existing Auth email normalization/hash helper and tenant-scoped email-hash unique identity. Every existing-row read uses five-argument `findOneWithDecryption`, exact tenant, `(organization_id IS NULL OR requested organization)`, and `deleted_at IS NULL`, then locks the row for update.
-4. Missing/deleted/foreign/wrong-org exact ID returns the same `[internal] auth_principal_target_unavailable`; it never creates.
-5. Email miss creates a disabled, unconfirmed, passwordless user in the requested tenant+organization with the requested non-human kind, using existing Auth encryption/email-hash creation helpers. It receives no role, ACL, session, API key, invitation, or welcome email.
-6. A tenant/email-hash unique violation aborts that transaction. Retry the **entire command once in a fresh transaction**, first reclaiming/replaying the same operation ID and loading the winner; never query inside an aborted transaction.
-7. Email hit converges only when the existing row already has the requested non-human kind. If it is human or the other non-human kind, return the same target-unavailable error; email identity never reclassifies.
-8. Exact-ID hit may change human or the other non-human kind to the requested kind. If already equal it is a successful no-op.
-9. User mutation and the first complete ledger row are inserted/committed atomically. Failure rolls back both; no provisional ledger survives. A successful no-op still inserts a completed operation ledger so retries are deterministic, but generic command logging is skipped because no user state changed.
+No new Shared import or Auth implementation import is required. The existing Auth semantics are authoritative: exact tenant is mandatory; an active user with null `organization_id` is tenant-wide and valid for every organization in that tenant, while an organization-bound user is valid only for the matching organization.
 
-Errors never disclose whether an email/foreign ID exists. Logs include tenant, organization, source, operation ID, outcome/code, and duration, but no user ID, email, name, reference value, credentials, or request payload.
+## Authority and Auth Boundary
+
+- Require `ctx.systemActor === true && ctx.auth == null`; HTTP, sessions, API keys, and browser paths cannot invoke it.
+- Before a write, soft-resolve the existing sanctioned Auth facade and validate exact `userId` in exact tenant/organization.
+- Missing facade/method/error and missing/deleted/foreign/wrong-organization users all return `[internal] connect_principal_target_unavailable` without mutation/disclosure.
+- There is no email mode. Operators create users through existing Auth-owned workflows, then supply the exact ID.
+- Connect never imports Auth entities, queries Auth tables, invokes an undocumented Auth write, or copies email/name/password/hash data.
+
+## Command, Collision, and Retry
+
+1. Strict-parse input; begin a Connect transaction, set five-second local lock timeout, and acquire the transaction advisory lock for `connect-principal-classification:{tenantId}:{organizationId}:{source}:{operationId}`.
+2. Load ledger unique `(tenant_id, organization_id, source, operation_id)`. Matching SHA-256 canonical request fingerprint replays stored result; mismatch returns `[internal] connect_principal_operation_conflict`.
+3. Validate exact user through the soft Auth facade before any classification write.
+4. Lock the scoped classification row by tenant, organization, and user.
+5. Missing creates; equal is a no-op; differing requires `expectedUpdatedAt` equal to `updated_at`, otherwise return the unified record conflict.
+6. Classification create/change and completed ledger commit atomically. Successful no-op still records completion for deterministic retry.
+7. On classification unique violation, discard the aborted transaction and retry the whole command once fresh, including Auth validation and winner locking.
+
+The operation never mutates Auth. Logs expose only scope, source, operation ID, outcome/code, and duration; no user ID, reference, or payload.
 
 ## Data Model
 
-### `PrincipalKindChange` / `principal_kind_changes`
-
-Append-only Auth-owned operation/transition ledger:
+### `ConnectPrincipalClassificationChange` / `connect_principal_classification_changes`
 
 | Field | Storage/rule |
 |---|---|
 | `id` | UUID PK |
 | `tenant_id`, `organization_id` | required scope |
-| `operation_id` | required UUID |
-| `source` | bounded token |
-| `request_fingerprint` | fixed lowercase SHA-256 hex |
-| `user_id` | UUID scalar, nullable until successful target resolution |
-| `before_kind` | nullable checked kind; null for creation |
-| `after_kind` | required non-human checked kind on success |
-| `created_user` / `changed_user` | required booleans on success |
-| `outcome` | `completed | undone`; operation errors do not persist a misleading completion |
+| `operation_id`, `source` | required operation identity |
+| `request_fingerprint` | lowercase SHA-256 hex |
+| `classification_id`, `user_id` | UUID scalars; soft references |
+| `before_kind`, `after_kind` | checked kinds; before nullable on create, after nullable only for tombstone |
+| `created_classification`, `changed_classification` | required booleans |
+| `tombstoned_classification` | required boolean |
+| `result_updated_at` | required optimistic-lock version |
+| `outcome` | `completed | undone` |
 | `reason_code`, `reference_id` | bounded tokens |
-| `inverse_of_id` | nullable scalar ledger ID for undo; no ORM relation |
+| `inverse_of_id` | nullable scalar ledger ID |
 | `created_at` | required timestamp |
 
-Unique `(tenant_id, organization_id, source, operation_id)`. Index `(tenant_id, organization_id, user_id, created_at)`. Checks close kinds/outcomes and require completed result fields. It has no `updated_at`, `deleted_at`, CRUD route, search, encryption, or public read because it is immutable and contains no PII/free text. Undo appends a separate inverse row with a new operation ID; it never updates/deletes history.
+Unique operation identity; index `(tenant_id, organization_id, user_id, created_at)`. A named CHECK requires `after_kind IS NULL` iff `tombstoned_classification = true`; a tombstone must have non-null `before_kind`, and an ordinary completed classification must have non-null `after_kind`. The ledger is immutable, has no ORM relations, CRUD, search, deletion, or free-text/PII.
 
-### Audit and command log
+## Audit and Undo
 
-For a real create/change, `buildLog` records command ID, scoped resource ID, operation ID/source/reason/reference, before/after kind, and created/changed booleans only. Email/name/hash/password and full input are excluded. `extractUndoPayload` reads a strict Zod-validated redacted snapshot. A replay/no-op sets `skipLog:true`; the Auth ledger remains the atomic idempotency/source-of-truth record.
+Real changes log only command/resource/operation tokens, before/after kinds, and flags. Full input/user ID are excluded. Replay/no-op skips generic logging; the ledger remains authoritative.
 
-## Undo Contract
+Undo is system-only with a fresh operation ID and a strict contract:
 
-- **Created row:** allowed only when the user still has the command-produced `updated_at`, remains the same non-human kind, passwordless, unconfirmed, non-deleted, and has no Auth-owned roles, ACLs, active sessions, API keys, or later principal-kind ledger transition. Undo soft-deletes it and appends an `undone` inverse ledger row atomically. Scalar consumer references remain intact and future resolver reads fail closed.
-- **Classification change:** allowed only when user version/kind still match the command result and no later kind ledger transition exists. Undo restores snapshotted `beforeKind` (including human) and appends the inverse ledger atomically.
-- Conflicts return the unified command undo conflict and change nothing. Undo itself requires `systemActor:true`, `auth:null`, a fresh operation ID, and is idempotently replayable by its own ledger identity.
+```ts
+export const undoConnectPrincipalClassificationInputSchema = z.object({
+  tenantId: z.string().uuid(),
+  organizationId: z.string().uuid(),
+  operationId: z.string().uuid(),
+  source: z.string().regex(/^[a-z0-9._:-]{1,100}$/),
+  originalChangeId: z.string().uuid(),
+  expectedUpdatedAt: z.string().datetime(),
+  reasonCode: z.string().regex(/^[a-z0-9._:-]{1,100}$/),
+}).strict()
 
-## Enablement Inventory and Gate
+export type UndoConnectPrincipalClassificationResult = {
+  classificationId: string
+  userId: string
+  kind: ConnectPrincipalKind | null
+  tombstoned: boolean
+  replayed: boolean
+  updatedAt: string | null
+}
+```
 
-Before a kind-sensitive consumer enables:
+- Created row: if version/kind still match and no later transition exists, delete the extension row and append an inverse tombstone ledger with `after_kind = null` atomically.
+- Changed row: under the same guards, restore `beforeKind` and append inverse.
+- Mismatch returns unified undo conflict. Undo uses the same scoped operation lock/fingerprint/result fields as ensure: an exact retry returns the stored nullable-kind/tombstone result with `replayed:true`; operation-ID reuse with different input conflicts. Auth is never changed.
 
-1. It builds a bounded list of exact known bot/integration IDs/emails from its own durable configuration; Auth never scans or guesses.
-2. It calls `ensureNonHumanPrincipal` once per item with stable source and deterministic UUID operation ID derived/stored by the consumer. Email collision requires operator resolution and an exact-ID operation.
-3. It reruns unresolved items; exact operation retries return the stored result. A second full pass produces zero user changes and no duplicate action log/ledger.
-4. It calls `resolveUserPrincipalKinds` in the same scope and requires every exact ID to return the expected non-human kind.
-5. Gate passes only with provisioning service present, classification read method present, zero unresolved items, and matching verification. Missing service/method, error, sentinel/missing row, or mismatch keeps the consumer disabled and reports bounded counts/codes without PII.
+## Trusted CLI, Durable Manifest, and Lifecycle
 
-This is a consumer-owned orchestration gate, not an Auth API/CLI/global scan. Each consumer ships its gate integration test in the same change.
+The production-reachable ingress is the auto-discovered Connect CLI command:
+
+```bash
+mercato connect principals reconcile --tenant <uuid> --organization <uuid> --manifest <path>
+```
+
+The command parses a strict JSON manifest of exact `{ externalKey, userId, kind, reasonCode, referenceId? }` entries, requires the normal trusted server/operations environment, rejects duplicate keys/IDs and all email/heuristic selectors, and invokes the same service/command path. It never writes ORM state directly. Dry-run is the default and reports bounded non-PII counts; explicit `--apply` persists the manifest and reconciles it.
+
+`ConnectPrincipalClassificationManifestEntry` / `connect_principal_classification_manifest_entries` durably stores exact desired state: scoped UUID PK, bounded stable `external_key`, exact `user_id`, desired checked `kind`, reason/reference tokens, deterministic `operation_id` derived from scope+external key+desired revision, `active`, `last_reconciled_at`, bounded `last_result_code`, and timestamps. Unique scope+external key and scope+user ID; no PII, Auth FK, or ORM relation. Import/upsert and reconciliation are commands with optimistic locking.
+
+Initial backfill is an operator-supplied exact-ID manifest followed by reconciliation and verification; there is no Auth scan or inference. Future Connect-owned automation must register/update a durable manifest entry only after its Auth workflow returns the exact user ID, then reconcile before enabling that identity. Rotation writes a new exact ID and operation ID under optimistic lock; retirement marks the manifest entry inactive and tombstones its sidecar classification through the undo/remediation command where safe. Auth deletion does not rewrite historical snapshots; reconciliation marks the target unavailable and future classification reads fail closed. CLI invocation or a Connect-owned lifecycle call into the same reconciliation service retries active unresolved entries idempotently; this contract adds no worker. No feature enables until all required active entries verify.
+
+## Enablement Gate
+
+1. Load the bounded active exact-ID inventory from the durable Connect manifest; never scan Auth or guess.
+2. Use stable source and deterministic/stored UUID operation IDs.
+3. Retry unresolved targets only after operator correction; a second pass produces zero changes/duplicate logs.
+4. Require the classification reader to return every expected exact kind.
+5. Where current activity matters, require the existing Auth facade to validate every ID.
+6. Missing service/reader/facade, error, sentinel/missing row, mismatch, or unresolved item keeps behavior disabled and reports bounded non-PII counts/codes.
 
 ## API, UI, ACL, Events, and Cache
 
-No HTTP/OpenAPI, UI, navigation, public error, ACL, notification, CLI, event, subscriber, worker, search, or cache surface. Existing `auth.users.edit` does not authorize this command. No public user/session/token response changes.
+No HTTP/OpenAPI, UI, navigation, ACL, notification, event, search, cache, or public Auth/Connect response change. This contract adds the trusted `mercato connect principals reconcile` CLI command and its auto-discovery entry only; it is not an end-user authorization surface.
 
 ## Migration & Backward Compatibility
 
-Forward migration creates only `principal_kind_changes`, checks, unique/indexes after the classification migration. Snapshot updated; generate/review/no-op probe; do not apply without approval. Generated down drops only ledger indexes/checks/table. Operational rollback first disables consumers, then removes provisioning command/DI while retaining table/history; classification remains. Schema down of provisioning may follow only after audit retention approval.
+After classification, a Connect migration creates the ledger and durable manifest tables, checks, unique keys, indexes, and snapshot update. Generate/review and require clean regeneration; never apply without approval.
 
-All 13 surfaces: auto-discovery unchanged except additive entity export; shared types/interface additive; signatures/imports unchanged; no events/widgets/APIs/ACLs/notifications/CLI; additive DB table; additive DI key; generated entity registry addition only. No deprecation/upgrade note is required.
+Rollback disables kind-sensitive behavior and reconciliation, removes CLI/command/service registration, and retains manifest/ledger history. Explicit schema down is retention-gated; classification rolls back last. Across all thirteen BC surfaces, entity/command/CLI auto-discovery, Connect database schema, and Connect DI gain additive entries; types/signatures/imports/events/widgets/APIs/ACLs/notifications and existing CLI commands remain unchanged.
 
 ## Testing Strategy and Integration Coverage
 
-- Strict schema/token/identity/systemActor tests; authenticated/superadmin/API-key/HTTP invocation rejected.
-- Exact-ID create prohibition on miss; scoped active/null-org/wrong-org/foreign/deleted cases.
-- Email create uses Auth encryption/hash, disabled/unconfirmed/passwordless/no roles/messages; email human/other-kind collision never converts.
-- Operation replay, fingerprint conflict, same-operation concurrency, different-operation same-email unique race, aborted-transaction fresh retry, exactly one created user and one completed ledger.
-- Exact-ID human→bot, bot→integration, already-equal no-op; atomic failure injection between user/ledger.
-- Command log redaction and skip rules; no PII in ledger/log/error/telemetry.
-- Undo create/change success, version/security/dependency/later-transition conflicts, inverse ledger and idempotent undo retry.
-- Enablement gate absent service/method/error/unresolved/mismatch/zero sentinel and successful two-pass remediation.
-- Package-local `packages/core/src/modules/auth/__integration__/TC-AUTH-064-principal-provisioning.spec.ts` plus metadata; no executable test under `.ai/qa/tests`.
+- Strict schema/system-actor; reject HTTP/session/API-key invocation.
+- Scoped Auth validation; absent/error/missing/deleted/foreign/wrong-org is indistinguishable and mutation-free.
+- Create all kinds, equal no-op, optimistic-lock change.
+- Replay/fingerprint conflict, concurrency, same-user race, fresh retry, atomic failure injection.
+- Audit/error/telemetry redaction.
+- Undo success/conflicts/inverse/replay; prove Auth never changes.
+- Undo tombstone CHECK, nullable result replay, and mismatched replay conflict.
+- CLI dry-run/apply validation, authorization/environment gate, exact-ID-only manifest, duplicate rejection, and command-path reuse.
+- Durable manifest import/reconcile/restart recovery, exact-ID backfill, future registration/rotation/retirement, unavailable Auth user, and successful no-change second pass.
+- Enablement negative matrix and successful two-pass remediation.
+- Decoupling/diff scope: no Core/Shared/UI edit, Auth import/query, or ORM relation.
+
+Executable coverage: `packages/connect/src/modules/connect/__integration__/TC-CONNECT-PRINCIPAL-002-provisioning.spec.ts`.
 
 ## Implementation Plan and File Manifest
 
-1. Add shared strict schema/types/interface.
-2. Add ledger entity/migration/snapshot.
-3. Implement command, service, DI, collision/retry/idempotency/audit/undo.
-4. Add enablement-contract helpers/tests without consumer imports in Auth.
-5. Run generation, migration no-op probe, targeted/full regression and integration gates.
-
 | File | Action |
 |---|---|
-| `packages/shared/src/lib/auth/principal-service.ts` | Modify provisioning schema/types/interface |
-| `packages/core/src/modules/auth/data/entities.ts` | Add ledger entity export |
-| `packages/core/src/modules/auth/commands/principals.ts` | Create internal command/undo |
-| `packages/core/src/modules/auth/services/principalProvisioningService.ts` | Create narrow DI implementation |
-| `packages/core/src/modules/auth/di.ts` | Register additive service key |
-| `packages/core/src/modules/auth/migrations/Migration<timestamp>_auth.ts` | Create ledger migration after classification migration |
-| `packages/core/src/modules/auth/migrations/.snapshot-open-mercato.json` | Modify |
-| `packages/core/src/modules/auth/commands/__tests__/principals.test.ts` | Create |
-| `packages/core/src/modules/auth/services/__tests__/principalProvisioningService.test.ts` | Create |
-| `packages/core/src/modules/auth/migrations/__tests__/principal-provisioning.migration.test.ts` | Create |
-| `packages/core/src/modules/auth/__integration__/TC-AUTH-064-principal-provisioning.spec.ts` | Create |
+| `packages/connect/src/modules/connect/lib/principal-classification-provisioning.ts` | Create schema/service/gate |
+| `packages/connect/src/modules/connect/data/entities.ts` | Add ledger and durable manifest entities |
+| `packages/connect/src/modules/connect/commands/principal-classifications.ts` | Create command/undo |
+| `packages/connect/src/modules/connect/cli.ts` | Add trusted reconcile command |
+| `packages/connect/src/modules/connect/lib/principal-classification-manifest.ts` | Add durable manifest/reconciliation |
+| `packages/connect/src/modules/connect/di.ts` | Register service |
+| `packages/connect/src/modules/connect/migrations/Migration<timestamp>_connect.ts` | Create ledger migration |
+| `packages/connect/src/modules/connect/migrations/.snapshot-open-mercato.json` | Modify |
+| `packages/connect/src/modules/connect/commands/__tests__/principal-classifications.test.ts` | Create |
+| `packages/connect/src/modules/connect/lib/__tests__/principal-classification-provisioning.test.ts` | Create |
+| `packages/connect/src/modules/connect/__tests__/cli-principal-classifications.test.ts` | Create |
+| `packages/connect/src/modules/connect/migrations/__tests__/principal-classification-provisioning.migration.test.ts` | Create |
+| `packages/connect/src/modules/connect/__integration__/TC-CONNECT-PRINCIPAL-002-provisioning.spec.ts` | Create |
+| `packages/connect/src/modules/connect/__integration__/TC-CONNECT-PRINCIPAL-003-reconciliation.spec.ts` | Create CLI/manifest/lifecycle coverage |
 
-Validation: `yarn db:generate`, `yarn generate`, targeted shared/Auth tests, core/shared builds, TC-AUTH-064, `yarn typecheck`; record one runner mode and never apply migrations.
+Validation: generate, targeted Connect tests/build/typecheck, integration, decoupling, and repository typecheck; record one runner and do not apply migrations.
 
 ## Risks & Impact Review
 
-### Email collision converts human
-- **Severity:** Critical
-- **Mitigation:** email path never reclassifies; exact-ID/system-only remediation; indistinguishable error; ledger.
-- **Residual:** trusted operator can choose wrong exact ID; immutable consumer snapshots and audit expose it.
-
-### User commits without ledger
-- **Severity:** Critical
-- **Mitigation:** one Auth transaction; failure injection; ledger is idempotency winner.
-- **Residual:** DB outage blocks enablement rather than partially succeeding.
-
-### Retry duplicates user/audit
-- **Severity:** High
-- **Mitigation:** scoped operation unique key/fingerprint/result plus tenant-email unique winner and whole-command fresh retry.
-- **Residual:** exhausted second collision returns retryable failure and gate stays closed.
-
-### Undo breaks live automation
-- **Severity:** High
-- **Mitigation:** version/security/Auth-dependency/later-transition checks, soft delete, system-only inverse operation, consumer disable-before-undo operational rule.
-- **Residual:** unknown scalar consumer references remain but resolve fail closed.
-
-### Cross-scope mutation/disclosure
-- **Severity:** High
-- **Mitigation:** exact tenant+organization/null predicate, trusted explicit scope, no browser route, indistinguishable failures.
-- **Residual:** tenant-wide null-org principals are intentionally visible within their tenant and require trusted provisioning.
-
-### Default-human legacy automation remains
-- **Severity:** High
-- **Mitigation:** exact consumer inventory/remediation and hard verification gate; never heuristic migration.
-- **Residual:** undocumented automation remains human until its owner inventories it; kind-sensitive consumer must not enable with known unresolved principals.
+| Risk | Severity | Mitigation |
+|---|---|---|
+| Wrong user classified | Critical | Exact ID, scoped validation, system actor, ledger/undo. |
+| State without ledger | Critical | One transaction and failure injection. |
+| Stale overwrite | High | Required version for changes/undo. |
+| Retry duplicates state | High | Scoped lock/fingerprint/unique key/fresh retry. |
+| Cross-scope disclosure | High | Exact scope, indistinguishable error, redaction. |
+| Core boundary erosion | High | Connect-only manifest and decoupling test. |
 
 ## Final Compliance Report — 2026-08-22
 
-Reviewed root/spec/core/auth/customers/CLI/shared/QA rules, actual command `systemActor` contract, Auth encryption/email uniqueness, principal facade, migrations, and all 13 BC surfaces.
-
 | Check | Status | Evidence |
 |---|---|---|
-| Scope cohesion | Pass | Trusted non-human provisioning/remediation/ledger/gate only |
-| Dependency | Pass | Classification first; explicit forward/rollback order |
-| Tenant isolation | Pass | Existing Auth scoped predicate and indistinguishable failures |
-| Command/audit/undo | Pass | System actor only, atomic ledger, redacted log, constrained inverse |
-| Collision/idempotency | Pass | Operation fingerprint/result plus email unique fresh retry |
-| Public auth stability | Pass | No API/UI/ACL/token/session changes |
-| Migration/BC | Pass | Additive table/key/types; all 13 surfaces audited |
-| Test discovery | Pass | Package-local TC-AUTH-064 |
-
-Non-compliant items: none.
+| Scope cohesion | Pass | Connect provisioning/remediation/ledger/gate only |
+| Owner architecture | Pass | No Auth/Core/Shared/UI implementation |
+| Dependency | Pass | Classification first; rollback last |
+| Isolation | Pass | Exact scope and soft Auth validation |
+| Audit/undo | Pass | Atomic/redacted/optimistic inverse |
+| Idempotency | Pass | Fingerprint/result and fresh retry |
+| HTTP/UI stability | Pass | No public application surface changes |
+| Production ingress/lifecycle | Pass | Trusted CLI, durable exact-ID manifest, reconciliation and future-user rules |
 
 ### Verdict
 
-**Ready to implement after the classification contract.** No mutation remains in the classification spec and no classification schema/read responsibility is duplicated here.
-
-## Review — 2026-08-22
-
-- Security, tenant isolation, command authority, collisions, atomicity, audit redaction, undo, enablement, compatibility, and split cohesion: passed.
+**Ready to implement after the Connect classification extension.**
 
 ## Changelog
 
 ### 2026-08-22
 
-- Created after owner selected SPLIT; moved all trusted non-human provisioning/remediation, command, ledger, collision/retry, audit/undo, enablement gate, tests, and rollback ordering out of the principal-kind classification specification.
+- Reworked rejected Auth provisioning into Connect-owned exact-user classification remediation.
+- Removed Auth user mutation, Shared contracts, and all Core/UI implementation.

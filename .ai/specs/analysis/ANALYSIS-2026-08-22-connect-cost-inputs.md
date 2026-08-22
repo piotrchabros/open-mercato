@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-**Ready to implement.** The revised specification resolves every previous blocker and important gap against actual repository conventions. It now has deterministic analytics-foundation ordering, an owner-provided scoped currency reader with fail-closed behavior, lossless bigint wire/storage rules, privacy-safe undo/audit design, exact provider-line replay semantics, complete owning-file/test manifests, and bounded API/reader contracts.
+**Ready to implement.** The revised specification resolves every previous blocker and important gap against actual repository conventions. It now has deterministic analytics-foundation ordering, an extension-owned adapter over the source-owned base-currency service with fail-closed behavior, lossless bigint wire/storage rules, privacy-safe undo/audit design, exact provider-line replay semantics, complete owning-file/test manifests, and bounded API/reader contracts.
 
 ## Evidence Reviewed
 
@@ -10,7 +10,7 @@
 - `BACKWARD_COMPATIBILITY.md` and all 13 categories.
 - Root/spec/core/customers/currencies/shared/UI/backend UI/CLI/QA guidance and repository review checklist.
 - Actual Connect module/entities/metrics/ACL/setup/DI/routes/commands/migrations and generated conventions.
-- Actual currencies API/ACL/DI: confirms the existing public list requires `currencies.view` and no current scoped code-reader exists, so the specified currencies-owned additive DI seam is necessary and correctly placed.
+- Actual currencies DI contract: confirms `baseCurrencyService.resolveBaseCurrency({ tenantId, organizationIds })` is source-owned and already consumed soft-optionally by other modules; the extension can validate one scoped base currency without changing or importing currencies storage.
 - QA discovery rules: executable module-local `__integration__` path is now correct and `.ai/qa/tests` remains config-only.
 
 ## Backward Compatibility
@@ -22,14 +22,14 @@ None. All proposed changes are additive.
 | # | Surface | Verified Result |
 |---:|---|---|
 | 1 | Auto-discovery file conventions | Base AN-MOD-01 ownership/order is explicit; new/modified index, ACL, setup, DI, entity, validation, encryption, events, search, API, page, and integration files retain conventions. |
-| 2 | Type definitions & interfaces | New currency/cost readers and schemas are additive; required fields and decimal-string semantics are pinned. |
+| 2 | Type definitions & interfaces | New extension-local currency/cost readers and schemas are additive; required fields and decimal-string semantics are pinned. |
 | 3 | Function signatures | No existing signature changes; both reader methods are new stable additions. |
 | 4 | Import paths | No moves/removals; cross-module reads remain DI/API based. |
 | 5 | Event IDs | Three new correctly formed past-tense CRUD event IDs; existing IDs unchanged. |
 | 6 | Widget injection spot IDs | No change. |
 | 7 | API route URLs | CRUD and sanitized currency-options routes are additive with exact schemas/guards. |
 | 8 | Database schema | Two new analytics tables/checks/indexes only; normal generated down and operational retention are distinguished. |
-| 9 | DI service names | `connectCostInputReader` and `currencyCodeReader` are additive and explicitly stable. |
+| 9 | DI service names | `connectCostInputReader` is additive and stable; the base-currency adapter is extension-internal and consumes an existing key unchanged. |
 | 10 | ACL feature IDs | Two additive IDs with dependency/default-role/wildcard behavior pinned. |
 | 11 | Notification type IDs | No change. |
 | 12 | CLI commands | No change. |
@@ -56,7 +56,7 @@ None blocking or important. Implementation chooses code organization inside the 
 None.
 
 - Both tenant and organization scope are mandatory on entity, readers, routes, selectors, uniqueness, undo revision lookup, and tests.
-- Currency validation is owned by currencies and consumed soft-optionally through DI; no peer ORM import or hard module requirement exists.
+- Currency validation is owned by the Connect extension adapter and uses the source-owned `baseCurrencyService`; no peer ORM import, generic peer-entity query, platform modification, or hard module requirement exists.
 - All route/internal inputs are exact Zod schemas with `z.infer`; money is never a JS number or JSON bigint.
 - Description fields are in encryption maps and decrypted only through five-argument scoped helpers. Command/audit/event payloads are redacted; undo reads a scoped encrypted revision secret.
 - CRUD uses commands, `runCrudCommandWrite`, `extractUndoPayload`, canonical side effects, optimistic locking, CrudForm/DataTable/apiCall, ACL/setup, search exclusion, i18n, and DS primitives.
@@ -70,7 +70,7 @@ None.
 |---|---|---|
 | Sensitive description escapes encrypted entity | Privacy breach through command/audit/search/event/log surfaces. | Encrypted cost and revision fields, redacted payloads, scoped undo lookup, exhaustive COST-INT-005/006. |
 | Bigint precision/serialization | Incorrect stored money or runtime JSON failure. | Canonical regex, signed-bigint maximum, BigInt only after parse, `.toString()` on every DTO, boundary tests. |
-| Currency dependency absent/invalid | Financial row lacks defined currency meaning. | Currencies-owned dual-scoped active reader; write 422 and selector 503 fail closed; no format-only acceptance. |
+| Currency dependency absent/invalid | Financial row lacks defined currency meaning. | Extension-owned dual-scoped active query adapter; write 422 and selector 503 fail closed; no format-only acceptance. |
 | Cross-scope disclosure | Financial/actor data leaks across organization/tenant. | Server-derived scope on every seam, scoped uniqueness/lookups, guessed-ID tests. |
 
 ### Medium Risks
@@ -109,7 +109,7 @@ None.
 |---|---|---|
 | Forbidden `.ai/qa/tests` executable file | Module-local `connect_analytics/__integration__/TC-CONNECT-COST-INPUTS` plus metadata | Resolved |
 | Missing analytics module prerequisite/scaffold | AN-MOD-01 strict order or unchanged fallback scaffold; complete shared-file manifest | Resolved |
-| Missing currency seam/selector authorization | Currencies-owned scoped `currencyCodeReader`; analytics options route; fail-closed absence | Resolved |
+| Missing currency seam/selector authorization | Extension-owned base-currency adapter; singleton analytics options route; fail-closed absence | Resolved |
 | Undefined bigint conversion/bounds | Canonical string grammar, bigint maximum, ORM/DTO/OpenAPI conversions | Resolved |
 | Sensitive undo/audit snapshot | Encrypted revision-secret entity; redacted command/audit/event payload; scoped undo | Resolved |
 | Provider normalization/grain/idempotency | Exact NFC/whitespace/lowercase canonicalization; invoice+line unique key; replay comparison | Resolved |

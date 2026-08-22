@@ -132,3 +132,6 @@ No further consumer-spec remediation. Verify both landed reader versions before 
 - Performance/index/bounded transfer: Pass.
 - QA/generated/live/activation/UI: Pass.
 - Verdict: Ready to implement in pinned phase order.
+## External-Extension Re-Audit — 2026-08-22
+
+Ready after sources. Reparenting now owns and publishes the exact denominator contract consumed here, and host/template module registration makes the external report module discoverable without modifying platform business code.

@@ -3,9 +3,9 @@
 | Field | Value |
 |---|---|
 | Date | 2026-08-22 |
-| Status | Proposed; ready after Auth prerequisite and maintainer approval |
+| Status | Proposed; ready after Connect principal-classification prerequisite and maintainer approval |
 | Scope | Connect-owned immutable response evidence, generation lifecycle, wait facts and scoped SLA reader |
-| Depends on | Auth principal-kind contract; Phase 1 Connect; Case re-parenting contract for lineage integration |
+| Depends on | Connect principal-classification extension contract; Phase 1 Connect; Case re-parenting contract for lineage integration |
 
 ## TLDR
 
@@ -19,7 +19,7 @@ This contract adds neutral Connect lifecycle/evidence facts useful to any author
 
 ## Architecture
 
-Auth owns principal classification. Connect softly resolves `authPrincipalKindReader` during evidence-capable enqueue and stores a fact; Auth absence/error yields `unknown` without changing send behavior. Connect owns all source writes, outbox events and `connectCaseSlaReader`. Consumers use DI and scalar IDs only. No cross-module ORM relation or consumer callback exists.
+Connect owns principal classification in its extension sidecar. Enqueue softly resolves `connectPrincipalKindReader` and stores a fact; missing/invalid/deleted/inaccessible classification or dependency error yields `unknown` without changing send behavior. Connect owns all source writes, outbox events and `connectCaseSlaReader`. Consumers use DI and scalar IDs only. No cross-module ORM relation or consumer callback exists.
 
 ## Data Models
 
@@ -50,7 +50,7 @@ Add plural scoped tables `connect_case_generation_facts`, `connect_case_wait_fac
 
 ## Commands and Concurrency
 
-Reply command strict Zod input adds server-owned `contentOrigin` and optional authenticated `acceptedByUserId`; types derive with `z.infer`. Enqueue locks scoped Case, resolves Auth through DI, snapshots generation/evidence, and persists outbound/message/attempt/outbox atomically.
+Reply command strict Zod input adds server-owned `contentOrigin` and optional authenticated `acceptedByUserId`; types derive with `z.infer`. Enqueue locks the scoped Case, soft-resolves `connectPrincipalKindReader`, snapshots generation/evidence, and persists outbound/message/attempt/outbox atomically. Missing reader, underlying Auth-facade failure, or unresolved classification records `unknown` without blocking send.
 
 `applyDeliveryOutcome` retains delivery-revision idempotency and locks the scoped Case `FOR UPDATE`. It performs a scoped conditional `UPDATE connect_cases SET first_outbound_sent_at=:at WHERE ... AND first_outbound_sent_at IS NULL RETURNING`. Only the returning winner emits the legacy non-null operational field; that legacy field remains unqualified. Attempt revision, Case status, wait/delivery facts and outbox commit atomically. Race tests use two distinct attempts.
 
@@ -95,7 +95,7 @@ No new public route, page, widget, notification or user-facing string. Existing 
 
 ## Migration and Rollout
 
-Deploy Auth principal-kind/read facade first and complete exact-ID remediation. Add generation/evidence columns plus fact tables/indexes. Existing Cases become generation 0. Existing outbounds backfill origin/kinds/evidence as unknown; never resolve present-day users to retro-credit. For large tables use nullable columns, bounded backfill, validate, then set default/not-null. Reparenting migration must include generation snapshots. Generate/review intended SQL and Connect snapshot; remove unrelated drift; never automate `db:migrate`.
+Deploy Connect principal classification and its provisioning/remediation contract first, reconcile the exact-ID manifest, and pass its enablement gate. Add generation/evidence columns plus fact tables/indexes. Existing Cases become generation 0. Existing outbounds backfill origin/kinds/evidence as unknown; never resolve present-day users to retro-credit. For large tables use nullable columns, bounded backfill, validate, then set default/not-null. Reparenting migration must include generation snapshots. Generate/review intended SQL and Connect snapshot; remove unrelated drift; never automate `db:migrate`.
 
 Rollback consumers first. Released evidence/events/DI/schema are additive frozen contracts and are not dropped while any consumer exists.
 
@@ -103,11 +103,11 @@ Rollback consumers first. Released evidence/events/DI/schema are additive frozen
 
 Modify Connect entities/events/DI and enqueue, delivery, ingest, transition and reparent snapshot call sites. Add `connect/lib/sla-source-reader.ts`, migration/snapshot and focused unit/database/integration tests. Run generate, package build/typecheck, decoupling and standalone harness refresh.
 
-Self-contained tests with fixtures/finally cleanup cover human/bot/integration/sentinel/deleted/wrong-org/Auth absence; accepted/unaccepted AI; immutable classification after user change/deletion; two-attempt delivery race; open/reopen/resolve/close and late old-generation delivery; exact wait boundaries; duplicate/out-of-order events; reader watermark/cursors/scope/limit/malformed rows; historical unknown backfill; split/merge/undo generation; PII scan; old consumer/provider compatibility.
+Self-contained tests with fixtures/finally cleanup cover human/bot/integration/sentinel/deleted/wrong-org classification, principal-reader absence, and underlying Auth-facade failure; accepted/unaccepted AI; immutable classification after user change/deletion; two-attempt delivery race; open/reopen/resolve/close and late old-generation delivery; exact wait boundaries; duplicate/out-of-order events; reader watermark/cursors/scope/limit/malformed rows; historical unknown backfill; split/merge/undo generation; PII scan; old consumer/provider compatibility.
 
 ## Risks and Impact Review
 
-False human evidence is critical and mitigated fail-closed at immutable enqueue. Wrong generation and missed waits are high and mitigated with locks, generation snapshot and transactional facts. Large-table migration is medium and uses bounded rollout. Auth absence is medium and produces unknown without send failure. Residual risk is explicit unknown history.
+False human evidence is critical and mitigated fail-closed at immutable enqueue. Wrong generation and missed waits are high and mitigated with locks, generation snapshot and transactional facts. Large-table migration is medium and uses bounded rollout. Principal-reader or underlying Auth-facade absence is medium and produces unknown without send failure. Residual risk is explicit unknown history.
 
 ## Backward Compatibility — All 13 Surfaces
 
@@ -119,7 +119,7 @@ Scope cohesion passes: this is one independently deployable Connect capability a
 
 ## Review — 2026-08-22
 
-Owner selected SPLIT. Fresh boundary review result: keep this Connect-owned source-fact capability separate from the optional SLA consumer. Ready after Auth prerequisite and named contract approval.
+Owner selected SPLIT. Fresh boundary review result: keep this Connect-owned source-fact capability separate from the optional SLA consumer. Ready after the Connect principal-classification prerequisite and named contract approval.
 
 ## Changelog
 

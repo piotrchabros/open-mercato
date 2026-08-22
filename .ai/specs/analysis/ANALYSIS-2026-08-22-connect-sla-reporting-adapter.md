@@ -57,3 +57,6 @@ Before implementation approve additive adapter identifiers and land source contr
 ## Re-Audit Changelog
 
 - 2026-08-22: Owner selected SPLIT; re-audited adapter-only scope across all 13 categories and retained Ready verdict.
+## External-Extension Re-Audit — 2026-08-22
+
+Ready after its source. The adapter remains package-local and independently activatable; explicit host/template module registration closes the prior discovery gap without adding platform business logic.

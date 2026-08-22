@@ -124,3 +124,6 @@ None. Prerequisite implementation and contract approval are explicit gates, not 
 
 - 2026-08-22: Initial combined audit blocked, then advanced after contract remediation.
 - 2026-08-22: Owner selected SPLIT; re-audited narrowed consumer across all thirteen categories and retained Ready verdict.
+## External-Extension Re-Audit — 2026-08-22
+
+Ready after prerequisites. The entire SLA runtime remains a sibling module inside `@open-mercato/connect`; host/template module registration is the only installation wiring outside the package.

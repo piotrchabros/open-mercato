@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-**Ready after named maintainer approval and the Auth principal-kind prerequisite.** The owner-selected split yields one independently deployable Connect capability: immutable evidence, generation/lifecycle facts, delivery serialization and a scoped reader. Actual code lacks these additions, but the spec gives exact implementation contracts and introduces no SLA dependency.
+**Ready after named maintainer approval and the Connect principal-classification prerequisite.** The owner-selected split yields one independently deployable Connect capability: immutable evidence, generation/lifecycle facts, delivery serialization and a scoped reader. Actual code lacks these additions, but the spec gives exact implementation contracts and introduces no SLA dependency.
 
 ## Evidence
 
@@ -53,7 +53,7 @@ No critical or important specification gaps remain. Before implementation obtain
 
 ## Recommendation
 
-**Ready to implement after named maintainer approval and Auth prerequisite implementation.**
+**Ready to implement after named maintainer approval and Connect principal-classification prerequisite implementation.**
 
 ## Re-Audit Changelog
 

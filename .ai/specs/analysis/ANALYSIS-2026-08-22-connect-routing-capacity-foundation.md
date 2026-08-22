@@ -134,3 +134,6 @@ None; the contract is implementation-ready.
 ## Recommendation
 
 **Ready to implement.** No critical or important readiness gap remains after re-audit.
+## External-Extension Re-Audit — 2026-08-22
+
+Ready. Executable coverage is package-local, and the only files outside `packages/connect` are host-app/template module-registration wiring required to install the sibling external module.

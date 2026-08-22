@@ -325,7 +325,9 @@ There is no browser coverage because this specification adds no UI path. Integra
 | `packages/connect/src/modules/connect_routing/migrations/Migration*_connect_routing.ts` | Create | Additive table/index/check migration |
 | `packages/connect/src/modules/connect_routing/migrations/.snapshot-open-mercato.json` | Create | Post-change module schema snapshot |
 | `packages/connect/src/modules/connect_routing/**/__tests__/*` | Create | Unit tests |
-| `.ai/qa/tests/connect-routing-capacity-foundation.spec.ts` | Create | Self-contained integration coverage |
+| `packages/connect/src/modules/connect_routing/__integration__/TC-CONNECT-ROUTING-CAPACITY.spec.ts` | Create | Self-contained package-local integration coverage |
+| `apps/mercato/src/modules.ts` | Modify | Host-app installation entry `{ id: 'connect_routing', from: '@open-mercato/connect' }` |
+| `packages/create-app/template/src/modules.ts` | Modify via template sync | Keep scaffolded host installation parity |
 
 ## Risks & Impact Review
 

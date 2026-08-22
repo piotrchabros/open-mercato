@@ -73,6 +73,8 @@ UI uses DataTable, CrudForm, apiCall, guarded mutations, shared conflict/loading
 
 Deploy order: approved Connect SLA source facts and reparenting contracts; SLA schema disabled; then scoped enable/reconcile. Generate/review intended SLA SQL/snapshot; remove unrelated drift; never automate `db:migrate`.
 
+`connect_sla` is a sibling module shipped by the external `@open-mercato/connect` package. Installation adds `{ id: 'connect_sla', from: '@open-mercato/connect' }` to `apps/mercato/src/modules.ts` and mirrors it with `yarn template:sync:fix`; these host composition edits contain no feature logic. All entities, APIs, UI, DI, workers, migrations, and tests remain under `packages/connect/src/modules/connect_sla/`. Generate and structural-cache refresh must prove enabled, disabled, and re-enabled behavior.
+
 Phases/files: create `connect_sla` discovery/ACL/setup/DI/events, data/validators/encryption/migration, business-time, commands/subscribers, deadline/rebuild/schedule workers, APIs/UI/locales/tests. No Connect source file is modified by this spec except the separately approved injection host integration. Run generate, focused DB/concurrency/integration/browser tests, package build/typecheck, decoupling, i18n advisory checks and standalone harness refresh.
 
 Self-contained tests create API fixtures and clean in `finally`: all principal/evidence variants; distinct-attempt race; generations/late delivery/wait boundaries; DST/property cases; policy matching/version deletion/locking; watermark crash/live races/leases/unknown history; split/merge/undo; tenant/org/worker/cursor/ACL/dependency/PII; every API and accessible UI/locales.

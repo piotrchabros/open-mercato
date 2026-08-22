@@ -235,6 +235,8 @@ Add exact page/client/locales and coexistence/accessibility/performance coverage
 | `packages/connect/src/modules/connect_cost_reporting/components/CostPerContactReport.client.tsx` | Create |
 | `packages/connect/src/modules/connect_cost_reporting/i18n/{en,de,es,ko,pl}.json` | Create |
 | `packages/connect/src/modules/connect_cost_reporting/__integration__/TC-CONNECT-COST-PER-CONTACT.spec.ts` | Create |
+| `apps/mercato/src/modules.ts` | Modify with host-app `connect_cost_reporting` installation entry |
+| `packages/create-app/template/src/modules.ts` | Modify through `yarn template:sync:fix` for scaffold parity |
 
 ## Risks & Impact Review
 

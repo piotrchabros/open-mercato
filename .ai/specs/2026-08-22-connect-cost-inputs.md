@@ -50,31 +50,24 @@ CrudForm/DataTable -> cost commands -> connect_cost_inputs -> sanitized connectC
 
 This capability depends on **AN-MOD-01** from `.ai/specs/2026-08-22-connect-analytics.md` landing first in the same release: that step creates `connect_analytics/{index,acl,setup,di}.ts`, its base locales, and generated module surface. If implementation begins before that commit is present, the cost-input PR must implement AN-MOD-01 unchanged before adding this slice; it must not invent a second module shell. Cost inputs then modify `acl.ts`, `setup.ts`, `di.ts`, and locales and add `data/entities.ts`, `data/validators.ts`, `encryption.ts`, `events.ts`, and `search.ts`. The base operational report and its `connect_analytics.view` grant remain byte-for-byte compatible.
 
-`connect_analytics` remains soft-optional relative to `connect`, `currencies`, `staff`, and `communication_channels`. It has no `requires` declaration or peer entity import. The only upstream addition is a currencies-owned, read-only DI contract described below.
+`connect_analytics` remains soft-optional relative to `connect`, `currencies`, `staff`, and `communication_channels`. It has no `requires` declaration or peer entity import. It changes no upstream package and restricts Phase 2 cost rows to the organization's resolved base currency through the existing source-owned `baseCurrencyService` contract.
 
 ### Currency Validation Contract
 
-Add the additive currencies-owned DI service `currencyCodeReader`:
+Add the extension-owned internal adapter `costInputCurrencyResolver` over the existing structural `baseCurrencyService` contract:
 
 ```ts
-type CurrencyCodeReader = {
-  listActive(input: {
-    tenantId: string
-    organizationId: string
-    search?: string
-    limit: number
-  }): Promise<Array<{ code: string; name: string; decimalPlaces: number }>>
-  existsActive(input: {
-    tenantId: string
-    organizationId: string
-    code: string
-  }): Promise<boolean>
+type CostInputCurrencyResolver = {
+  resolve(input: { tenantId: string; organizationId: string }): Promise<
+    | { status: 'resolved'; code: string }
+    | { status: 'missing' | 'ambiguous' | 'unavailable' }
+  >
 }
 ```
 
-The currencies implementation owns its ORM query and always filters both scopes, `deleted_at is null`, and `is_active = true`; `limit` is `1..100`, defaulted by the caller to 50. Analytics resolves it inside `try/catch`. Create/update fail closed with `422 currency_validation_unavailable` when the service/module is absent and with `422 currency_invalid` when the uppercase code is not active. There is no format-only or hard-coded currency-list fallback, because accepting an unconfigured code would make financial rows unverifiable.
+The adapter structurally soft-resolves `baseCurrencyService` and calls `resolveBaseCurrency({ tenantId, organizationIds: [organizationId] })`; it never imports the Currency entity or queries its table. Missing service/method, malformed result, disabled currencies, query failure, missing base, or ambiguous base are dependency-unavailable outcomes. Create/update fail closed with `422 currency_validation_unavailable`; a submitted uppercase code differing from the resolved code returns `422 currency_invalid`. There is no format-only or hard-coded fallback, and arbitrary non-base currency rows are out of scope for this external-extension release.
 
-The cost form loads its selector through new sanitized `GET /api/connect_analytics/cost-input-options/currencies?search=&pageSize=` guarded by `connect_analytics.cost_inputs.manage`; this route calls `currencyCodeReader.listActive` and never requires or grants `currencies.view`. Missing dependency returns `503 currency_dependency_unavailable` and disables submit with a localized explanation. Agent and channel selectors use the existing scoped `/api/staff/team-members` (`staff.view`) and `/api/communication_channels/channels` (`communication_channels.view`) APIs only for callers who already have those features. Otherwise the relevant cost type is disabled; the server still validates UUID shape and dimension rules but deliberately does not infer peer authorization or import peer storage. Detail pages retain the stored scalar ID with localized “record unavailable” fallback if a peer record is deleted or inaccessible.
+The cost form loads its singleton currency selector through sanitized `GET /api/connect_analytics/cost-input-options/currency`, guarded by `connect_analytics.cost_inputs.manage`; the route returns `{ item: { code } }` only after successful base-currency resolution and never requires or grants `currencies.view`. Missing/ambiguous dependency returns `503 currency_dependency_unavailable` and disables submit with a localized explanation. Agent and channel selectors use the existing scoped `/api/staff/team-members` (`staff.view`) and `/api/communication_channels/channels` (`communication_channels.view`) APIs only for callers who already have those features. Otherwise the relevant cost type is disabled; the server still validates UUID shape and dimension rules but deliberately does not infer peer authorization or import peer storage. Detail pages retain the stored scalar ID with localized “record unavailable” fallback if a peer record is deleted or inaccessible.
 
 ### Cost Input Reader Contract
 
@@ -111,7 +104,7 @@ The input is parsed by a Zod schema and requires `periodStart < periodEnd`, uppe
 | `user_id` | UUID nullable; required only for agent |
 | `channel_id` | UUID nullable; required only for channel |
 | `amount_minor` | bigint, required, `0..9223372036854775807`; canonical JSON decimal string |
-| `currency_code` | required uppercase `[A-Z]{3}` `char(3)`, then validated active through `currencyCodeReader` |
+| `currency_code` | required uppercase `[A-Z]{3}` `char(3)`, equal to the scope's resolved base currency |
 | `source` | `manual | provider_invoice` |
 | `provider_invoice_ref` | canonical invoice identity, text max 255; required for provider invoice |
 | `provider_line_ref` | canonical invoice-line/external-item identity, text max 255; required for provider invoice |
@@ -153,9 +146,9 @@ Use `makeCrudRoute`, entity ID `connect_analytics:cost_input`, indexer, scoped p
 
 Zod/schema/dimension/currency/period/money failures are mapped to localized `422` codes; duplicate changed provider line is 409; optimistic update/delete/undo uses the unified 409 conflict body; auth/feature/organization/not-found use standard 401/403/400/404. `openapi.ts` exports the exact Zod-derived item, detail, paged, create, update, replay, delete, and error schemas. No BigInt enters a response schema value.
 
-### `GET /api/connect_analytics/cost-input-options/currencies`
+### `GET /api/connect_analytics/cost-input-options/currency`
 
-Strict query `search?: string.max(100)`, `pageSize: 1..100 = 50`; dual scope is server-derived. Guard is `connect_analytics.cost_inputs.manage`. Response is `{ items: [{ code, name, decimalPlaces }] }`. Missing currency reader is 503, never an empty-success response.
+No query parameters; dual scope is server-derived. Guard is `connect_analytics.cost_inputs.manage`. Response is `{ item: { code } }`. Missing, ambiguous, or unavailable base-currency resolution is 503, never an empty-success response.
 
 ## Access Control
 
@@ -178,7 +171,7 @@ All strings use `useT`/`resolveTranslations`; complete `en/de/es/ko/pl`. Client 
 
 ## Migration & Backward Compatibility
 
-Prerequisite order is base analytics AN-MOD-01, then this slice; shared files are modified additively. Add two tables, indexes/checks, entity/event IDs, CRUD/options APIs, ACL IDs, `connectCostInputReader`, currencies-owned `currencyCodeReader`, search config, and UI routes only. Migration creates schema, no seed costs. Update analytics snapshot; use `yarn db:generate` only as diff probe and never automated `db:migrate`. Generated `down()` drops only the two new analytics tables/checks/indexes; it does not alter currencies schema. Operational code rollback disables the new routes/pages/readers while intentionally retaining already-migrated rows. Existing operational reports remain unchanged. Route/ACL/entity/event/DI IDs become stable.
+Prerequisite order is base analytics AN-MOD-01, then this slice; no platform or peer module file changes. Add two tables, indexes/checks, entity/event IDs, CRUD/singleton-currency APIs, ACL IDs, `connectCostInputReader`, an extension-local adapter over existing `baseCurrencyService`, search config, and UI routes only. Migration creates schema, no seed costs. Update analytics snapshot; use `yarn db:generate` only as diff probe and never automated `db:migrate`. Generated `down()` drops only the two new analytics tables/checks/indexes; it does not alter currencies schema. Operational code rollback disables the new routes/pages/readers while intentionally retaining already-migrated rows. Existing operational reports remain unchanged. Route/ACL/entity/event/DI IDs become stable.
 
 ## Testing Strategy and Integration Coverage
 
@@ -189,7 +182,7 @@ Prerequisite order is base analytics AN-MOD-01, then this slice; shared files ar
 - **COST-INT-004:** reader overlap boundaries, currency filtering, deleted-row exclusion, and sanitized DTO.
 - **COST-INT-005:** encrypted description not plaintext in cost/revision tables, command/audit payload, reader/search/event/log/error; authorized scoped CRUD read and undo decrypt through revision secret.
 - **COST-INT-006:** audit/index/cache callbacks, redacted snapshots, `extractUndoPayload`, undo conflict/provider uniqueness, and key-rotation-compatible revision decryption.
-- **COST-INT-007:** currencies reader dual-scope/active filtering, options-route ACL, absent dependency 422/503 fail-closed behavior, and no implicit `currencies.view` grant.
+- **COST-INT-007:** base-currency resolver exact scope/code, singleton options-route ACL, missing/ambiguous/unavailable dependency 422/503 fail-closed behavior, and no implicit `currencies.view` grant.
 - **COST-INT-008:** staff/channel selector authorization/absence and stored inaccessible-ID fallback; no cross-module entity import or hard requirement.
 - **COST-INT-009:** base analytics coexistence and generated API/page/ACL/DI/event/search/entity manifests contain exact additive surfaces.
 - **COST-UI-001:** DataTable/CrudForm keyboard, conflicts, validation focus, delete shortcuts, states, accessibility.
@@ -202,7 +195,7 @@ Executable coverage lives at `packages/connect/src/modules/connect_analytics/__i
 ## Implementation Plan
 
 1. **COST-BASE-01:** verify AN-MOD-01 exists; otherwise implement its module scaffold unchanged before this slice.
-2. **COST-CUR-01:** additive scoped `currencyCodeReader` in currencies with tests; soft-resolve it from analytics.
+2. **COST-CUR-01:** extension-owned scoped `costInputCurrencyResolver` adapter over source-owned `baseCurrencyService`, with fail-closed tests.
 3. **COST-DATA-01:** cost/revision entities, validators, encryption, migration/indexes/checks, snapshot.
 4. **COST-CMD-01:** CRUD/undo/replay/optimistic lock/redacted audit/index/invalidation.
 5. **COST-API-01:** exact guarded `makeCrudRoute`, options route, query engine, indexer, and OpenAPI.
@@ -222,15 +215,15 @@ Executable coverage lives at `packages/connect/src/modules/connect_analytics/__i
 | `packages/connect/src/modules/connect_analytics/commands/cost-inputs.ts` | Create |
 | `packages/connect/src/modules/connect_analytics/api/openapi.ts` | Create |
 | `packages/connect/src/modules/connect_analytics/api/cost-inputs/route.ts` | Create |
-| `packages/connect/src/modules/connect_analytics/api/cost-input-options/currencies/route.ts` | Create sanitized selector route |
+| `packages/connect/src/modules/connect_analytics/api/cost-input-options/currency/route.ts` | Create sanitized singleton selector route |
 | `packages/connect/src/modules/connect_analytics/lib/cost-input-reader.ts` | Create |
+| `packages/connect/src/modules/connect_analytics/lib/cost-input-currency.ts` | Create soft base-currency adapter; no peer entity import |
 | `packages/connect/src/modules/connect_analytics/di.ts` | Modify |
 | `packages/connect/src/modules/connect_analytics/backend/connect/analytics/cost-inputs/**` | Create |
 | `packages/connect/src/modules/connect_analytics/components/**` | Create |
 | `packages/connect/src/modules/connect_analytics/i18n/{en,de,es,ko,pl}.json` | Create/Modify |
 | `packages/connect/src/modules/connect_analytics/migrations/{Migration*_connect_analytics.ts,.snapshot-open-mercato.json}` | Create |
-| `packages/core/src/modules/currencies/{di.ts,lib/currency-code-reader.ts}` | Modify/Create additive scoped read facade |
-| `packages/core/src/modules/currencies/lib/__tests__/currency-code-reader.test.ts` | Create |
+| `packages/connect/src/modules/connect_analytics/lib/__tests__/cost-input-currency.test.ts` | Create scoped structural-contract and dependency-failure coverage |
 | `packages/connect/src/modules/connect_analytics/__integration__/TC-CONNECT-COST-INPUTS.{spec,meta}.ts` | Create executable integration/browser coverage |
 
 ## Risks & Impact Review
@@ -320,5 +313,5 @@ Fully compliant after independent pre-implementation remediation; ready to imple
 
 - Narrowed to implementation-ready cost accounting CRUD and sanitized reader; cost-per-contact is a separate spec.
 - Initial review: security, performance, cache, commands, and risks passed; it requested the fresh-context audit completed below.
-- Remediated audit blockers and important gaps: declared AN-MOD-01 delivery order/full scaffold, currencies-owned validation facade and fail-closed selector, exact bigint schemas/transforms, encrypted revision secrets with redacted audit/undo, invoice-line replay identity, exact CRUD/OpenAPI/errors/reader bounds, ACL/setup/search/event manifests, module-local integration tests, and rollback semantics.
+- Remediated audit blockers and important gaps: declared AN-MOD-01 delivery order/full scaffold, source-owned base-currency validation with fail-closed singleton selector, exact bigint schemas/transforms, encrypted revision secrets with redacted audit/undo, invoice-line replay identity, exact CRUD/OpenAPI/errors/reader bounds, ACL/setup/search/event manifests, module-local integration tests, and rollback semantics.
 - Re-review: all 13 BC surfaces remain additive; security, money precision, privacy, optional coupling, test discovery, migration, and generated-contract checks pass. Verdict: ready to implement.
