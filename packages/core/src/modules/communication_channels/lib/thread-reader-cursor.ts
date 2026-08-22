@@ -79,7 +79,11 @@ export type ThreadReaderCursorPayload = {
 
 /** Stable hash of a conversation allowlist, order- and duplicate-insensitive. */
 export function hashAllowlist(externalConversationIds: readonly string[]): string {
-  const normalized = Array.from(new Set(externalConversationIds)).sort()
+  // Byte-order comparator, not the locale-dependent default: the hash travels
+  // inside a cursor and is re-derived by whichever process serves the next page.
+  const normalized = Array.from(new Set(externalConversationIds)).sort((a, b) =>
+    a === b ? 0 : a < b ? -1 : 1,
+  )
   return createHash('sha256').update(JSON.stringify(normalized)).digest('hex')
 }
 
