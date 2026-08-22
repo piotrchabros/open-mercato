@@ -10,7 +10,7 @@ description: >-
 steps:
   - id: setup
     name: Install skills + commit the input
-    command: "corepack yarn install-skills && mkdir -p .ai/analysis/spec-pipeline && rm -f .ai/analysis/spec-pipeline/HALT && echo '--- skills installed, gate state reset. Commit the design prototype before step 2. ---'"
+    command: "sh .ai/scripts/pipeline-setup.sh .ai/analysis/spec-pipeline && echo '--- commit the design prototype before step 2 ---'"
 
   - id: shape
     name: Shape the scope
