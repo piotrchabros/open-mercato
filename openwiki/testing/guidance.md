@@ -85,6 +85,17 @@ node scripts/docker-exec.mjs test
 | `packages/core/src/modules/api_keys/__integration__/TC-APIKEY-007.spec.ts` | API key scoped deletion fails closed (PR #4051) |
 | `packages/ai-assistant/src/modules/ai_assistant/lib/__tests__/scope-injection.test.ts` | Code Mode tenant/org scope enforcement (PR #4174) |
 | `packages/core/src/modules/auth/api/__tests__/users.route.test.ts` | User route recipient scoping |
+| `packages/core/src/modules/customer_accounts/__tests__/customerAuth.test.ts` | Customer JWT session revalidation: `findActiveSessionForClaims` claims-scoped lookup, revoked session rejection, missing-`sid` rejection, staff-audience replay rejection, fail-closed on lookup throw, soft-deleted/deactivated user rejection, DB-resolved features (JWT claims ignored), and the legacy-token grace window (`JWT_LEGACY_GRACE_MINUTES`/`JWT_LEGACY_CUTOVER_AT`) |
+| `packages/core/src/modules/customer_accounts/lib/__tests__/customerAuthServer.test.ts` | `getCustomerAuthForHost` host-resolved tenant binding: platform-domain passthrough, active-mapping tenant bind, non-active mapping fails fully unauthenticated, cross-host replay (JWT tenant ≠ host tenant) returns null, resolver-throw fails OPEN (deliberately pinned; spec S4/R5 requires the backend equivalent to fail closed) |
+
+### Customer Portal Auth / Session Revocation
+
+The customer auth suites mock `customerSessionService` as `{ findActiveSessionForClaims }` — **not** the older `findActiveSessionById`. If a test resolves the service without that method, every auth path collapses to null (the exact regression the `b06e5b8` alignment fixed after the develop merge). When adding or editing customer auth tests, keep the mock aligned with the claims-validating method documented in [domain/modules.md → Session Revalidation & Token Lifecycle](../domain/modules.md#session-revalidation--token-lifecycle). Run focused:
+
+```bash
+yarn workspace @open-mercato/core test -- customer_accounts/__tests__/customerAuth.test.ts
+yarn workspace @open-mercato/core test -- customer_accounts/lib/__tests__/customerAuthServer.test.ts
+```
 
 ### Sales Business Rules
 
