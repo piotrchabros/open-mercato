@@ -3,7 +3,13 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import type { AppContainer } from '@open-mercato/shared/lib/di/container'
 import type { OptimisticLockCurrentReader } from '@open-mercato/shared/lib/crud/optimistic-lock'
 import { registerOptimisticLockReaders } from '@open-mercato/shared/lib/crud/optimistic-lock-store'
-import { CustomerEntity, CustomerAddress, CustomerInteraction } from './data/entities'
+import {
+  CustomerEntity,
+  CustomerAddress,
+  CustomerInteraction,
+  CustomerInteractionRetractionSaga,
+} from './data/entities'
+import { createInteractionLifecycleService } from './lib/interaction-lifecycle'
 
 const RESOURCE_KIND_COMPANY = 'customers.company'
 // The CRUD factory derives resourceKind via singularize-the-second-segment of
@@ -69,6 +75,14 @@ export function register(container: AppContainer) {
     CustomerEntity: asValue(CustomerEntity),
     CustomerAddress: asValue(CustomerAddress),
     CustomerInteraction: asValue(CustomerInteraction),
+    CustomerInteractionRetractionSaga: asValue(CustomerInteractionRetractionSaga),
+
+    // Source-owned Customer Interaction lifecycle (Connect upstream Contract B).
+    // Registered BESIDE the legacy `customers.interactions.create` command, not
+    // instead of it: existing callers keep their signature and behaviour, and
+    // only a module that needs retractable projections opts in here.
+    // See lib/interaction-lifecycle.ts.
+    customersInteractionLifecycle: asValue(createInteractionLifecycleService(container)),
   })
   // `crudMutationGuardService` is registered platform-wide in the shared
   // DI bootstrap (`packages/shared/src/lib/di/container.ts`). It already

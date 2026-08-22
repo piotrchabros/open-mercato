@@ -395,6 +395,7 @@ const sidebars: SidebarsConfig = {
             "framework/modules/overrides",
             "framework/modules/notifications",
             "framework/modules/messages",
+            "framework/modules/customers-interaction-lifecycle",
             "framework/modules/currencies",
             "framework/modules/integrations-data-sync",
             "framework/modules/sales-providers",

@@ -45,6 +45,16 @@ DI methods/types and storage fields are additive. Existing create signature stay
 
 One deployable capability: source-owned Customer Interaction lifecycle. It does not implement Connect identity, projection workers, or UI host addresses.
 
+## Implementation Status
+
+| Phase | Status | Date | Notes |
+|-------|--------|------|-------|
+| CUS-UP-01 — `customer-reference` / `interaction-lifecycle` types + `customersInteractionLifecycle` registration | Done | 2026-08-22 | Registered beside the legacy `customers.interactions.create` command; reference validation returns only `{ kind, id }` |
+| CUS-UP-02 — saga entity, retraction-group fields, all-or-none begin, reader exclusion | Done | 2026-08-22 | `Migration20260822200000_customers`. Hiding routes through the module's existing `deleted_at` soft-delete predicate — already applied by every ordinary reader — with `retraction_state` distinguishing a retraction from a user deletion for restricted audit reads |
+| CUS-UP-03 — reference, idempotency, inventory, epoch and isolation tests | Partial | 2026-08-22 | Unit coverage for wrong kind, deleted/missing customer, sibling-organization and foreign-tenant references, duplicate and payload-mismatch creates, group mismatch, omitted/extra inventory rejection with all-or-none semantics, association-epoch isolation, stale epoch, mutually exclusive decisions, lost-acknowledgement recovery, abort restoring exactly its own members, and ordinary-read exclusion via the soft-delete route. Integration tests against a real database still pending |
+| CUS-UP-04 — public contract + backward-compatibility documentation | Done | 2026-08-22 | `apps/docs/docs/framework/modules/customers.mdx` § Source-owned interaction lifecycle |
+
 ## Changelog
 
+- 2026-08-22: Implemented CUS-UP-01, -02 and -04; unit coverage for -03 landed, integration coverage outstanding.
 - 2026-08-21: Extracted and expanded PR B from the Connect projection umbrella spec to support full owner-approved unlink retraction.

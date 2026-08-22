@@ -1,5 +1,5 @@
 import { Collection, OptionalProps } from '@mikro-orm/core'
-import { Entity, Index, ManyToOne, OneToMany, OneToOne, PrimaryKey, Property, Unique } from '@mikro-orm/decorators/legacy'
+import { Check, Entity, Index, ManyToOne, OneToMany, OneToOne, PrimaryKey, Property, Unique } from '@mikro-orm/decorators/legacy'
 import type { DictionaryEntrySortMode } from '@open-mercato/core/modules/dictionaries/lib/entrySort'
 
 export type CustomerEntityKind = 'person' | 'company'
@@ -560,13 +560,33 @@ export class CustomerActivity {
   expression:
     `create unique index "customer_interactions_email_dedupe_uq" on "customer_interactions" ("entity_id", "external_message_id") where "external_message_id" is not null and "deleted_at" is null`,
 })
+// Deterministic-source idempotency: a retried projection with the same
+// `(namespace, key)` resolves to the existing row instead of duplicating the
+// customer's timeline. Partial so hand-created interactions are unaffected.
+@Index({
+  name: 'customer_interactions_source_key_uq',
+  expression:
+    `create unique index "customer_interactions_source_key_uq" on "customer_interactions" ("tenant_id", "organization_id", "source_namespace", "source_key") where "source_namespace" is not null and "source_key" is not null`,
+})
+// The retraction group. `beginRetractionSaga` locks and enumerates by exactly
+// this tuple, so it must be indexed or every unlink scans the tenant's
+// interactions.
+@Index({
+  name: 'customer_interactions_retraction_group_idx',
+  expression:
+    `create index "customer_interactions_retraction_group_idx" on "customer_interactions" ("tenant_id", "organization_id", "source_namespace", "source_identity_id", "source_association_epoch") where "source_namespace" is not null`,
+})
+@Check({
+  name: 'customer_interactions_retraction_state_chk',
+  expression: `"retraction_state" is null or "retraction_state" in ('pending_hidden', 'tombstoned')`,
+})
 @Index({
   name: 'customer_interactions_email_visibility_idx',
   expression:
     `create index "customer_interactions_email_visibility_idx" on "customer_interactions" ("entity_id", "interaction_type", "visibility", "author_user_id") where "interaction_type" = 'email' and "deleted_at" is null`,
 })
 export class CustomerInteraction {
-  [OptionalProps]?: 'status' | 'pinned' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'durationMinutes' | 'location' | 'allDay' | 'recurrenceRule' | 'recurrenceEnd' | 'participants' | 'reminderMinutes' | 'visibility' | 'linkedEntities' | 'guestPermissions' | 'externalMessageId' | 'channelProviderKey'
+  [OptionalProps]?: 'status' | 'pinned' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'durationMinutes' | 'location' | 'allDay' | 'recurrenceRule' | 'recurrenceEnd' | 'participants' | 'reminderMinutes' | 'visibility' | 'linkedEntities' | 'guestPermissions' | 'externalMessageId' | 'channelProviderKey' | 'sourceNamespace' | 'sourceKey' | 'sourceIdentityId' | 'sourceAssociationEpoch' | 'retractionState' | 'retractedAt' | 'retractionSagaId'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -688,8 +708,141 @@ export class CustomerInteraction {
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
 
+  // ── Source-owned projection + retraction (Connect upstream Contract B) ──
+  //
+  // Set only on interactions PROJECTED by another module through
+  // `customersInteractionLifecycle`. Hand-created interactions leave them NULL
+  // and are unaffected by any of the retraction machinery.
+
+  /** Owning module's namespace, e.g. `connect`. Immutable once written. */
+  @Property({ name: 'source_namespace', type: 'text', nullable: true })
+  sourceNamespace?: string | null
+
+  /**
+   * Deterministic key within the namespace. Creation is idempotent on
+   * `(namespace, key)` so a retried projection cannot duplicate a timeline row.
+   */
+  @Property({ name: 'source_key', type: 'text', nullable: true })
+  sourceKey?: string | null
+
+  /**
+   * The source's identity for this projection, plus the association epoch it
+   * was created under. Together with the namespace they form the immutable
+   * RETRACTION GROUP: unlinking an identity retracts exactly the members of one
+   * `(namespace, identityId, associationEpoch)` group, so a later re-link
+   * (a new epoch) can never be retracted by an older unlink.
+   */
+  @Property({ name: 'source_identity_id', type: 'text', nullable: true })
+  sourceIdentityId?: string | null
+
+  @Property({ name: 'source_association_epoch', type: 'int', nullable: true })
+  sourceAssociationEpoch?: number | null
+
+  /**
+   * `pending_hidden` while a retraction saga is in flight, `tombstoned` once it
+   * commits. Both also set `deleted_at`, which is what actually removes the row
+   * from every ordinary reader — the module's soft-delete convention is already
+   * applied at every call site, so routing retraction through it cannot be
+   * defeated by a reader that forgot a new predicate. This column is what lets a
+   * restricted audit reader tell a retraction from a user deletion, and lets an
+   * abort restore exactly the rows the saga hid.
+   */
+  @Property({ name: 'retraction_state', type: 'text', nullable: true })
+  retractionState?: 'pending_hidden' | 'tombstoned' | null
+
+  @Property({ name: 'retracted_at', type: Date, nullable: true })
+  retractedAt?: Date | null
+
+  /** The saga that hid this row, so an abort restores only its own members. */
+  @Property({ name: 'retraction_saga_id', type: 'text', nullable: true })
+  retractionSagaId?: string | null
+
   @ManyToOne(() => CustomerEntity, { fieldName: 'entity_id' })
   entity!: CustomerEntity
+}
+
+/**
+ * Source-journaled retraction saga (Connect upstream Contract B).
+ *
+ * Retraction has to be recoverable across a lost acknowledgement in either
+ * direction, so the SOURCE journals the decision rather than the caller:
+ *
+ *   - `begin` records the complete inventory the caller believes exists. It is
+ *     accepted only when it exactly equals the source's active stored set — an
+ *     omitted or extra key means the caller's view is stale, and hiding a
+ *     partial set would leave the timeline in a state nobody intended.
+ *   - `commit` and `abort` are mutually exclusive monotonic transitions, so a
+ *     recovery worker replaying an old decision cannot flip a settled saga.
+ *   - `epoch` fences stale workers: an operation carrying an older epoch than
+ *     the stored one is rejected outright.
+ */
+@Entity({ tableName: 'customer_interaction_retraction_sagas' })
+@Unique({
+  name: 'customer_interaction_retraction_sagas_uq',
+  properties: ['tenantId', 'organizationId', 'namespace', 'sagaId', 'epoch'],
+})
+@Index({
+  name: 'customer_interaction_retraction_sagas_group_idx',
+  properties: ['tenantId', 'organizationId', 'namespace', 'identityId'],
+})
+@Check({
+  name: 'customer_interaction_retraction_sagas_decision_chk',
+  expression: `"decision" is null or "decision" in ('commit', 'abort')`,
+})
+export class CustomerInteractionRetractionSaga {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'decision' | 'decidedAt' | 'finalizedAt' | 'reason' | 'requestedByUserId'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'namespace', type: 'text' })
+  namespace!: string
+
+  /** Caller-supplied saga identity, unique within the namespace and scope. */
+  @Property({ name: 'saga_id', type: 'text' })
+  sagaId!: string
+
+  /** Monotonic fence. A stale worker's lower epoch is rejected. */
+  @Property({ name: 'epoch', type: 'int' })
+  epoch!: number
+
+  @Property({ name: 'identity_id', type: 'text' })
+  identityId!: string
+
+  @Property({ name: 'association_epoch', type: 'int' })
+  associationEpoch!: number
+
+  /** The exact set of source keys this saga hid, for recovery and for abort. */
+  @Property({ name: 'inventory', type: 'jsonb' })
+  inventory!: string[]
+
+  @Property({ name: 'decision', type: 'text', nullable: true })
+  decision?: 'commit' | 'abort' | null
+
+  @Property({ name: 'decided_at', type: Date, nullable: true })
+  decidedAt?: Date | null
+
+  @Property({ name: 'finalized_at', type: Date, nullable: true })
+  finalizedAt?: Date | null
+
+  @Property({ name: 'reason', type: 'text', nullable: true })
+  reason?: string | null
+
+  /** Logical link to auth.user.id (no DB FK — cross-module). */
+  @Property({ name: 'requested_by_user_id', type: 'uuid', nullable: true })
+  requestedByUserId?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
 }
 
 @Entity({ tableName: 'customer_comments' })
