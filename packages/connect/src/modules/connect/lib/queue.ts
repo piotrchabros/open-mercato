@@ -16,6 +16,10 @@ export const CONNECT_QUEUES = {
   outboundReconcile: 'connect.outbound.reconcile',
   /** Closes resolved Cases after the configured quiet window. */
   caseAutoClose: 'connect.case.auto-close',
+  /** Materializes staged Customer-timeline projections. */
+  projectionDrain: 'connect.projection.drain',
+  /** Converges unlink sagas after a lost acknowledgement or a crash. */
+  projectionRecovery: 'connect.projection.recovery',
 } as const
 
 export type ConnectQueueName = (typeof CONNECT_QUEUES)[keyof typeof CONNECT_QUEUES]

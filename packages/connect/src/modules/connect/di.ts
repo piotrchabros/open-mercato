@@ -17,6 +17,11 @@ import {
   ConnectOutboundAttempt,
   ConnectOutboundMessage,
   ConnectUnknownDelivery,
+  ConnectIdentityLinkAudit,
+  ConnectManualMatchTask,
+  ConnectPendingProjection,
+  ConnectPendingRetraction,
+  ConnectRetractionSaga,
 } from './data/entities'
 import { createCapabilityReporter } from './lib/activation'
 
@@ -39,6 +44,11 @@ export function register(container: AppContainer) {
     ConnectOutboundAttempt: asValue(ConnectOutboundAttempt),
     ConnectOutboundMessage: asValue(ConnectOutboundMessage),
     ConnectUnknownDelivery: asValue(ConnectUnknownDelivery),
+    ConnectIdentityLinkAudit: asValue(ConnectIdentityLinkAudit),
+    ConnectManualMatchTask: asValue(ConnectManualMatchTask),
+    ConnectPendingProjection: asValue(ConnectPendingProjection),
+    ConnectPendingRetraction: asValue(ConnectPendingRetraction),
+    ConnectRetractionSaga: asValue(ConnectRetractionSaga),
 
     // Read by `communication_channels` Contract E before it lets an
     // administrator cut a shared channel over to Connect projection. Connect

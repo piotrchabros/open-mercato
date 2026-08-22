@@ -86,6 +86,47 @@ export const features = [
     title: 'Acknowledge unknown deliveries',
     module: 'connect',
   },
+  /**
+   * Customer matching. Split into five features because the acts genuinely
+   * differ in what they can cost:
+   *
+   * - `.read` sees the queue and searches candidates — no customer data changes.
+   * - `.link` associates an identity with a customer. A wrong link exposes
+   *   another customer's conversations, so it is the front-line grant that
+   *   creates the risk.
+   * - `.unlink` takes that exposure back across two modules. It is the
+   *   supervisory counterpart and is NOT granted with `.link`.
+   * - `.recover` resumes a stuck unlink saga — an operational act on a
+   *   half-committed cross-module workflow.
+   * - `.audit` reads historical associations, including customers an identity
+   *   is no longer linked to. Deliberately separate from `.read` so an ordinary
+   *   agent cannot recover a cleared association from the audit trail.
+   */
+  {
+    id: 'connect.customer_match.read',
+    title: 'View the customer-matching queue and candidates',
+    module: 'connect',
+  },
+  {
+    id: 'connect.customer_match.link',
+    title: 'Link a contact identity to a customer',
+    module: 'connect',
+  },
+  {
+    id: 'connect.customer_match.unlink',
+    title: 'Unlink a contact identity and retract its timeline projections',
+    module: 'connect',
+  },
+  {
+    id: 'connect.customer_match.recover',
+    title: 'Resume a stuck unlink saga',
+    module: 'connect',
+  },
+  {
+    id: 'connect.customer_match.audit',
+    title: 'Read historical identity link audit (restricted)',
+    module: 'connect',
+  },
 ] as const
 
 export default features
