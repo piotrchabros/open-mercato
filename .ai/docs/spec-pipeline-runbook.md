@@ -61,11 +61,12 @@ threshold, and `onFail.retry` sends the agent back until the threshold is met.
 ```
 agent step ──▶ node .ai/scripts/spec-gate-check.mjs <gate>
                      exit 0  threshold met      → advance
+                                                 (or: halted, advisory — recorded, run continues)
                      exit 1  not met            → onFail.retry the agent step
                      exit 2  HALT               → stop looping, escalate to a human
 ```
 
-| Gate | Threshold — all countable, none subjective | Retries |
+| Gate | Threshold — all countable, none subjective | Retries (per gate) |
 |---|---|---|
 | `claims` | zero OVERSTATED/REFUTED/UNCITABLE rows carrying a decision · zero unstruck false claims · ledger not UNGATED | 3 |
 | `write-path` | every headline requirement has a task that performs its write · zero stale task cross-references | 2 |
@@ -88,17 +89,22 @@ it without improving anything. Every figure in `gate-state.json` is COUNTED from
 artifacts — the same engagement propagated a miscounted headline entity figure across four
 documents before anyone recounted it.
 
-**3. The loop can conclude that looping is wrong.** `spec-gate-check` exits **2** and writes a
-`HALT` marker when either:
+**3. The loop can conclude that looping is wrong.** `spec-gate-check` halts a gate — writing
+`HALT-<gate>` beside the state — when either:
 
 - a round **introduces more unverified claims than it resolves** — the divergence signature above,
   caught by comparing this round's `newClaimsIntroduced` against `rowsResolved`; or
-- the round budget is spent with the threshold still unmet.
+- that gate's round budget is spent with the threshold still unmet.
 
-On HALT the `remediate` step does not revise. It reports what is unresolved, names what would
-settle it and who produces that, and asks the owner. Some questions genuinely cannot be closed by
-specifying — a contact-volume baseline that depends on operator data no fixture contains is not a
-writing problem — and recognising that is what stopped a fourth revision round from being attempted.
+A halt stops the LOOP. Whether it also aborts the RUN is the `--advisory` switch, and both
+pipelines pass it: the halt is recorded, the script exits 0, and the workflow reaches its remaining
+steps instead of dying mid-pipeline. `remediate` then does two things — it carries on with the
+gates that have not halted, and for each one that has, it reports what is unresolved, names what
+would settle it and who produces that, and asks the owner in a single `CEZ:ASK` at the end. Some
+questions genuinely cannot be closed by specifying — a contact-volume baseline that depends on
+operator data no fixture contains is not a writing problem — and recognising that is what stopped a
+fourth revision round from being attempted. Set `OM_GATE_STRICT=1` to restore the old behaviour
+where a spent budget exits 2 and fails the run.
 
 `review` uses **loop-until-dry** rather than a fixed count: two consecutive rounds with no new
 finding. Fixed counts stop while the tail is still producing; a dry-round counter stops when
@@ -107,15 +113,24 @@ discovery is actually exhausted.
 ### Loop state
 
 The agent maintains `.ai/analysis/spec-pipeline/gate-state.json`. Before re-entering a failed gate
-it copies the current `gates` block to `previous.gates` and increments `round` — without those two
-fields the divergence detector cannot distinguish a converging loop from a diverging one, and the
-loop loses the only control that stops it going wrong slowly.
+it copies the current `gates` block to `previous.gates` — without it the divergence detector cannot
+distinguish a converging loop from a diverging one, and the loop loses the only control that stops
+it going wrong slowly.
 
-Two budgets apply, deliberately: the script's `--max-rounds` (soft, needs the agent to increment
-`round`) and cezar's `onFail.max` (hard, enforced by the runner regardless).
+**Round counters are per gate and script-owned**, in `gate-rounds.json` beside the state. The agent
+does not maintain them. They used to be one shared `round` field on the agent's state while each
+gate carried its own `--max-rounds`, which made the counter global and monotonic against local
+budgets: `review` alone needs three rounds to reach its two dry rounds, so `frozen --max-rounds 2`
+was already over budget before its first evaluation and halted with zero retries. `pipeline-setup.sh`
+clears the counters and every halt marker at the start of a run, so a run never inherits a spent
+budget from the last one.
+
+Two budgets apply, deliberately: the script's `--max-rounds` (per gate, counted by the script) and
+cezar's `onFail.max` (hard, enforced by the runner regardless, and never reset for the life of a
+run — it is the backstop against a gate that passes, re-opens and loops forever).
 
 Run `node .ai/scripts/spec-gate-check.mjs all` at any point for the full picture; it prints one
-line per gate and each unmet condition beneath it.
+line per gate, each unmet condition beneath it, and a banner listing every gate that halted.
 
 ---
 
@@ -438,8 +453,12 @@ The mechanical bars target **new** code. Existing modules predate several of the
 show real-but-pre-existing findings; scope the gate to the module under construction.
 
 **Divergence, in code.** If a round leaves more unresolved findings than the round before, the
-build is getting worse and `impl-gate-check` exits 2. `review-round` then escalates instead of
-fixing — the code equivalent of refusing to write a fourth variant.
+build is getting worse and `impl-gate-check` halts that bar. `review-round` then escalates instead
+of fixing it again — the code equivalent of refusing to write a fourth variant. The comparison is
+per critic (`previous.critics.<name>.unresolved`): a bar evaluating `security` alone counts only
+security's findings, so measuring them against a whole-run total compares two different things.
+Round budgets are per critic and script-owned, exactly as on the spec side, and the bars run
+`--advisory` so a halted bar records itself and the run still reaches `ds-review` and `done`.
 
 ## Definition of done for the spec phase
 
@@ -450,4 +469,6 @@ fixing — the code equivalent of refusing to write a fourth variant.
 - [ ] One review round complete with all four roles; findings remediated once, not in place
 - [ ] No known-false claim remains unstruck
 - [ ] Open questions state what would close them, and who produces that
-- [ ] `node .ai/scripts/spec-gate-check.mjs all` exits 0, and no `HALT` marker remains
+- [ ] `node .ai/scripts/spec-gate-check.mjs all` exits 0, and no `HALT-<gate>` marker remains
+      (run it WITHOUT `--advisory` for the honest verdict — advisory mode reports unmet gates in a
+      banner and still exits 0, because its job is to let the run finish, not to sign it off)

@@ -180,3 +180,12 @@ skills-lock.json
 # clean-tree guard refuse the next run.
 .stryker-tmp/
 **/reports/mutation/
+
+# Spec/implementation pipeline loop machinery (.ai/scripts/*-gate-check.mjs). The
+# round counters and halt markers are per-run scratch the scripts own and
+# pipeline-setup.sh resets; the ledgers and HALT-REPORT write-ups beside them are
+# real artifacts and stay tracked.
+.ai/analysis/**/gate-rounds.json
+.ai/analysis/**/HALT
+.ai/analysis/**/HALT-*
+!.ai/analysis/**/HALT-REPORT-*

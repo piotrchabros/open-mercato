@@ -71,15 +71,16 @@ steps:
       propagated across four documents is one of the defects this pipeline exists to catch.
 
       If you are re-entering this step after a failed gate: copy the previous `gates` block to
-      `previous.gates` and increment `round` FIRST. The divergence detector reads those two fields,
-      and without them it cannot tell a converging loop from a diverging one.
+      `previous.gates` FIRST. The divergence detector reads it, and without it it cannot tell a
+      converging loop from a diverging one. Do NOT maintain a `round` field — the gate script owns
+      the round counters now, per gate, in .ai/analysis/spec-pipeline/gate-rounds.json.
 
       Set `ungated: true` if you both wrote and verified the claims. That is not a failure to hide —
       the Architect reviewer re-runs the ledger independently later, which is what clears it.
 
   - id: claims-gate
     name: "▶ threshold — claims"
-    command: "node .ai/scripts/spec-gate-check.mjs claims --max-rounds 3"
+    command: "node .ai/scripts/spec-gate-check.mjs claims --max-rounds 3 --advisory"
     onFail:
       retry: claims-ledger
       max: 3
@@ -101,7 +102,7 @@ steps:
 
   - id: writepath-gate
     name: "▶ threshold — write path"
-    command: "node .ai/scripts/spec-gate-check.mjs write-path --max-rounds 2"
+    command: "node .ai/scripts/spec-gate-check.mjs write-path --max-rounds 2 --advisory"
     onFail:
       retry: decompose
       max: 2
@@ -135,7 +136,7 @@ steps:
 
   - id: coreedit-gate
     name: "▶ threshold — out-of-scope edits"
-    command: "node .ai/scripts/spec-gate-check.mjs core-edit --max-rounds 2"
+    command: "node .ai/scripts/spec-gate-check.mjs core-edit --max-rounds 2 --advisory"
     onFail:
       retry: core-ledger
       max: 2
@@ -171,11 +172,15 @@ steps:
   - id: remediate
     name: Remediate once
     prompt: >-
-      FIRST: if .ai/analysis/spec-pipeline/HALT exists, STOP. Do not revise anything. Read it, then
-      report what is unresolved, what would settle it and who produces that, and emit a CEZ:ASK
-      asking the owner how to proceed. The halt fired because another revision is the wrong move —
-      three rounds on one document once produced wrong sum, then wrong subtraction, then wrong unit,
-      each round fixing the last defect and introducing a subtler one.
+      FIRST: check for halt markers — .ai/analysis/spec-pipeline/HALT-<gate>, one per gate. A marker
+      means STOP LOOPING ON THAT GATE: do not revise for it again. Another revision is the wrong move
+      there — three rounds on one document once produced wrong sum, then wrong subtraction, then
+      wrong unit, each round fixing the last defect and introducing a subtler one.
+
+      A halt no longer ends the run (the gates run `--advisory`). So do BOTH: carry on with the
+      gates that have NOT halted, and for each one that has, report what is unresolved, what would
+      settle it and who produces that. Emit ONE CEZ:ASK at the end covering every halted gate — do
+      not stop the workflow to ask, and do not quietly drop the question either.
 
       Otherwise apply the review findings ONCE.
 
@@ -192,7 +197,7 @@ steps:
 
   - id: review-gate
     name: "▶ threshold — review dry"
-    command: "node .ai/scripts/spec-gate-check.mjs review --max-rounds 3"
+    command: "node .ai/scripts/spec-gate-check.mjs review --max-rounds 3 --advisory"
     onFail:
       retry: review
       max: 3
@@ -234,7 +239,7 @@ steps:
 
   - id: frozen-gate
     name: "▶ threshold — frozen surfaces"
-    command: "node .ai/scripts/spec-gate-check.mjs frozen --max-rounds 2"
+    command: "node .ai/scripts/spec-gate-check.mjs frozen --max-rounds 2 --advisory"
     onFail:
       retry: freeze
       max: 2
@@ -260,4 +265,4 @@ steps:
 
   - id: final-gate
     name: "▶ Definition of done — all thresholds"
-    command: "node .ai/scripts/spec-gate-check.mjs all --max-rounds 99 && sed -n '/^## Definition of done/,$p' .ai/docs/spec-pipeline-runbook.md"
+    command: "node .ai/scripts/spec-gate-check.mjs all --advisory && sed -n '/^## Definition of done/,$p' .ai/docs/spec-pipeline-runbook.md"
