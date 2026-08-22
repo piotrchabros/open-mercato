@@ -201,6 +201,30 @@ PR A and PR C modify STABLE type/DI surfaces additively. Required fields are not
 - Indeterminate delivery cannot trigger automatic duplicate sends.
 - UI follows repository mutation, HTTP, i18n, optimistic-lock, and design-system rules.
 
+## Implementation Status
+
+| Phase | Status | Date | Notes |
+|-------|--------|------|-------|
+| INB-DATA-01/02 — outbound message/attempt/outbox, assignment audit, read state, unknown-delivery entities | Done | 2026-08-22 | `Migration20260823010000_connect`; reply payload encrypted, unique predecessor index prevents retry forks |
+| INB-API-00 — Case read/list + priority-only update | Done | 2026-08-22 | The projection carries no subject, wrap-up, decrypted handle or message content; the update schema has no other writable field, so a `status` or `assigneeUserId` in the body is ignored rather than partially applied |
+| INB-GUARD-01 — search guard coverage | N/A | 2026-08-22 | No search surface is added in this slice; `search.ts` arrives with the Case search Inbox does not yet expose |
+| INB-CMD-01 — unified assign/claim/transfer/unassign | Done | 2026-08-22 | One command with audit + optimistic lock; self-claim is the same command with the caller's id |
+| INB-CMD-02 — shared transition command | Done | 2026-08-22 | Used by the interactive routes AND the auto-close sweep, so the two cannot drift |
+| INB-API-01 — assign + lifecycle routes | Done | 2026-08-22 | Guarded, per-method metadata, optimistic conflict surfaced as 409 |
+| INB-SEND-01/01A/01B — enqueue with server-resolved destination | Done | 2026-08-22 | Message + attempt + outbox commit together; Contract D resolved before insert; transient stays queued, stale/ambiguous/unavailable is a definitive pre-provider failure |
+| INB-SEND-02 — dispatch worker + queue/schedule | Done | 2026-08-22 | Leased batch claim, re-resolves the target at dispatch, indeterminate submission becomes `unknown` and is never resubmitted. Connect never calls a provider |
+| INB-SEND-03 — outcome subscriber + reconciliation worker | Done | 2026-08-22 | Matches on full scope + attempt, monotonic revisions, terminal decisions fenced, read-only lookup only |
+| INB-SEND-04 — failed-only retry | Done | 2026-08-22 | Child attempt with a NEW correlation, parent consumed, unique predecessor index arbitrates concurrent clicks |
+| INB-EVT-01 — Inbox domain-outbox events | Done | 2026-08-22 | `connect.case.assigned/.resolved/.reopened`, `connect.outbound.attempted/.status_changed` |
+| INB-OPS-01 — unknown-delivery recovery queue | Done | 2026-08-22 | Inbox-owned, works with Metrics absent; refresh + acknowledge only, no force-sent/force-failed |
+| INB-READ-02 — per-user read watermark | Done | 2026-08-22 | Own-user only, monotonic, never transferred with an assignment |
+| INB-WRK-01 — auto-close sweep | Done | 2026-08-22 | Server-only `system:auto_close` principal built from the schedule's own scope; still runs guards, and there is no request shape that can select it |
+| INB-READ-01 — thread route | Done | 2026-08-22 | Case matrix first, then Contract C; cursors carry the access epoch and fail closed after a transfer |
+| INB-UI-01/02 — three-pane Inbox | Done | 2026-08-22 | Shared primitives, guarded mutations, masked non-editable destination, `unknown` disables retry with an explanation, five complete locales |
+| INB-DS-01 — DS Guardian | Partial | 2026-08-22 | The DS ESLint pass is clean on `packages/connect`; the interactive `om-ds-guardian` review and screenshots need a running app |
+| INB-TEST-01..05 — integration/browser | Not Started | — | Require a live database and browser harness. Unit coverage exists for the access matrix, epoch binding, outcome application, and the lifecycle/attach rules |
+
 ## Changelog
 
+- 2026-08-22: Implemented the data model, assignment, lifecycle, thread reading, the durable outbound state machine, reconciliation, the recovery queue and the three-pane UI with unit coverage; integration and browser verification outstanding.
 - 2026-08-21: Successor split from v2; added unified assignment, explicit send worker, unknown/reconcile semantics, and class (e) PR C decision.

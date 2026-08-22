@@ -62,12 +62,21 @@
     }
   },
   "peerDependencies": {
-    "@open-mercato/shared": "workspace:*"
+    "@open-mercato/shared": "workspace:*",
+    "@open-mercato/ui": "workspace:*",
+    "next": "^16.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@open-mercato/shared": "workspace:*",
+    "@open-mercato/ui": "workspace:*",
+    "@testing-library/jest-dom": "^7.0.0",
     "@types/jest": "^30.0.0",
     "jest": "^30.4.2",
+    "next": "16.3.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "ts-jest": "^29.4.12",
     "typescript": "7.0.2"
   },

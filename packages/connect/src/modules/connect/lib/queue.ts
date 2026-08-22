@@ -10,6 +10,12 @@ export const CONNECT_QUEUES = {
   domainOutbox: 'connect.domain_outbox.publish',
   /** Retries inbound receipts left `processing` by a crash or outage. */
   inboundReceipts: 'connect.inbound.receipts',
+  /** Submits durable outbound rows to the hub send facade. */
+  outboundDispatch: 'connect.outbound.dispatch',
+  /** Re-checks attempts whose outcome is still unknown. */
+  outboundReconcile: 'connect.outbound.reconcile',
+  /** Closes resolved Cases after the configured quiet window. */
+  caseAutoClose: 'connect.case.auto-close',
 } as const
 
 export type ConnectQueueName = (typeof CONNECT_QUEUES)[keyof typeof CONNECT_QUEUES]
