@@ -75,15 +75,21 @@ steps:
   - id: review-round
     name: Critics — four specialists in parallel
     prompt: >-
-      FIRST: if .ai/analysis/impl-pipeline/HALT exists, STOP. Do not fix anything and do not
-      re-review. Read it, report what is failing, what you have already tried, and which decision
-      you need — then emit a CEZ:ASK. The halt fired because the last round left MORE unresolved
-      findings than the one before it, which means iterating again makes the code worse.
+      FIRST: check for halt markers — .ai/analysis/impl-pipeline/HALT-<critic>, one per critic. A
+      marker means STOP LOOPING ON THAT BAR: do not fix for it and do not re-review it. It fired
+      because that bar's round budget is spent, or because the last round left MORE unresolved
+      findings than the one before it — which means iterating again makes the code worse.
+
+      A halt no longer ends the run (the bars run `--advisory`). So do BOTH: keep working the bars
+      that have NOT halted, and for each one that has, report what is failing, what you already
+      tried, and which decision you need. Emit ONE CEZ:ASK at the end covering every halted bar.
 
       If you are re-entering this step after a failed bar: fix the outstanding findings FIRST, then
-      re-run the validation gate, then re-review. Set `previous.totalUnresolved` to the count you
-      were told and increment `round` before you finish — the divergence detector reads those and
-      without them it cannot tell a converging loop from a diverging one.
+      re-run the validation gate, then re-review. Set `previous.critics.<name>.unresolved` to each
+      critic's own count from the previous round — the divergence detector compares per critic, and
+      a whole-run total there measures a different thing and never fires. Do NOT maintain a `round`
+      field; the gate script owns the counters, per critic, in
+      .ai/analysis/impl-pipeline/gate-rounds.json.
 
       Then spawn FOUR critic subagents IN PARALLEL, each blocked from reading the others until it
       has written its own findings. Each returns findings with severity (critical / high / major /
@@ -117,34 +123,35 @@ steps:
       critical or major.
 
       Write .ai/analysis/impl-pipeline/state.json:
-      { slice, round, critics: { <name>: { ran, findings: { critical, high, major, minor },
-      unresolved } }, validationGate: { ran, passed, command }, previous: { totalUnresolved } }.
+      { slice, critics: { <name>: { ran, findings: { critical, high, major, minor }, unresolved } },
+      validationGate: { ran, passed, command },
+      previous: { critics: { <name>: { unresolved } }, totalUnresolved } }.
       COUNT the findings from the critic reports. Do not assert a number from memory.
 
   - id: architecture-bar
     name: "▶ bar — architecture"
-    command: "node .ai/scripts/impl-gate-check.mjs architecture --module packages/connect/src/modules/connect --max-rounds 3"
+    command: "node .ai/scripts/impl-gate-check.mjs architecture --module packages/connect/src/modules/connect --max-rounds 3 --advisory"
     onFail:
       retry: review-round
       max: 3
 
   - id: security-bar
     name: "▶ bar — security"
-    command: "node .ai/scripts/impl-gate-check.mjs security --module packages/connect/src/modules/connect --max-rounds 3"
+    command: "node .ai/scripts/impl-gate-check.mjs security --module packages/connect/src/modules/connect --max-rounds 3 --advisory"
     onFail:
       retry: review-round
       max: 3
 
   - id: code-review-bar
     name: "▶ bar — code review"
-    command: "node .ai/scripts/impl-gate-check.mjs code-review --module packages/connect/src/modules/connect --max-rounds 3"
+    command: "node .ai/scripts/impl-gate-check.mjs code-review --module packages/connect/src/modules/connect --max-rounds 3 --advisory"
     onFail:
       retry: review-round
       max: 3
 
   - id: tests-bar
     name: "▶ bar — tests"
-    command: "node .ai/scripts/impl-gate-check.mjs tests --module packages/connect/src/modules/connect --max-rounds 3"
+    command: "node .ai/scripts/impl-gate-check.mjs tests --module packages/connect/src/modules/connect --max-rounds 3 --advisory"
     onFail:
       retry: review-round
       max: 3
@@ -162,4 +169,4 @@ steps:
 
   - id: done
     name: "▶ Definition of done"
-    command: "node .ai/scripts/impl-gate-check.mjs all --module packages/connect/src/modules/connect --max-rounds 99 && corepack yarn i18n:check-hardcoded && echo '--- slice complete: bars met, gate green, DS reviewed ---'"
+    command: "node .ai/scripts/impl-gate-check.mjs all --module packages/connect/src/modules/connect --advisory && corepack yarn i18n:check-hardcoded && echo '--- slice complete: bars met, gate green, DS reviewed ---'"

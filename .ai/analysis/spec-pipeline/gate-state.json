@@ -1,6 +1,5 @@
 {
   "spec": ".ai/specs/2026-08-21-connect-successor-bundle",
-  "round": 4,
   "gates": {
     "claims": { "rows": 25, "confirmed": 25, "overstated": 0, "refuted": 0, "uncitable": 0, "loadBearingUnresolved": 0, "unstruckFalseClaims": 0, "ungated": false, "newClaimsIntroduced": 0, "rowsResolved": 0 },
     "coreEdit": { "rows": 26, "classDorE": 10, "justified": 10, "assignedUpstreamPr": 10, "ruleQuoted": true },

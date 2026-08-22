@@ -2,7 +2,8 @@
 /**
  * impl-gate-check — quality bar evaluator for the implementation pipeline's critic loops.
  *
- *   node .ai/scripts/impl-gate-check.mjs <critic> --module <path> [--state <path>] [--max-rounds N]
+ *   node .ai/scripts/impl-gate-check.mjs <critic> --module <path> [--state <path>]
+ *                                       [--max-rounds N] [--advisory]
  *
  * Critics: architecture · security · code-review · tests · all
  *
@@ -23,19 +24,51 @@
  *
  * DIVERGENCE. If a remediation round leaves more unresolved findings than the round before,
  * the loop is making the code worse and exits 2. Iterating harder on a diverging build
- * produces the code equivalent of wrong sum -> wrong subtraction -> wrong unit.
+ * produces the code equivalent of wrong sum -> wrong subtraction -> wrong unit. The
+ * comparison is PER CRITIC: a bar evaluating `security` alone counts only security's
+ * unresolved findings, so measuring it against a whole-run total compares two different
+ * things and never fires. `all` is the one place the totals are commensurable.
+ *
+ * ROUND BUDGETS ARE PER CRITIC, AND THIS SCRIPT OWNS THEM. The four bars used to share
+ * one agent-maintained `round` while each carried its own `--max-rounds 3`, so three
+ * remediation rounds anywhere spent the budget for all four and the next bar to fail
+ * halted with zero retries. Counters now live in a script-owned `gate-rounds.json`
+ * beside the state, keyed by critic, incremented here and cleared when a bar passes.
+ *
+ * ADVISORY MODE (`--advisory`, or OM_GATE_SOFT=1; OM_GATE_STRICT=1 forces strict back).
+ * A spent budget still stops the LOOP but no longer aborts the RUN: the halt is recorded
+ * and the script exits 0 so the workflow reaches its remaining steps, with the final
+ * `all` pass reporting every recorded halt instead of silently succeeding.
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { join, dirname, extname, relative } from 'node:path'
 
 const argv = process.argv.slice(2)
-const critic = argv.find((a) => !a.startsWith('--')) ?? 'all'
 const flag = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 && argv[i + 1] ? argv[i + 1] : d }
 const modulePath = flag('module', null)
 const statePath = flag('state', '.ai/analysis/impl-pipeline/state.json')
 const maxRounds = Number(flag('max-rounds', 3))
-const HALT_MARKER = join(dirname(statePath), 'HALT')
+// A value that follows a flag is that flag's argument, never the critic name.
+const VALUE_OF = new Set([modulePath, statePath, flag('max-rounds', null)].filter(Boolean))
+const critic = argv.find((a) => !a.startsWith('--') && !VALUE_OF.has(a)) ?? 'all'
+
+const ANALYSIS_DIR = dirname(statePath)
+const haltMarker = (name) => join(ANALYSIS_DIR, `HALT-${name}`)
+const LEGACY_HALT = join(ANALYSIS_DIR, 'HALT')
+const ROUNDS_FILE = join(ANALYSIS_DIR, 'gate-rounds.json')
+
+const advisory = (argv.includes('--advisory') || process.env.OM_GATE_SOFT === '1')
+  && process.env.OM_GATE_STRICT !== '1'
+
+/** Script-owned round counters, one per critic. Absent file → every bar at round 1. */
+function readRounds() {
+  try { return JSON.parse(readFileSync(ROUNDS_FILE, 'utf8')) } catch { return {} }
+}
+function writeRounds(rounds) {
+  mkdirSync(ANALYSIS_DIR, { recursive: true })
+  writeFileSync(ROUNDS_FILE, `${JSON.stringify(rounds, null, 2)}\n`)
+}
 
 if (!modulePath) {
   console.error('impl-gate-check: --module <path-to-module-dir> is required')
@@ -159,10 +192,13 @@ function loadState() {
     console.error(`impl-gate-check: no state at ${statePath}`)
     console.error('\nEach critic writes its findings here. Expected shape:')
     console.error(JSON.stringify({
-      slice: '<slice id>', round: 1,
+      slice: '<slice id>',
       critics: Object.fromEntries(Object.keys(CRITICS).map((k) => [k, { ran: false, findings: { critical: 0, high: 0, major: 0, minor: 0 }, unresolved: 0 }])),
       validationGate: { ran: false, passed: false, command: null },
-      previous: { totalUnresolved: null },
+      previous: {
+        critics: Object.fromEntries(Object.keys(CRITICS).map((k) => [k, { unresolved: null }])),
+        totalUnresolved: null,
+      },
     }, null, 2))
     process.exit(1)
   }
@@ -170,21 +206,28 @@ function loadState() {
   catch (e) { console.error(`impl-gate-check: ${statePath} is not valid JSON — ${e.message}`); process.exit(1) }
 }
 
-function halt(reason, round) {
-  mkdirSync(dirname(HALT_MARKER), { recursive: true })
-  writeFileSync(HALT_MARKER, `${new Date().toISOString()}\nround ${round}\n${reason}\n`)
-  console.error(`\n  ██  HALT — stop looping and escalate to a human.\n  ${reason}\n`)
+/** Record the halt. Stopping the LOOP is never optional; aborting the RUN is. */
+function recordHalt(name, reason, round) {
+  mkdirSync(ANALYSIS_DIR, { recursive: true })
+  writeFileSync(haltMarker(name), `${new Date().toISOString()}\n${name}\nround ${round}\n${reason}\n`)
+}
+
+function halt(name, reason, round) {
+  recordHalt(name, reason, round)
+  console.error(advisory
+    ? `\n  ██  HALT (advisory) — stop looping on this bar; the run continues.\n  ${reason}\n`
+    : `\n  ██  HALT — stop looping and escalate to a human.\n  ${reason}\n`)
   console.error('  Iterating harder on a diverging build makes it worse. Report what is failing,')
   console.error('  what you have tried, and which decision you need — then stop.\n')
-  process.exit(2)
+  if (advisory) {
+    console.error('  Advisory mode: this bar is recorded as UNMET and the workflow advances to its')
+    console.error('  remaining steps. The definition-of-done pass lists every recorded halt.')
+    console.error('  Set OM_GATE_STRICT=1 to make a spent budget abort the run again.\n')
+  }
+  process.exit(advisory ? 0 : 2)
 }
 
 const state = loadState()
-const round = Number(state.round) || 1
-if (existsSync(HALT_MARKER)) {
-  console.error(`impl-gate-check: HALT marker present (${HALT_MARKER}). Resolve with a human and delete it before resuming.`)
-  process.exit(2)
-}
 
 const names = critic === 'all' ? Object.keys(CRITICS) : [critic]
 if (names.some((n) => !CRITICS[n])) {
@@ -192,11 +235,29 @@ if (names.some((n) => !CRITICS[n])) {
   process.exit(1)
 }
 
-console.log(`\nimpl-gate-check — round ${round}/${maxRounds}  ·  ${modulePath}`)
+const rounds = readRounds()
+const round = critic === 'all' ? 1 : Number(rounds[critic]) || 1
+
+// A halt already recorded for THIS bar is not re-litigated: strict mode stops until a
+// human clears it, advisory mode reports it and lets the workflow move on.
+if (critic !== 'all' && (existsSync(haltMarker(critic)) || (!advisory && existsSync(LEGACY_HALT)))) {
+  const marker = existsSync(haltMarker(critic)) ? haltMarker(critic) : LEGACY_HALT
+  if (!advisory) {
+    console.error(`impl-gate-check: HALT marker present (${marker}). Resolve with a human and delete it before resuming.`)
+    process.exit(2)
+  }
+  console.error(`impl-gate-check: ${critic} already halted (${marker}) — advisory mode, advancing without re-running the loop.`)
+  process.exit(0)
+}
+
+console.log(critic === 'all'
+  ? `\nimpl-gate-check — definition of done  ·  ${modulePath}`
+  : `\nimpl-gate-check — ${critic} round ${round}/${maxRounds}  ·  ${modulePath}`)
 console.log(`${SRC.length} source file(s), ${ALL.length - SRC.length} test file(s)\n`)
 
 let failed = false
 let totalUnresolved = 0
+const divergedCritics = []
 
 for (const name of names) {
   const def = CRITICS[name]
@@ -214,18 +275,31 @@ for (const name of names) {
   }
 
   // (b) critic findings
+  let diverged = null
   if (!c?.ran) owed.push('critic has not run')
   else {
     const blocking = def.sev.reduce((n, s) => n + Number(c.findings?.[s] ?? 0), 0)
     const unresolved = Number(c.unresolved ?? blocking)
     totalUnresolved += unresolved
     if (unresolved > 0) owed.push(`${unresolved} unresolved ${def.sev.join('/')} finding(s)`)
+    // Per critic, so the two numbers measure the same thing. `all` compares the totals
+    // below, which is the one place a whole-run figure is commensurable.
+    const was = Number(state.previous?.critics?.[name]?.unresolved)
+    if (Number.isFinite(was) && unresolved > was) {
+      diverged = `unresolved ${name} findings rose ${was} → ${unresolved} — remediation is introducing defects faster than it closes them`
+    }
   }
 
   const ok = owed.length === 0
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${def.title}${mechHits ? `  (${mechHits} mechanical)` : ''}`)
   for (const o of owed) console.log(`        · ${o}`)
+  if (diverged) console.log(`        · DIVERGING — ${diverged}`)
   if (!ok) failed = true
+  if (diverged) {
+    if (critic !== 'all') halt(name, diverged, round)
+    recordHalt(name, diverged, Number(rounds[name]) || 1)
+    divergedCritics.push(name)
+  }
 }
 
 // the validation gate is the one bar no critic can waive
@@ -240,14 +314,40 @@ if (critic === 'all' || critic === 'code-review') {
 
 console.log('')
 
-const prev = state.previous?.totalUnresolved
-if (prev != null && totalUnresolved > prev) {
-  halt(`unresolved findings rose ${prev} → ${totalUnresolved} — remediation is introducing defects faster than it closes them`, round)
+if (critic === 'all') {
+  const prev = Number(state.previous?.totalUnresolved)
+  if (Number.isFinite(prev) && totalUnresolved > prev) {
+    console.log(`  ██  DIVERGING — unresolved findings rose ${prev} → ${totalUnresolved} across all four critics.`)
+    console.log('')
+    failed = true
+  }
+  const halted = [...new Set([...names.filter((n) => existsSync(haltMarker(n))), ...divergedCritics])]
+  if (halted.length) {
+    console.log('  ██  UNMET BARS — these halted rather than reaching their threshold:')
+    for (const n of halted) console.log(`        · ${n}  (see ${haltMarker(n)})`)
+    console.log('')
+  }
+  if (!failed && !halted.length) { console.log('Quality bar met. Advancing.'); process.exit(0) }
+  if (advisory) {
+    console.log('Advisory mode: the definition of done is NOT met — the findings above are owed.')
+    console.log('The run is allowed to complete so its remaining steps report. OM_GATE_STRICT=1 to fail instead.')
+    process.exit(0)
+  }
+  process.exit(halted.length ? 2 : 1)
 }
 
-if (!failed) { console.log('Quality bar met. Advancing.'); process.exit(0) }
-if (round >= maxRounds) halt(`round budget spent (${round}/${maxRounds}) with the bar still unmet`, round)
+if (!failed) {
+  // A bar that passes gives its budget back: a later step can legitimately re-open it,
+  // and cezar's own onFail.max is the hard backstop against an endless alternation.
+  if (rounds[critic] != null) { delete rounds[critic]; writeRounds(rounds) }
+  console.log('Quality bar met. Advancing.')
+  process.exit(0)
+}
+if (round >= maxRounds) halt(critic, `round budget spent (${round}/${maxRounds}) with the bar still unmet`, round)
 
+writeRounds({ ...rounds, [critic]: round + 1 })
 console.log(`Bar not met. Fix and re-run — round ${round + 1} of ${maxRounds}.`)
-console.log(`Before re-running: set previous.totalUnresolved = ${totalUnresolved} and increment round.`)
+console.log(`Before re-running: set previous.critics.${critic}.unresolved = ${totalUnresolved} so the`)
+console.log(`divergence detector can compare like with like. The round counter is kept for you in`)
+console.log(`${ROUNDS_FILE} — do not maintain it by hand.`)
 process.exit(1)

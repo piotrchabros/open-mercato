@@ -55,7 +55,12 @@ if ! sh scripts/install-skills.sh; then
   exit 1
 fi
 
+# Reset the loop state, for real. This used to remove only the HALT marker while the
+# round counters lived on in the agent's state file, so a fresh run inherited a spent
+# budget from the previous one and the first failing gate halted with zero retries.
+# The counters are script-owned now (gate-rounds.json), and both they and every halt
+# marker — the per-gate ones and the legacy global — go here.
 mkdir -p "$ANALYSIS_DIR"
-rm -f "$ANALYSIS_DIR/HALT"
+rm -f "$ANALYSIS_DIR/HALT" "$ANALYSIS_DIR"/HALT-* "$ANALYSIS_DIR/gate-rounds.json"
 
 echo "--- skills installed, gate state reset ($ANALYSIS_DIR) ---"
