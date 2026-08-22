@@ -3,11 +3,13 @@ import type { AppContainer } from '@open-mercato/shared/lib/di/container'
 import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import {
+  ChannelDeliveryAttempt,
   ChannelThreadMapping,
   CommunicationChannel,
   ExternalConversation,
   MessageChannelLink,
 } from '../data/entities'
+import { bindDeliveryCorrelation, computeDeliveryFingerprint } from './delivery-correlation'
 import { ChannelMutationBlockedError, guardOutboundCreate } from './mutation-guards'
 import { COMMUNICATION_CHANNELS_QUEUES, getCommunicationChannelsQueue } from './queue'
 import type { OutboundDeliveryPayload } from '../workers/outbound-delivery'
@@ -48,6 +50,24 @@ export type SendAsUserInput = {
    * caller-specified visibility flag. The hub does not interpret these keys.
    */
   channelMetadata?: Record<string, unknown>
+  /**
+   * Caller-supplied send correlation (Connect upstream Contract A).
+   *
+   * Optional. When present, the hub binds `correlationId` to `attemptId` and a
+   * content fingerprint before enqueuing, so a caller that loses this response
+   * can resubmit the identical request and learn the original outcome instead of
+   * choosing between a duplicate send and a lost one. When absent, behaviour is
+   * byte-identical to before this contract.
+   *
+   * `fingerprint` is optional: omitted, the hub derives it from the canonical
+   * recipients/subject/body/thread of this very request, which is what a caller
+   * would compute anyway.
+   */
+  correlation?: {
+    correlationId: string
+    attemptId: string
+    fingerprint?: string
+  }
 }
 
 export type SendAsUserResult =
@@ -57,8 +77,16 @@ export type SendAsUserResult =
       threadId: string
       channelId: string
       providerKey: string
+      /** True when this request matched an existing correlation and nothing was re-enqueued. */
+      duplicate?: boolean
     }
-  | { ok: false; status: number; error: string; fieldErrors?: Record<string, string> }
+  | {
+      ok: false
+      status: number
+      error: string
+      code?: string
+      fieldErrors?: Record<string, string>
+    }
 
 /**
  * In-process send-as-user facade.
@@ -121,11 +149,77 @@ export async function sendAsUser(
     }
   }
 
+  const commandBus = container.resolve('commandBus') as CommandBus
+  const messageBody = input.body.plain ?? htmlToText(input.body.html ?? '')
+
+  // Bind the caller's correlation BEFORE anything is composed or enqueued
+  // (Connect upstream Contract A). Doing it first is what makes a resubmission
+  // safe: a caller that lost this response can repeat the identical request and
+  // learn the original outcome instead of choosing between a duplicate send and
+  // a lost one. Callers that supply no correlation skip this entirely and keep
+  // the pre-contract behaviour.
+  let boundAttempt: ChannelDeliveryAttempt | null = null
+  if (input.correlation) {
+    const fingerprint =
+      input.correlation.fingerprint ??
+      computeDeliveryFingerprint({
+        to: input.to,
+        cc: input.cc,
+        bcc: input.bcc,
+        subject: input.subject,
+        body: messageBody,
+        threadRef: input.parentMessageId ?? null,
+      })
+    const binding = await bindDeliveryCorrelation(
+      em,
+      { tenantId, organizationId, channelId: channel.id },
+      {
+        correlationId: input.correlation.correlationId,
+        attemptId: input.correlation.attemptId,
+        fingerprint,
+        actorUserId: actor.userId,
+      },
+    )
+    if (binding.status === 'conflict') {
+      return {
+        ok: false,
+        status: 409,
+        code: binding.reason,
+        error:
+          binding.reason === 'attempt_mismatch'
+            ? 'This correlation is already bound to a different attempt.'
+            : 'This correlation is already bound to different message content.',
+      }
+    }
+    if (binding.status === 'duplicate') {
+      // The same logical send, already accepted. Return the original result —
+      // never a second enqueue.
+      if (binding.attempt.messageId) {
+        return {
+          ok: true,
+          duplicate: true,
+          messageId: binding.attempt.messageId,
+          threadId: binding.attempt.threadId ?? binding.attempt.messageId,
+          channelId: channel.id,
+          providerKey: channel.providerKey,
+        }
+      }
+      // Bound but not yet composed — an earlier submission is still in flight or
+      // died between binding and compose. Re-enqueuing here could duplicate the
+      // in-flight send, so the caller is told to retry the lookup instead.
+      return {
+        ok: false,
+        status: 409,
+        code: 'correlation_in_progress',
+        error: 'This send is already in progress; query its delivery status instead of resubmitting.',
+      }
+    }
+    boundAttempt = binding.attempt
+  }
+
   // Create the Message via the messages module compose command. The outbound
   // subscriber picks it up via `messages.message.sent` and routes through the
   // adapter chain.
-  const commandBus = container.resolve('commandBus') as CommandBus
-  const messageBody = input.body.plain ?? htmlToText(input.body.html ?? '')
   const composeInput = {
     type: `channel.${channel.providerKey}`,
     visibility: 'public' as const,
@@ -265,6 +359,15 @@ export async function sendAsUser(
     em.persist(channelLink)
     await em.flush()
   })
+
+  // Anchor the correlation to the composed message BEFORE enqueuing: the
+  // delivery worker resolves the attempt through `messageId`, so the link has to
+  // exist by the time the job can run.
+  if (boundAttempt) {
+    boundAttempt.messageId = messageId
+    boundAttempt.threadId = messageThreadId
+    await em.flush()
+  }
 
   const queue = getCommunicationChannelsQueue(COMMUNICATION_CHANNELS_QUEUES.outbound)
   const deliveryJob: OutboundDeliveryPayload = {

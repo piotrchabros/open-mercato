@@ -1,6 +1,7 @@
 import { asValue } from 'awilix'
 import type { AppContainer } from '@open-mercato/shared/lib/di/container'
 import {
+  ChannelDeliveryAttempt,
   CommunicationChannel,
   ExternalConversation,
   ExternalMessage,
@@ -14,6 +15,7 @@ import { getChannelAdapterRegistry } from './lib/adapter-registry-singleton'
 import { ensureTestSeedAdapterRegistered } from './lib/test-seed'
 import { sendAsUser } from './lib/send-as-user'
 import { checkSharedInboxAuthorization } from './lib/shared-inbox-authorization'
+import { lookupSendStatus } from './lib/send-status-lookup'
 
 export function register(container: AppContainer) {
   // Test-only: register the network-free stub channel adapter when
@@ -32,6 +34,7 @@ export function register(container: AppContainer) {
     MessageReaction: asValue(MessageReaction),
     SharedChannelMembership: asValue(SharedChannelMembership),
     SharedInboxOAuthState: asValue(SharedInboxOAuthState),
+    ChannelDeliveryAttempt: asValue(ChannelDeliveryAttempt),
 
     // Channel adapter registry — process-wide singleton backed by globalThis so
     // the auth-less webhook route resolves the same registry as DI consumers.
@@ -48,5 +51,11 @@ export function register(container: AppContainer) {
     // envelope contracts so the rule has exactly one implementation.
     // See lib/shared-inbox-authorization.ts.
     communicationChannelsSharedInboxAuthorization: asValue(checkSharedInboxAuthorization),
+
+    // Read-only send-status reconciliation (Connect upstream Contract A). The
+    // sanctioned answer to "did my send happen?" for a caller that lost the
+    // original response — it never sends and never resends.
+    // See lib/send-status-lookup.ts.
+    communicationChannelsSendStatusLookup: asValue(lookupSendStatus),
   })
 }

@@ -70,6 +70,25 @@ const events = [
     category: 'lifecycle',
     clientBroadcast: true,
   },
+  // ── Delivery outcome (Connect upstream Contract A) ───────
+  /**
+   * The single authoritative statement of what happened to one outbound send.
+   *
+   * Written ONLY by the hub delivery worker. Subscribers must match the
+   * complete scope plus `attemptId` — never `correlationId` alone, which is only
+   * unique within one tenant+organization+channel — and must treat
+   * `status: 'unknown'` as "may already have been delivered", never as a
+   * licence to resend.
+   *
+   * Payload: `{ tenantId, organizationId, channelId, correlationId, attemptId,
+   * deliveryRevision, providerMessageId?, status, reasonCode?, occurredAt }`.
+   */
+  {
+    id: 'communication_channels.delivery.outcome_recorded',
+    label: 'Outbound Delivery Outcome Recorded',
+    entity: 'channel_delivery_attempt',
+    category: 'lifecycle',
+  },
   // ── Shared-inbox authorization (Connect upstream Contract E) ──
   {
     id: 'communication_channels.shared_inbox.provisioned',

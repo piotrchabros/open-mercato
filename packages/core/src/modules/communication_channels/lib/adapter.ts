@@ -58,6 +58,25 @@ export interface SendMessageInput {
   credentials: Record<string, unknown>
   scope: TenantScope
   metadata?: Record<string, unknown>
+  /**
+   * Hub-assigned correlation for this send (Connect upstream Contract A).
+   *
+   * Threaded down so a provider that DOES offer an idempotency key can use
+   * `attemptId` as one, and so provider-side logs can be joined to the hub's
+   * delivery record when reconciling an indeterminate send.
+   *
+   * ADDITIVE-ONLY (BACKWARD_COMPATIBILITY.md): adapters that ignore it behave
+   * exactly as before, and the hub never requires an adapter to honour it.
+   */
+  correlation?: SendCorrelation
+}
+
+/** Hub-assigned identity of one outbound send. See {@link SendMessageInput.correlation}. */
+export interface SendCorrelation {
+  /** Caller-stable id for "this logical send", unique per tenant+org+channel. */
+  correlationId: string
+  /** Immutable attempt identity bound to the correlation on first acceptance. */
+  attemptId: string
 }
 
 export interface MessageContent {

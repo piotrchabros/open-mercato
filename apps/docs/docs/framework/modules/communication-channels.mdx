@@ -358,6 +358,113 @@ OM_INTEGRATION_MODULES=communication_channels,channel-imap,channel-gmail \
   yarn test:integration                      # email-foundation slice only
 ```
 
+## Send correlation and delivery outcomes
+
+Email providers expose no idempotent-send key and no reliable "did message X send?" query. A
+caller that loses the response to a send therefore has only two bad options: resend (duplicate
+mail) or give up (lost mail). Connect upstream Contract A
+(`.ai/specs/2026-08-21-connect-upstream-send-contract.md`) adds the hub-side record that makes a
+third option possible — ask.
+
+Everything here is **opt-in and additive**. A send without a correlation behaves exactly as it
+did before.
+
+### Correlating a send
+
+Pass `correlation` to `sendAsUser` (DI: `communicationChannelsSendAsUser`) or to
+`POST /api/communication_channels/send-as-user`:
+
+```jsonc
+{
+  "userChannelId": "…",
+  "to": ["customer@example.com"],
+  "subject": "Re: your order",
+  "body": { "plain": "…" },
+  "correlation": {
+    "correlationId": "order-4711-reply",   // stable per logical send
+    "attemptId": "01J…",                   // immutable once bound
+    "fingerprint": "…"                     // optional; derived when omitted
+  }
+}
+```
+
+The binding happens **before** anything is composed or enqueued, and is stored in
+`channel_delivery_attempts`, unique per `(tenant, organization, channel, correlationId)`:
+
+| Resubmission | Result |
+|--------------|--------|
+| Same attempt + same fingerprint, already delivered | `202` with `duplicate: true` and the ORIGINAL `messageId` — nothing is re-enqueued |
+| Same attempt + same fingerprint, still in flight | `409 correlation_in_progress` — query the status instead of resubmitting |
+| Different attempt | `409 attempt_mismatch` — the binding is never overwritten |
+| Different content | `409 fingerprint_mismatch` — a correlation cannot be re-pointed at a different message |
+
+The fingerprint is a canonical hash of recipients (lower-cased and sorted, so ordering is
+irrelevant), subject, body and thread.
+
+### Outcome event
+
+`communication_channels.delivery.outcome_recorded` is persistent and is written **only** by the
+hub delivery worker:
+
+```ts
+{
+  tenantId, organizationId, channelId,
+  correlationId, attemptId,
+  deliveryRevision,            // monotonic per attempt
+  providerMessageId?,          // present on a confirmed send
+  status: 'sent' | 'failed' | 'unknown',
+  reasonCode?,                 // e.g. authorization_revoked, retries_exhausted
+  occurredAt,
+}
+```
+
+Subscribers **MUST** match the complete scope plus `attemptId` — `correlationId` is only unique
+within one tenant+organization+channel. The payload is identifier-only, so persistent event
+storage never holds recipients, subject or body.
+
+`sent` and `failed` are terminal and fenced: a late or duplicated outcome cannot regress them,
+and a fenced outcome emits nothing at all.
+
+### `unknown` is not a failure
+
+`unknown` means the request reached the network and then died without a response — the provider
+may or may not have accepted it. For an **uncorrelated** send the hub keeps its long-standing
+preference for a duplicate over a loss and retries. For a **correlated** send the caller asked
+for the opposite guarantee, so the attempt is recorded `unknown` and is **never retried
+automatically**. Resolving it is an explicit decision: reconcile against the provider, or send
+a new message.
+
+### Reading the outcome
+
+| DI key | Shape |
+|--------|-------|
+| `communicationChannelsSendStatusLookup` | `(container, actor, { channelId, correlationId, attemptId }) => Promise<SendStatusLookupResult>` |
+
+It never sends and never calls a side-effecting provider operation. It returns a conclusive
+`sent`/`failed`, or `unknown`, plus `providerEvidence: 'supported' | 'unsupported'` so a caller
+knows whether an `unknown` can ever be corroborated independently.
+
+Authorization mirrors the send path exactly: a shared inbox goes through Contract E (scope +
+active membership + `.send`), a personal mailbox is owner-only, and a legacy tenant-wide channel
+requires `communication_channels.manage`. A correlation in another tenant, in a sibling
+organization, or bound to a different attempt is reported as **missing** — saying "that exists
+but is not yours" would itself be a leak.
+
+### Dispatch-time re-authorization
+
+A queued send can sit for minutes. Immediately before the provider call, a shared-inbox send
+re-runs Contract E authorization against **current** membership and features. A membership
+revoked in between produces a definitive `failed:authorization_revoked` outcome with no provider
+call at all. The probe fails closed: if the actor's grants cannot be resolved, the send is
+refused rather than assumed still authorized.
+
+### Adapter surface
+
+`SendMessageInput.correlation` (`{ correlationId, attemptId }`) is threaded to adapters so a
+provider that *does* offer an idempotency key can use `attemptId` as one, and so provider-side
+logs join to the hub's record during reconciliation. It is additive: adapters that ignore it are
+unaffected, and the hub never requires an adapter to honour it.
+
 ## Shared inboxes (organization-owned team mailboxes)
 
 A **shared inbox** is a `CommunicationChannel` with `is_shared_inbox = true`, a non-null

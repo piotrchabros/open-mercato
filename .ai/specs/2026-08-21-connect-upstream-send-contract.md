@@ -54,6 +54,16 @@ STABLE exported input types change additively only. No existing required field o
 
 One deployable capability: authorized shared-channel send. It does not implement Connect UI, delivery workers, or thread reads.
 
+## Implementation Status
+
+| Phase | Status | Date | Notes |
+|-------|--------|------|-------|
+| SND-UP-01 — additive hub/adapter types + scoped correlation persistence | Done | 2026-08-22 | `ChannelDeliveryAttempt` + `Migration20260822150000_communication_channels`; uniqueness is an expression index so `organization_id IS NULL` rows deduplicate too. Callers that omit `correlation` are byte-identical |
+| SND-UP-02 — outcome classification, event, status lookup, DI | Done | 2026-08-22 | `communication_channels.delivery.outcome_recorded` written only by the delivery worker; `communicationChannelsSendStatusLookup` registered. Retry exhaustion is recorded by the worker, which is the only component that knows there will be no later attempt |
+| SND-UP-03 — guard, isolation, idempotency and no-resend tests | Partial | 2026-08-22 | Unit coverage for fingerprint canonicalization, swapped/reused attempts, cross-tenant/organization/channel correlation isolation, terminal fencing, the identifier-only event payload, indeterminate-dispatch classification, dispatch-time re-authorization, and status-lookup masking. Integration tests (two organizations using the same correlation value concurrently, revoke-during-queued-delivery end to end) still pending |
+| SND-UP-04 — public contract docs + maintainer sign-off | Partial | 2026-08-22 | Documented in `apps/docs/docs/framework/modules/communication-channels.mdx` § Send correlation and delivery outcomes. **Named maintainer sign-off for this class (e) change is still outstanding.** |
+
 ## Changelog
 
+- 2026-08-22: Implemented SND-UP-01 and -02; unit coverage for -03 landed; docs written and maintainer sign-off outstanding for -04.
 - 2026-08-21: Extracted PR A from the Connect Inbox umbrella spec; retained class (e) sign-off and dropped the false sender-column change.

@@ -38,6 +38,19 @@ const bodySchema = z.object({
    * not interpret them.
    */
   channelMetadata: z.record(z.string(), z.unknown()).optional(),
+  /**
+   * Optional send correlation (Connect upstream Contract A). Supplying it makes
+   * this request idempotent: a caller that loses the response may repeat the
+   * identical request and receive the original outcome rather than a second
+   * send. Omitting it preserves the pre-contract behaviour exactly.
+   */
+  correlation: z
+    .object({
+      correlationId: z.string().min(1).max(200),
+      attemptId: z.string().min(1).max(200),
+      fingerprint: z.string().min(1).max(200).optional(),
+    })
+    .optional(),
 })
 
 /**
@@ -87,7 +100,11 @@ export async function POST(req: Request): Promise<Response> {
 
   if (!result.ok) {
     return NextResponse.json(
-      result.fieldErrors ? { error: result.error, fieldErrors: result.fieldErrors } : { error: result.error },
+      {
+        error: result.error,
+        ...(result.code ? { code: result.code } : {}),
+        ...(result.fieldErrors ? { fieldErrors: result.fieldErrors } : {}),
+      },
       { status: result.status },
     )
   }
@@ -99,7 +116,10 @@ export async function POST(req: Request): Promise<Response> {
       threadId: result.threadId,
       channelId: result.channelId,
       providerKey: result.providerKey,
-      enqueuedForDelivery: true,
+      // A duplicate correlation resolves to the original send, so nothing was
+      // enqueued a second time — the caller must be able to tell.
+      enqueuedForDelivery: !result.duplicate,
+      ...(result.duplicate ? { duplicate: true } : {}),
     },
     { status: 202 },
   )
@@ -116,7 +136,7 @@ export const openApi = {
         { status: 401, description: 'Unauthorized' },
         { status: 403, description: 'Cannot send through a channel you don\'t own' },
         { status: 404, description: 'Channel not found' },
-        { status: 409, description: 'Channel in a non-deliverable transitional status' },
+        { status: 409, description: 'Channel in a non-deliverable transitional status, or a conflicting/in-progress send correlation' },
         { status: 422, description: 'Invalid body, or channel requires_reauth / disconnected' },
       ],
     },

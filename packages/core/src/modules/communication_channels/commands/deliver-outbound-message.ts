@@ -15,7 +15,20 @@ import {
 import { stringOrUndefined, stripBrackets } from '../lib/email-mime'
 import type { ChannelAdapterRegistry } from '../lib/registry'
 import { isUniqueViolation } from '../lib/pg-errors'
-import { OUTBOUND_DELIVERY_STATUS_DISPATCHING } from '../lib/delivery-status'
+import {
+  OUTBOUND_DELIVERY_STATUS_DISPATCHING,
+  OUTBOUND_DELIVERY_STATUS_FAILED,
+  OUTBOUND_DELIVERY_STATUS_UNKNOWN,
+} from '../lib/delivery-status'
+import {
+  DELIVERY_REASON_AUTHORIZATION_REVOKED,
+  DELIVERY_REASON_INDETERMINATE,
+  DELIVERY_REASON_PROVIDER_REJECTED,
+  findAttemptForMessage,
+  isIndeterminateDispatchError,
+  publishDeliveryOutcome,
+} from '../lib/delivery-outcome'
+import { isSharedSendStillAuthorized } from '../lib/shared-send-authorization'
 import { Message } from '../../messages/data/entities'
 import {
   ChannelThreadMapping,
@@ -271,6 +284,11 @@ const deliverOutboundMessageCommand: CommandHandler<
       }
     }
 
+    // (3 cont.) The durable delivery attempt this message belongs to, when the
+    // caller supplied a correlation (Connect upstream Contract A). `null` for
+    // every uncorrelated send, which keeps that path byte-identical.
+    const deliveryAttempt = await findAttemptForMessage(em, message.id, dscope)
+
     // (2 cont.) Decrypted credentials via the integrations module (if available).
     let credentialsService: CredentialsServiceLike | null = null
     try {
@@ -399,6 +417,46 @@ const deliverOutboundMessageCommand: CommandHandler<
         },
       })
 
+      // Re-run shared-channel authorization immediately before the provider
+      // call (Connect upstream Contract A + E). Membership revoked between
+      // enqueue and dispatch must produce a definitive
+      // `failed:authorization_revoked` outcome WITHOUT a provider call — the
+      // authority the send was accepted under no longer exists.
+      if (channel.isSharedInbox && deliveryAttempt?.actorUserId) {
+        const stillAuthorized = await isSharedSendStillAuthorized(
+          ctx.container,
+          em,
+          channel,
+          deliveryAttempt.actorUserId,
+        )
+        if (!stillAuthorized) {
+          link.deliveryStatus = OUTBOUND_DELIVERY_STATUS_FAILED
+          link.channelMetadata = {
+            ...((link.channelMetadata as Record<string, unknown> | undefined) ?? {}),
+            lastError: DELIVERY_REASON_AUTHORIZATION_REVOKED,
+            lastErrorAt: new Date().toISOString(),
+            transient: false,
+            retryable: false,
+          }
+          await em.flush()
+          await publishDeliveryOutcome({
+            em,
+            attempt: deliveryAttempt,
+            status: 'failed',
+            reasonCode: DELIVERY_REASON_AUTHORIZATION_REVOKED,
+          })
+          return {
+            status: 'failed',
+            messageId: message.id,
+            channelLinkId: link.id,
+            providerKey: channel.providerKey,
+            error: DELIVERY_REASON_AUTHORIZATION_REVOKED,
+            transient: false,
+            requiresReauth: false,
+          }
+        }
+      }
+
       // Record that this send is about to cross the provider boundary.
       //
       // Everything before this point is provably undispatched; everything after
@@ -431,6 +489,17 @@ const deliverOutboundMessageCommand: CommandHandler<
           organizationId: channel.organizationId ?? input.scope.tenantId,
         },
         metadata: converted.metadata,
+        // Threaded so a provider that offers an idempotency key can use the
+        // attempt id, and so provider logs join to the hub's delivery record
+        // when reconciling. Adapters that ignore it are unaffected.
+        ...(deliveryAttempt
+          ? {
+              correlation: {
+                correlationId: deliveryAttempt.correlationId,
+                attemptId: deliveryAttempt.attemptId,
+              },
+            }
+          : {}),
       })
 
       if (sendResult.status === 'failed') {
@@ -505,6 +574,15 @@ const deliverOutboundMessageCommand: CommandHandler<
         },
         { persistent: true },
       )
+
+      if (deliveryAttempt) {
+        await publishDeliveryOutcome({
+          em,
+          attempt: deliveryAttempt,
+          status: 'sent',
+          providerMessageId: sendResult.externalMessageId,
+        })
+      }
 
       return {
         status: 'delivered',
@@ -583,13 +661,45 @@ const deliverOutboundMessageCommand: CommandHandler<
         { persistent: true },
       )
 
+      // Record the outcome on the durable attempt (Connect upstream Contract A).
+      //
+      // A correlated send that fails indeterminately — the request reached the
+      // network and then died without a response — becomes `unknown` and is NOT
+      // retried: the caller asked for "never resend what may already have
+      // arrived", which is the opposite of the hub's default preference for a
+      // duplicate over a loss. A transient failure that is NOT indeterminate
+      // stays pending so the worker's normal retry can still succeed; the
+      // worker records the terminal `failed` once retries are exhausted.
+      let deliveryTransient = classification.transient
+      if (deliveryAttempt) {
+        const indeterminate = isIndeterminateDispatchError(classification.message)
+        if (indeterminate) {
+          deliveryTransient = false
+          await publishDeliveryOutcome({
+            em,
+            attempt: deliveryAttempt,
+            status: 'unknown',
+            reasonCode: DELIVERY_REASON_INDETERMINATE,
+          })
+          link.deliveryStatus = OUTBOUND_DELIVERY_STATUS_UNKNOWN
+          await em.flush()
+        } else if (!classification.transient) {
+          await publishDeliveryOutcome({
+            em,
+            attempt: deliveryAttempt,
+            status: 'failed',
+            reasonCode: DELIVERY_REASON_PROVIDER_REJECTED,
+          })
+        }
+      }
+
       return {
         status: 'failed',
         messageId: message.id,
         channelLinkId: link.id,
         providerKey: channel.providerKey,
         error: classification.message,
-        transient: classification.transient,
+        transient: deliveryTransient,
         requiresReauth,
       }
     }
