@@ -42,6 +42,13 @@ const RECONCILE_SWEEP_INTERVAL_SECONDS = 900
 const AUTO_CLOSE_SWEEP_INTERVAL_SECONDS = 3600
 const PROJECTION_DRAIN_SWEEP_INTERVAL_SECONDS = 120
 const PROJECTION_RECOVERY_SWEEP_INTERVAL_SECONDS = 300
+/**
+ * Hourly, not daily. The sweep re-covers a trailing window rather than only
+ * yesterday, so running it often keeps today's numbers current AND keeps
+ * absorbing late delivery outcomes — and because a rebuild is idempotent,
+ * frequency costs compute rather than correctness.
+ */
+const METRICS_AGGREGATE_INTERVAL_SECONDS = 3600
 
 /**
  * `scheduled_jobs.id` is a uuid column, so a module-owned schedule's stable key
@@ -72,6 +79,7 @@ export const setup: ModuleSetupConfig = {
       'connect.customer_match.link',
       'connect.customer_match.unlink',
       'connect.customer_match.recover',
+      'connect.metrics.view',
     ],
     // A front-line agent handles their own work and claims from the unassigned
     // queue, and may match an identity to a customer. Deliberately no
@@ -139,6 +147,14 @@ export const setup: ModuleSetupConfig = {
         seconds: PROJECTION_RECOVERY_SWEEP_INTERVAL_SECONDS,
         description:
           'Converges unlink sagas after a lost acknowledgement or a coordinator crash, by reading the source ledger.',
+      },
+      {
+        key: `connect:${organizationId}:metrics-daily`,
+        name: 'Connect daily metrics aggregation',
+        queue: CONNECT_QUEUES.metricsAggregate,
+        seconds: METRICS_AGGREGATE_INTERVAL_SECONDS,
+        description:
+          'Recomputes daily operational aggregates from immutable facts over a trailing window, so late delivery outcomes settle into their own enqueue cohort.',
       },
       {
         key: `connect:${organizationId}:case-auto-close-sweep`,

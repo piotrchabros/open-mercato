@@ -52,6 +52,7 @@ type ContainerLike = { resolve: <T = unknown>(name: string) => T }
 export async function retryOutbound(
   container: ContainerLike,
   rawInput: RetryOutboundInput,
+  now: Date = new Date(),
 ): Promise<RetryOutboundResult> {
   const input = retrySchema.parse(rawInput)
   const actor: CaseActor = input.actor
@@ -137,6 +138,11 @@ export async function retryOutbound(
         attemptId: child.id,
         attemptNumber: child.attemptNumber,
         predecessorAttemptId: parent.id,
+        // A retry is its OWN attempt in its own cohort. Folding it back into
+        // the parent's day would make a failed-then-retried send look like one
+        // attempt with two outcomes.
+        enqueueCohortUtcDate: now.toISOString().slice(0, 10),
+        occurredAt: now.toISOString(),
       },
     })
 

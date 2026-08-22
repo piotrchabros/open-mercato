@@ -127,6 +127,29 @@ export const features = [
     title: 'Read historical identity link audit (restricted)',
     module: 'connect',
   },
+
+  /**
+   * Operational metrics.
+   *
+   * Split from the Inbox features because the audience is different: metrics
+   * are an operations surface, and an agent handling their own Cases has no
+   * reason to read organization-wide volume, response percentiles or the
+   * suppression safety criterion.
+   *
+   * `.manage` is separate again because a rebuild is a bounded but real cost —
+   * it recomputes aggregates over a date range — and because it is the only
+   * write on this surface.
+   */
+  {
+    id: 'connect.metrics.view',
+    title: 'View Connect operational metrics and exceptions',
+    module: 'connect',
+  },
+  {
+    id: 'connect.metrics.manage',
+    title: 'Rebuild Connect metric aggregates',
+    module: 'connect',
+  },
 ] as const
 
 export default features

@@ -50,8 +50,12 @@ function attempt(overrides: Row = {}): Row {
     organizationId: ORG,
     caseId: 'case-1',
     hubCorrelationId: 'corr-1',
+    messageId: 'message-1',
     status: 'sending',
     deliveryRevision: 1,
+    // The immutable enqueue cohort the outcome event reports, so a send
+    // confirmed days later still counts against the day it was queued.
+    createdAt: new Date('2026-08-22T08:00:00.000Z'),
     ...overrides,
   }
 }

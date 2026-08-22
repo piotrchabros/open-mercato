@@ -7,6 +7,7 @@ import {
   ConnectContactIdentity,
   ConnectPendingProjection,
 } from '../data/entities'
+import { stageDomainEvent } from '../lib/domain-outbox'
 import { CONNECT_PROJECTION_NAMESPACE } from '../lib/projection-key'
 import { CONNECT_QUEUES } from '../lib/queue'
 
@@ -164,5 +165,33 @@ async function drainOne(
     projection.lastError = result.status
   }
   projection.leaseExpiresAt = null
+
+  // Announce the terminal outcome so operational metrics can measure lag and
+  // surface failures. Staged in the same transaction as the status change: an
+  // announcement that outlives a rollback would report work that never
+  // happened.
+  if (projection.status === 'projected' || projection.status === 'failed') {
+    stageDomainEvent(em, {
+      tenantId: projection.tenantId,
+      organizationId: projection.organizationId,
+      sourceEventId: `connect.projection.status_changed:${projection.projectionKey}:${projection.status}`,
+      aggregateId: projection.caseId,
+      aggregateVersion: projection.associationEpoch,
+      eventType: 'connect.projection.status_changed',
+      payload: {
+        caseId: projection.caseId,
+        identityId: projection.identityId,
+        projectionKey: projection.projectionKey,
+        fromStatus: 'pending',
+        toStatus: projection.status,
+        // The staging time is what makes lag measurable: how long a resolved
+        // Case waited before it reached the customer's timeline.
+        stagedAt: projection.createdAt.toISOString(),
+        completedAt: now.toISOString(),
+        occurredAt: now.toISOString(),
+      },
+    })
+  }
+
   await em.flush()
 }

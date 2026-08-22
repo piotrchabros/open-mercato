@@ -152,6 +152,21 @@ This spec adds only Connect-owned tables, APIs, ACL IDs, jobs, and UI routes. Pu
 - ROI is explicitly deferred until 30 days of operator data exist.
 - Sensitive dimensions exclude raw handles and message content.
 
+## Implementation Status
+
+| Phase | Status | Date | Notes |
+|-------|--------|------|-------|
+| MET-DATA-01 — fact and daily-aggregate entities, migration, indexes | Done | 2026-08-22 | `Migration20260823050000_connect`; facts are append-only and unique on `(tenant, organization, source_key)`, aggregates are a rebuildable projection of them |
+| MET-WRITE-01 — event ledger payloads + metrics subscribers | Done | 2026-08-22 | Source writers were extended to publish the ledger fields (claim/enqueue cohorts, `firstInboundAt`, `firstAssignedAt`, `firstConfirmedHumanOutboundAt`, staged/completed, applied suppression settings), the outbox publisher now carries `sourceEventId`, and the dead-letter sweep and projection drain gained the domain events their facts require |
+| MET-AGG-01 — deterministic aggregation and percentiles | Done | 2026-08-22 | Nearest-rank percentiles, one bucket per attempt resolved to its latest revision, strictest applied limit per day; `computeTotals` is pure and unit-tested without a database |
+| MET-WRK-01 — aggregate/rebuild worker + schedule | Done | 2026-08-22 | `connect:{organizationId}:metrics-daily` (hourly) re-covers a 7-day trailing window; scopes are discovered from the facts; cancellation stops unstarted days only; a non-zero reconciliation on a complete day is logged as an error |
+| MET-API-01 — summary, exceptions, guarded rebuild | Done | 2026-08-22 | Today is excluded; empty populations report `null`, never zero; rebuild marks days stale rather than clearing them and is scoped to the caller's own organization by the server |
+| MET-UI-01 — admin metrics screen + locales | Done | 2026-08-22 | UTC-labelled, baseline maturity stated, reconciliation shown as the equation; every block is a table (the accessible form and the better one for exact integers); five complete locales |
+| MET-ACL-01 — feature IDs and grants | Done | 2026-08-22 | `connect.metrics.view` / `.manage`; managers get view. Denial matrices need the integration harness |
+| MET-DS-01 — DS Guardian | Partial | 2026-08-22 | The DS ESLint pass is clean on `packages/connect`; the interactive review and screenshots need a running app |
+| MET-TEST-01..06 — integration/browser | Not Started | — | Require a live database and browser harness. Unit coverage exists for the reconciliation arithmetic, the per-sender criterion including a mid-day settings change, enqueue-cohort late transitions, unknown-send ageing, empty-population handling, fact idempotency, and rebuild determinism |
+
 ## Changelog
 
+- 2026-08-22: Implemented the fact/aggregate model, the event-ledger payload extensions, eight metrics subscribers, deterministic aggregation, the rebuild worker and schedule, three API routes and the admin screen with unit coverage; integration and browser verification outstanding.
 - 2026-08-21: Successor split from v2; replaced unmeasurable criteria with reconciled Connect-owned facts and explicit baseline semantics.

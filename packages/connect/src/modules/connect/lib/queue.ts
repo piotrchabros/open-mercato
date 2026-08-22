@@ -20,6 +20,8 @@ export const CONNECT_QUEUES = {
   projectionDrain: 'connect.projection.drain',
   /** Converges unlink sagas after a lost acknowledgement or a crash. */
   projectionRecovery: 'connect.projection.recovery',
+  /** Recomputes daily operational aggregates from immutable facts. */
+  metricsAggregate: 'connect.metrics.aggregate',
 } as const
 
 export type ConnectQueueName = (typeof CONNECT_QUEUES)[keyof typeof CONNECT_QUEUES]

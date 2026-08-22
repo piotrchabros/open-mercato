@@ -223,7 +223,16 @@ export async function ingestInboundMessage(
     aggregateId: receipt.id,
     aggregateVersion: receipt.attempts,
     eventType: 'connect.inbound.claimed',
-    payload: { receiptId: receipt.id, channelId: input.channelId, reclaimed: claim.status === 'reclaimed' },
+    payload: {
+      receiptId: receipt.id,
+      channelId: input.channelId,
+      reclaimed: claim.status === 'reclaimed',
+      // The cohort is frozen here. A terminal fact that lands after midnight
+      // still reconciles against the day this receipt was claimed.
+      claimCohortUtcDate: receipt.claimCohortUtcDate,
+      claimedAt: now.toISOString(),
+      leaseExpiresAt: receipt.leaseExpiresAt?.toISOString() ?? null,
+    },
   })
   await em.flush()
 
@@ -257,7 +266,21 @@ export async function ingestInboundMessage(
       aggregateId: receipt.id,
       aggregateVersion: receipt.attempts,
       eventType: 'connect.inbound.disposed',
-      payload: { receiptId: receipt.id, disposition: 'suppressed', reason: disposition.reason },
+      payload: {
+        receiptId: receipt.id,
+        channelId: input.channelId,
+        disposition: 'suppressed',
+        reason: disposition.reason,
+        claimCohortUtcDate: receipt.claimCohortUtcDate,
+        // Hash only — enough to bound a per-sender rate, never enough to
+        // recover an address from a reporting table.
+        senderHash: handleHash,
+        // The settings actually in force for THIS decision. Without them a
+        // later settings change silently reinterprets history.
+        appliedWindowMinutes: settings.suppressionWindowMinutes,
+        appliedCountLimit: settings.suppressionCount,
+        occurredAt: now.toISOString(),
+      },
     })
     await em.flush()
     return { status: 'suppressed', reason: disposition.reason, receiptId: receipt.id }
@@ -397,8 +420,14 @@ export async function ingestInboundMessage(
     eventType: 'connect.inbound.disposed',
     payload: {
       receiptId: receipt.id,
+      channelId: input.channelId,
       disposition: outcome.opened ? 'opened' : 'attached',
       caseId: outcome.caseId,
+      claimCohortUtcDate: receipt.claimCohortUtcDate,
+      senderHash: handleHash,
+      appliedWindowMinutes: settings.suppressionWindowMinutes,
+      appliedCountLimit: settings.suppressionCount,
+      occurredAt: now.toISOString(),
     },
   })
   await em.flush()

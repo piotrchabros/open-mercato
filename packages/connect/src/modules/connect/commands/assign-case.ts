@@ -144,6 +144,10 @@ export async function assignCase(
     }
 
     target.assigneeUserId = input.assigneeUserId ?? null
+    // Stamped ONCE. Later transfers leave it alone, because the operator
+    // question is "how long until someone owned this", and a reassignment three
+    // hours in must not restart that clock.
+    if (input.assigneeUserId && !target.firstAssignedAt) target.firstAssignedAt = now
 
     // Taking ownership of a brand-new Case starts work on it. Unassigning does
     // not move the status back — the work that was done still happened.
@@ -187,6 +191,10 @@ export async function assignCase(
         fromAssigneeUserId: previous,
         toAssigneeUserId: input.assigneeUserId ?? null,
         actorUserId: actor.userId,
+        // Immutable: the first time anyone owned this Case. A later transfer
+        // must not reset it, or "time to pick up" silently becomes zero.
+        firstAssignedAt: target.firstAssignedAt?.toISOString() ?? null,
+        occurredAt: now.toISOString(),
       },
     })
 

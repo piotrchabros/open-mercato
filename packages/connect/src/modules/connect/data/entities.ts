@@ -73,6 +73,8 @@ export class ConnectCase {
     | 'closedAt'
     | 'wrapUp'
     | 'previousCaseId'
+    | 'firstAssignedAt'
+    | 'firstOutboundSentAt'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -129,6 +131,22 @@ export class ConnectCase {
 
   @Property({ name: 'last_inbound_at', type: Date, nullable: true })
   lastInboundAt?: Date | null
+
+  /**
+   * When this Case was FIRST picked up. Never overwritten by a later transfer,
+   * because the operator question is "how long until someone owned this", and a
+   * reassignment three hours in must not reset that to zero.
+   */
+  @Property({ name: 'first_assigned_at', type: Date, nullable: true })
+  firstAssignedAt?: Date | null
+
+  /**
+   * When the first outbound reply was CONFIRMED sent. Queued and failed
+   * attempts do not count — a first-response metric that fires on enqueue
+   * measures how fast an agent typed, not when the customer heard back.
+   */
+  @Property({ name: 'first_outbound_sent_at', type: Date, nullable: true })
+  firstOutboundSentAt?: Date | null
 
   @Property({ name: 'resolved_at', type: Date, nullable: true })
   resolvedAt?: Date | null
@@ -1512,6 +1530,310 @@ export class ConnectPendingRetraction {
 
   @Property({ name: 'finalized_at', type: Date, nullable: true })
   finalizedAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+// ── Operational metrics ───────────────────────────────────────
+
+/**
+ * The fact types Metrics records.
+ *
+ * Every one is derived from a Connect-owned domain event. Metrics never reads
+ * `messages`, `communication_channels` or `customers` storage — a reporting
+ * module that queries peer tables becomes a hidden coupling that breaks when
+ * the peer refactors, and worse, can outlive the authorization that produced
+ * the data.
+ */
+export type ConnectFactType =
+  | 'inbound_claimed'
+  | 'inbound_opened'
+  | 'inbound_attached'
+  | 'inbound_suppressed'
+  | 'inbound_dead_lettered'
+  | 'outbound_attempted'
+  | 'outbound_sent'
+  | 'outbound_failed'
+  | 'outbound_unknown'
+  | 'case_assigned'
+  | 'case_resolved'
+  | 'case_reopened'
+  | 'first_response_seconds'
+  | 'elapsed_assigned_to_resolution_seconds'
+  | 'projection_lag_ms'
+  | 'projection_failed'
+
+/**
+ * One immutable operational fact.
+ *
+ * Append-only and idempotent by `sourceKey`, which is the publishing event's
+ * own `sourceEventId` plus the fact type. At-least-once publication is
+ * therefore harmless: a redelivered event maps to the same key and the unique
+ * index rejects the second insert.
+ *
+ * Dimensions are deliberately narrow — ids, a disposition, a timestamp, and a
+ * sender HASH where suppression analysis needs one. A raw handle or a message
+ * body here would put customer content into a reporting table that outlives
+ * retention on the record it came from.
+ */
+@Entity({ tableName: 'connect_operational_facts' })
+@Unique({
+  name: 'connect_operational_facts_source_uq',
+  properties: ['tenantId', 'organizationId', 'sourceKey'],
+})
+@Index({
+  name: 'connect_operational_facts_day_idx',
+  properties: ['tenantId', 'organizationId', 'cohortUtcDate', 'factType'],
+})
+@Index({
+  name: 'connect_operational_facts_sender_idx',
+  properties: ['tenantId', 'organizationId', 'channelId', 'senderHash'],
+})
+export class ConnectOperationalFact {
+  [OptionalProps]?:
+    | 'createdAt'
+    | 'caseId'
+    | 'conversationId'
+    | 'attemptId'
+    | 'projectionKey'
+    | 'channelId'
+    | 'senderHash'
+    | 'disposition'
+    | 'value'
+    | 'appliedWindowMinutes'
+    | 'appliedCountLimit'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  /** Never null: the organization is the authorization boundary for reporting. */
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'fact_type', type: 'text' })
+  factType!: ConnectFactType
+
+  /** `<eventSourceId>:<factType>` — what makes a redelivery a no-op. */
+  @Property({ name: 'source_key', type: 'text' })
+  sourceKey!: string
+
+  /**
+   * The IMMUTABLE cohort this fact belongs to, frozen by the writer. A terminal
+   * fact that arrives after midnight still lands on its claim/enqueue day, so a
+   * reconciliation equation can never be broken by a slow worker.
+   */
+  @Property({ name: 'cohort_utc_date', type: 'string', length: 10 })
+  cohortUtcDate!: string
+
+  @Property({ name: 'case_id', type: 'uuid', nullable: true })
+  caseId?: string | null
+
+  @Property({ name: 'conversation_id', type: 'uuid', nullable: true })
+  conversationId?: string | null
+
+  @Property({ name: 'attempt_id', type: 'uuid', nullable: true })
+  attemptId?: string | null
+
+  @Property({ name: 'projection_key', type: 'text', nullable: true })
+  projectionKey?: string | null
+
+  @Property({ name: 'channel_id', type: 'uuid', nullable: true })
+  channelId?: string | null
+
+  /** Keyed blind index only. Never reversible to an address. */
+  @Property({ name: 'sender_hash', type: 'text', nullable: true })
+  senderHash?: string | null
+
+  @Property({ name: 'disposition', type: 'text', nullable: true })
+  disposition?: string | null
+
+  /** Duration or measurement facts carry a number; counters leave it null. */
+  @Property({ name: 'value', type: 'double', nullable: true })
+  value?: number | null
+
+  /**
+   * The suppression settings IN FORCE when this receipt was decided. Without
+   * them a later settings change silently reinterprets history, and the
+   * per-sender safety criterion becomes unfalsifiable.
+   */
+  @Property({ name: 'applied_window_minutes', type: 'int', nullable: true })
+  appliedWindowMinutes?: number | null
+
+  @Property({ name: 'applied_count_limit', type: 'int', nullable: true })
+  appliedCountLimit?: number | null
+
+  @Property({ name: 'occurred_at', type: Date })
+  occurredAt!: Date
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+}
+
+/**
+ * One aggregated row per organization per UTC day.
+ *
+ * Rebuildable by construction: it is a pure function of the immutable facts for
+ * that day, so a late event or a fixed bug is repaired by recomputing rather
+ * than by patching a counter nobody can audit.
+ *
+ * `generatedAt` and `stale` exist so the UI can distinguish "no traffic" from
+ * "not aggregated yet" from "aggregated, but a rebuild is in flight". Showing
+ * zero for the latter two is the failure mode this whole spec exists to avoid.
+ */
+@Entity({ tableName: 'connect_metric_daily' })
+@Unique({
+  name: 'connect_metric_daily_day_uq',
+  properties: ['tenantId', 'organizationId', 'utcDate'],
+})
+export class ConnectMetricDaily {
+  [OptionalProps]?:
+    | 'createdAt'
+    | 'updatedAt'
+    | 'stale'
+    | 'inboundClaimed'
+    | 'casesOpened'
+    | 'casesAttached'
+    | 'inboundSuppressed'
+    | 'inboundDeadLettered'
+    | 'outboundAttempted'
+    | 'outboundSent'
+    | 'outboundFailed'
+    | 'outboundUnknown'
+    | 'unknownMaxAgeSeconds'
+    | 'casesAssigned'
+    | 'casesResolved'
+    | 'casesReopened'
+    | 'firstResponseP50Seconds'
+    | 'firstResponseP90Seconds'
+    | 'firstResponseSampleCount'
+    | 'elapsedResolutionP50Seconds'
+    | 'elapsedResolutionP90Seconds'
+    | 'elapsedResolutionSampleCount'
+    | 'projectionLagP50Ms'
+    | 'projectionLagP90Ms'
+    | 'projectionLagMaxMs'
+    | 'projectionSampleCount'
+    | 'projectionFailed'
+    | 'observedMaxPermittedPerSender'
+    | 'appliedCountLimit'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'utc_date', type: 'string', length: 10 })
+  utcDate!: string
+
+  @Property({ name: 'inbound_claimed', type: 'int', default: 0 })
+  inboundClaimed: number = 0
+
+  @Property({ name: 'cases_opened', type: 'int', default: 0 })
+  casesOpened: number = 0
+
+  @Property({ name: 'cases_attached', type: 'int', default: 0 })
+  casesAttached: number = 0
+
+  @Property({ name: 'inbound_suppressed', type: 'int', default: 0 })
+  inboundSuppressed: number = 0
+
+  @Property({ name: 'inbound_dead_lettered', type: 'int', default: 0 })
+  inboundDeadLettered: number = 0
+
+  @Property({ name: 'outbound_attempted', type: 'int', default: 0 })
+  outboundAttempted: number = 0
+
+  @Property({ name: 'outbound_sent', type: 'int', default: 0 })
+  outboundSent: number = 0
+
+  @Property({ name: 'outbound_failed', type: 'int', default: 0 })
+  outboundFailed: number = 0
+
+  /** Never folded into sent or failed. An unknown send is its own answer. */
+  @Property({ name: 'outbound_unknown', type: 'int', default: 0 })
+  outboundUnknown: number = 0
+
+  @Property({ name: 'unknown_max_age_seconds', type: 'int', nullable: true })
+  unknownMaxAgeSeconds?: number | null
+
+  @Property({ name: 'cases_assigned', type: 'int', default: 0 })
+  casesAssigned: number = 0
+
+  @Property({ name: 'cases_resolved', type: 'int', default: 0 })
+  casesResolved: number = 0
+
+  @Property({ name: 'cases_reopened', type: 'int', default: 0 })
+  casesReopened: number = 0
+
+  @Property({ name: 'first_response_p50_seconds', type: 'double', nullable: true })
+  firstResponseP50Seconds?: number | null
+
+  @Property({ name: 'first_response_p90_seconds', type: 'double', nullable: true })
+  firstResponseP90Seconds?: number | null
+
+  /**
+   * The population behind the percentiles. A p90 over three samples is not a
+   * p90, and an operator cannot tell without this number.
+   */
+  @Property({ name: 'first_response_sample_count', type: 'int', default: 0 })
+  firstResponseSampleCount: number = 0
+
+  @Property({ name: 'elapsed_resolution_p50_seconds', type: 'double', nullable: true })
+  elapsedResolutionP50Seconds?: number | null
+
+  @Property({ name: 'elapsed_resolution_p90_seconds', type: 'double', nullable: true })
+  elapsedResolutionP90Seconds?: number | null
+
+  @Property({ name: 'elapsed_resolution_sample_count', type: 'int', default: 0 })
+  elapsedResolutionSampleCount: number = 0
+
+  @Property({ name: 'projection_lag_p50_ms', type: 'double', nullable: true })
+  projectionLagP50Ms?: number | null
+
+  @Property({ name: 'projection_lag_p90_ms', type: 'double', nullable: true })
+  projectionLagP90Ms?: number | null
+
+  @Property({ name: 'projection_lag_max_ms', type: 'double', nullable: true })
+  projectionLagMaxMs?: number | null
+
+  /**
+   * Zero means the Customer Projection capability is absent or produced no
+   * work, which the API reports as UNAVAILABLE rather than as a lag of zero.
+   */
+  @Property({ name: 'projection_sample_count', type: 'int', default: 0 })
+  projectionSampleCount: number = 0
+
+  @Property({ name: 'projection_failed', type: 'int', default: 0 })
+  projectionFailed: number = 0
+
+  /**
+   * The largest number of receipts any single `(channel, sender)` pair was
+   * PERMITTED in its window. The safety criterion is that this never exceeds
+   * the limit that was actually applied.
+   */
+  @Property({ name: 'observed_max_permitted_per_sender', type: 'int', default: 0 })
+  observedMaxPermittedPerSender: number = 0
+
+  @Property({ name: 'applied_count_limit', type: 'int', nullable: true })
+  appliedCountLimit?: number | null
+
+  /** Set while a rebuild is in flight, so the UI can keep showing last-good. */
+  @Property({ name: 'stale', type: 'boolean', default: false })
+  stale: boolean = false
+
+  @Property({ name: 'generated_at', type: Date })
+  generatedAt!: Date
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
