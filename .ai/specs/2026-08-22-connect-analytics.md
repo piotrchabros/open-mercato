@@ -1,159 +1,215 @@
-# Mercato Connect — Analytics and Cost Inputs
-
-| Field | Value |
-|---|---|
-| Date | 2026-08-22 |
-| Status | Proposed; independently deployable after Phase 1 metrics |
-| Scope | `connect_analytics` reports, cost inputs, cost-per-contact; optional SLA family |
-| Depends on | Phase 1 Connect metrics; optional `connect_sla`; routing-capacity foundation for readiness only |
+# Mercato Connect — Operational Reporting
 
 ## TLDR
 
-Add a separately activatable, PII-free analytics module over sanctioned Phase 1 metric aggregates. It provides consistent response, resolution, delivery, suppression, and reconciliation reporting plus auditable manual/provider-invoice cost rows and a versioned cost-per-contact formula. SLA dimensions appear only when the optional SLA reader is registered; absence is unavailable, never zero.
+- Add `connect_analytics` reporting over sanctioned Phase 1 operational aggregates without copying message content, handles, sender hashes, or customer/Case identifiers.
+- Preserve existing `connect` metrics entities, formulas, APIs, UI, and ACLs; consume them through a scoped DI facade.
+- Consume SLA reporting through a soft-optional facade. Missing SLA is unavailable, never zero.
 
-Out of scope: message/customer content, forecasting, live routing, changing Phase 1 formulas, and provider invoice ingestion adapters.
+Scope is response time, resolution time, delivery, suppression, reconciliation, and optional SLA attainment. Cost inputs/cost-per-contact, capacity backfill, SLA writes, routing, raw-fact duplication, AI, and live channels are separate/non-goals.
 
 ## Overview
 
-Phase 1 already stores immutable operational facts and deterministic daily aggregates behind stable `/api/connect/metrics/*` routes. Analytics extends rather than moves those surfaces. Connect exposes a narrow organization-scoped `connectOperationalMetricsReader`; analytics owns report composition and cost inputs. `connect_sla` exposes an optional identifier-only reader.
-
-> **Market references:** Chatwoot separates reporting events from read models and applies common dimensions across conversation/agent/inbox/team/SLA reports. ERPNext snapshots costing rates on submitted work instead of recomputing history from current rates. We adopt explicit cohort/denominator metadata and immutable money snapshots; we reject current-owner attribution and averages without counts.
+Phase 1 already owns immutable operational facts, deterministic `connect_metric_daily` rows, bounded summary/exception/rebuild APIs, and an admin metrics page. Phase 2 adds an independently gated, formula-versioned reporting surface over those aggregates and optional SLA summaries. It adopts explicit cohort/sample/unavailable semantics and rejects transactional peer-table queries or hidden duplication.
 
 ## Problem Statement
 
-Operators cannot compare existing facts across consistent dimensions or attach cost. `amount_minor` is meaningless without currency and provenance, while deriving past cost from current rate cards rewrites history. Disabled SLA must not appear as zero breaches.
+Operators lack a dedicated analytics contract that can compose operational and optional SLA outcomes. Moving Phase 1 metrics would break stable routes and ACLs; direct entity imports would violate module isolation. Missing days, empty percentile populations, or disabled SLA can also become misleading zeros unless the contract distinguishes them.
 
 ## Proposed Solution
 
-- New `packages/connect/src/modules/connect_analytics` module with independent ACL, DI, CRUD, reports, UI, migration/snapshot and locales.
-- Connect-owned reader returns only sanctioned PII-free aggregates. No cross-module ORM access.
-- Cost rows snapshot currency, amount, dimensions, source and period. Results are separated by currency; no implicit FX.
-- Agent dimensions require `connect_analytics.view.agents`; aggregate view never returns user IDs.
-- Optional SLA capability is explicit in every response.
+Add a sanitized `connectOperationalMetricsReader` to `connect`. `connect_analytics` soft-resolves that reader and a future `connectSlaAnalyticsReader`, composes bounded reports, and owns only the new API/UI/ACL/formula metadata. No new reporting table is needed: a request reads at most 92 daily rows. Materialization requires later performance evidence and a separate spec update.
+
+### Decisions and Alternatives
+
+| Decision | Rationale |
+|---|---|
+| Keep Phase 1 metrics in `connect` | Existing schemas, routes, formulas, event IDs, and ACLs remain stable. |
+| DI read facades, consumer-owned glue | Source modules own storage/semantics; optional modules degrade cleanly. |
+| UTC complete days | Matches Phase 1 cohorts; timezone changes do not reinterpret history. |
+| Version every formula | Published meaning cannot change silently. |
+| Do not average daily percentiles | A mean of p50/p90 values is not a valid range percentile. |
+
+Rejected: copying facts/aggregates (drift/retention), direct ORM access (coupling), HTTP loopback (auth/latency), and hard SLA dependency (unnecessary deployment coupling).
+
+## User Stories
+
+- A manager compares inbound disposition, delivery, response, and resolution for a bounded date range.
+- An administrator sees unreconciled receipts, unknown sends, and suppression violations without PII.
+- A manager sees SLA attainment when available and an explicit unavailable state otherwise.
+- An auditor identifies UTC cohort, sample count, generation state, and formula version.
 
 ## Architecture
 
 ```text
-Connect metric reader ─────────────┐
-optional SLA analytics reader ─────┼─> report service -> scoped APIs/UI
-connect_analytics cost inputs ─────┘
+connect_metric_daily -> connectOperationalMetricsReader --+
+                                                         +-> report composer -> guarded API/UI
+connect_sla source -> connectSlaAnalyticsReader ----------+   (soft optional)
 ```
 
-V1 uses indexed reads without cache. A future cache must be DI-resolved with tenant/org tags and invalidation on every cost/fact change.
+`connect` registers:
+
+```ts
+type ConnectOperationalMetricsReader = {
+  listDaily(input: {
+    tenantId: string
+    organizationId: string
+    fromUtcDate: string
+    toUtcDate: string
+  }): Promise<ConnectOperationalMetricDay[]>
+}
+```
+
+The DTO preserves Phase 1 counters, reconciliation inputs, outbound outcomes/unknown age, daily response/resolution percentiles with sample counts, optional projection lag, suppression result, `generatedAt`, and `stale`. It forbids source IDs, sender hash, body, subject, handle, and customer data.
+
+`connect_sla` may register `connectSlaAnalyticsReader.summarize(ScopedUtcRange)`. `connect_analytics` resolves both locally with `try/catch`; absent Connect is `operationalMetrics: unavailable`, absent SLA is `sla: unavailable`. There are no cross-module entity imports, ORM relations, or side-effect imports.
 
 ## Data Models
 
-### `connect_analytics_cost_input`
+No persisted entity is added.
 
-UUID; non-null tenant/organization; `period_start` inclusive and `period_end` exclusive UTC; `cost_type = agent|channel|ai`; nullable scalar `user_id`, `channel_id`, `provider_key`; signed non-zero safe-integer `amount_minor` (credits allowed); ISO-4217 `currency_code`; `source = manual|provider_invoice`; nullable `source_reference`; `formula_version = 1`; creator; timestamps, optimistic `updated_at`, soft delete.
-
-Agent requires user ID, channel requires channel ID, AI requires provider key; irrelevant dimensions are null. Provider invoice requires a scoped unique source reference. No notes or invoice payloads are stored.
-
-### Report projection
-
-Each result includes range, cohort (`opened_utc_date|enqueue_utc_date|claim_utc_date`), formula version, numerator, denominator/sample count, nullable value, currency/dimensions, and capability state. It is a read model, not an authoritative entity.
-
-## Commands and Events
-
-Cost create/update/delete are undoable commands with audit snapshots and optimistic locking. Provider-invoice upsert is idempotent by scoped reference. Identifier-only events use `createModuleEvents`: `connect_analytics.cost_input.created|updated|deleted`.
+The report envelope contains `from`, `to`, `requestedDays`, `completeDays`, `formulaVersion: connect_analytics.operational.v1`, capability states, sanitized `days`, additive `totals` (null with no aggregates), daily percentile series/sample counts, and optional source-versioned SLA summary. It never fabricates a range percentile from daily percentiles.
 
 ## API Contracts
 
-All routes export OpenAPI and per-method metadata.
+### `GET /api/connect_analytics/reports/operational`
 
-- `GET|POST|PUT|DELETE /api/connect-analytics/cost-inputs` — `makeCrudRoute`, indexer, `.cost_inputs.view/manage`, page ≤100, `updatedAt`, 409 conflicts.
-- `GET /api/connect-analytics/reports/summary?from&to&groupBy&channelId&userId&currency` — max 366 days; `connect_analytics.view`; user grouping/filter additionally requires `.view.agents`.
-- `GET /api/connect-analytics/reports/cost-per-contact` — sum active costs per currency divided by Case-opened denominator; zero denominator is null.
+Query: `from` and `to` as `YYYY-MM-DD`; ordered, maximum 92 days, clamped to yesterday UTC. Metadata requires auth and `connect_analytics.view`; route exports Zod-derived OpenAPI.
 
-Foreign scope returns 404. Invalid dimensions/currency/ranges return 400. Missing Connect returns 503; missing SLA returns 200 with `sla.available=false` and no SLA series.
+Response is the report envelope. Errors: 400 missing organization, 401, 403, 422 invalid/oversized range, 503 required Connect reader unavailable. SLA absence remains a successful response with unavailable capability.
 
-## Metric Contracts
+Agent-grain reporting is deferred: existing facts do not carry a sanctioned agent dimension. `connect_analytics.view.agents` is reserved but guards no route until Connect exposes an additive authorized aggregate; analytics never approximates it by querying Cases.
 
-- Phase 1 response/resolution/delivery/suppression/reconciliation retain their writers, UTC cohorts, null semantics and late rebuild behavior.
-- Every average/percentile includes sample count. Midnight and reopen facts remain in immutable cohorts.
-- Cost/contact v1: cost rows overlapping the selected complete UTC range are prorated by overlap seconds, summed per currency, then divided by `cases_opened`. Metadata declares this formula. Split-collapse becomes formula v2 once re-parenting facts exist; history is not silently rewritten.
-- SLA attainment groups by policy version and excludes merged/superseded clocks.
+## Access Control
 
-## UI/UX and i18n
+- `connect_analytics.view`: aggregate operational reports; manager default.
+- `connect_analytics.view.agents`: future sensitive agent reports; admin only and inert in MVP.
+- Admin/superadmin receive `connect_analytics.*`; employees receive neither.
+- Framework wildcard matching applies; server-derived organization scope cannot be widened by query input.
 
-`/backend/connect/analytics` reuses shared chart/KPI/filter/detail components and pairs charts with exact tables. Costs use `DataTable` and `CrudForm` with canonical helpers/conflict handling. Shared status/loading/error/empty primitives, semantic tokens, keyboard dialogs, focus/non-color encoding and icon labels are required. Locales: `en`, `de`, `es`, `ko`, `pl`.
+## UI/UX and Internationalization
 
-## Integration Test Coverage
+Add `/backend/connect/analytics`, guarded by `connect_analytics.view`. The server page loads initial data; one bounded `OperationalReport.client.tsx` owns date controls/refresh. Reuse shared KPI/detail/table, `Alert`, `EmptyState`, and loading/error primitives. Every trend has a synchronized table/text equivalent; UTC/cohort/sample/stale/formula labels are visible and unavailable never renders as zero.
 
-- Tenant/org denial matrix and same IDs across sibling scopes.
-- Cost guards/undo/provider dedupe/optimistic 409/credits/limits/proration/mixed currencies/zero denominator.
-- Phase 1 formula consistency, late outcomes, midnight cohorts, empty samples and counts.
-- SLA absent/disabled/present; merged clocks excluded; agent dimensions denied without `.view.agents` including wildcard cases.
-- Storage/API/log/search scans prohibit message content, handles, customer IDs and invoice payloads.
-- Accessible chart/table/filter/CRUD flows and five locales.
+All strings use `useT`/`resolveTranslations`; `en/de/es/ko/pl` are complete. Use `apiCall`, semantic DS tokens, Lucide icons and labelled icon buttons. No raw fetch, inline SVG, arbitrary sizes, or hardcoded status colors.
+
+Frontend contract: server shell plus the single justified client island; no provider/bootstrap change or new dependency; route-attributable bundle under 60 kB gzip; no hydration warnings; keyboard, screen-reader, high-contrast, and non-color tests.
+
+## Performance and Cache
+
+- One indexed source query plus one optional SLA query, run concurrently after authorization; no N+1.
+- Maximum 92 rows and 250 kB uncompressed response; p95 composition target 250 ms excluding cold DB startup.
+- No cache in MVP because bounded reads expose `stale/generatedAt` and caching can conceal rebuilds. Any future cache must use DI with tenant/org/source-rebuild tags.
 
 ## Migration & Backward Compatibility
 
-All additions are new tables, routes, ACLs, events and DI services. Existing `/api/connect/metrics/*`, `connect.metrics.*`, fact types and formulas stay unchanged. Published formula versions never reinterpret history. Migration/snapshot contain only intended schema; automation does not apply migrations.
+No migration/backfill. Add module, page, route, ACL IDs, and DI facade only. Existing `/api/connect/metrics/*`, `/backend/connect/metrics`, `connect.metrics.*`, entity schemas, and formulas remain unchanged. The reader DI name/required DTO fields become stable. Disabling analytics removes its API/navigation and preserves source data; disabling SLA omits only SLA families.
 
-## Risks & Impact Review
+## Testing Strategy and Integration Coverage
 
-#### Misleading cost history
-- **Scenario:** Currency/rate changes or overlaps rewrite cost.
-- **Severity:** High
-- **Affected area:** Cost-per-contact.
-- **Mitigation:** Immutable amount/currency/provenance, explicit proration/formula version, visible credits.
-- **Residual risk:** Manual inputs can be wrong; audit/undo exposes corrections.
+- Unit: composition, totals, range/clamp, capability states, formula versions, and rejection of percentile averaging.
+- **AN-INT-001:** tenant and sibling-organization isolation with overlapping dates.
+- **AN-INT-002:** complete/incomplete/missing/stale day semantics.
+- **AN-INT-003:** empty response/resolution populations remain unavailable with sample counts.
+- **AN-INT-004:** delivery revisions, unknown age, reconciliation, and suppression match source DTOs.
+- **AN-INT-005:** SLA enabled/disabled behavior and source formula version.
+- **AN-INT-006:** Connect reader absent produces explicit 503, never zero totals.
+- **AN-INT-007:** ACL/wildcard denial matrix and organization switching.
+- **AN-INT-008:** response/log/search contain no forbidden PII or identifiers.
+- **AN-UI-001:** keyboard, screen reader, table equivalents, error/empty/unavailable/high contrast, hydration.
+- **AN-UI-002:** maximum range response/bundle/performance budgets.
 
-#### PII leakage through dimensions
-- **Scenario:** Agent/customer/message details enter broad responses.
-- **Severity:** Critical
-- **Affected area:** Analytics storage/API.
-- **Mitigation:** Reader allowlist, no customer dimension, separate agent ACL, forbidden-field scans.
-- **Residual risk:** Restricted user IDs remain personal data.
-
-#### Optional family shown as zero
-- **Scenario:** Disabled SLA appears perfect.
-- **Severity:** High
-- **Affected area:** Decisions.
-- **Mitigation:** Capability envelope and omitted unavailable series.
-- **Residual risk:** External consumers must honor the field.
+Fixtures are self-contained and cleaned in `finally`; existing Phase 1 integration gaps are not relabeled complete.
 
 ## Implementation Plan
 
-1. **ANA-SEAM:** scoped Connect metric reader and optional SLA reader contracts/tests.
-2. **ANA-DATA:** scaffold, ACL/setup/DI, cost entity/validators, migration/snapshot.
-3. **ANA-CMD/API:** undoable commands, CRUD/OpenAPI and report service/routes.
-4. **ANA-UI:** dashboard and cost CRUD with five locales.
-5. **ANA-TEST:** isolation, PII, arithmetic, optionality, locking and browser/accessibility.
+1. **AN-CON-01:** sanitized scoped Connect reader, registration, DTO/privacy/decoupling tests.
+2. **AN-MOD-01:** module metadata, ACL, setup grants, DI helper, locales; run `yarn generate`.
+3. **AN-CMP-01:** pure versioned composer and optional SLA adapter.
+4. **AN-API-01:** guarded/OpenAPI report route and Zod schemas.
+5. **AN-UI-01:** accessible server-first page and bounded client island.
+6. **AN-TEST-01:** ship AN-INT/AN-UI tests in the same change.
+7. **AN-VAL-01:** package test/typecheck/build, integration tests, generate, root typecheck/lint; record runner mode.
+
+### File Manifest
+
+| File | Action |
+|---|---|
+| `packages/connect/src/modules/connect/lib/operational-metrics-reader.ts` | Create |
+| `packages/connect/src/modules/connect/di.ts` | Modify |
+| `packages/connect/src/modules/connect_analytics/{index,acl,setup,di}.ts` | Create |
+| `packages/connect/src/modules/connect_analytics/lib/report-composer.ts` | Create |
+| `packages/connect/src/modules/connect_analytics/api/reports/operational/route.ts` | Create |
+| `packages/connect/src/modules/connect_analytics/backend/connect/analytics/{page.tsx,page.meta.ts}` | Create |
+| `packages/connect/src/modules/connect_analytics/components/OperationalReport.client.tsx` | Create |
+| `packages/connect/src/modules/connect_analytics/i18n/{en,de,es,ko,pl}.json` | Create |
+| `.ai/qa/tests/connect-analytics-operational.spec.ts` | Create |
+
+## Risks & Impact Review
+
+#### Misleading mathematics
+- **Scenario**: daily percentiles are averaged or empty samples become zero.
+- **Severity**: High
+- **Affected area**: operator decisions
+- **Mitigation**: daily series, sample counts, versioned formulas, unavailable states.
+- **Residual risk**: small samples may be over-read; maturity/sample labels remain visible.
+
+#### Cross-scope disclosure
+- **Scenario**: a source/composition query omits tenant or organization.
+- **Severity**: Critical
+- **Affected area**: API/UI
+- **Mitigation**: server-derived dual scope at both layers and isolation/denial tests.
+- **Residual risk**: future report families must repeat the matrix.
+
+#### Optional SLA becomes false success
+- **Scenario**: disabled SLA appears as perfect/zero attainment.
+- **Severity**: High
+- **Affected area**: SLA report
+- **Mitigation**: explicit unavailable capability and omitted numeric values.
+- **Residual risk**: users must understand the labelled unavailable state.
+
+#### PII propagation
+- **Scenario**: raw fact dimensions enter DTOs/logs.
+- **Severity**: Critical
+- **Affected area**: privacy/retention
+- **Mitigation**: aggregate-only DTO, forbidden-field tests, no peer storage access.
+- **Residual risk**: every additive DTO field needs privacy review.
+
+#### Rebuild race
+- **Scenario**: reports read stale/in-flight source aggregates.
+- **Severity**: Medium
+- **Affected area**: temporary accuracy
+- **Mitigation**: preserve per-day `stale/generatedAt`, no cache, explicit UI labels.
+- **Residual risk**: mixed generation times are possible and disclosed.
 
 ## Final Compliance Report — 2026-08-22
 
 ### AGENTS.md Files Reviewed
 
-- `AGENTS.md`, `.ai/specs/AGENTS.md`, `packages/core/AGENTS.md`, `packages/ui/AGENTS.md`, `packages/ui/src/backend/AGENTS.md`, `packages/events/AGENTS.md`, `packages/cli/AGENTS.md`, `packages/core/src/modules/customers/AGENTS.md`
+- Root, `.ai/specs`, core, UI/backend UI, shared, `BACKWARD_COMPATIBILITY.md`, and spec-writing guides.
 
 ### Compliance Matrix
 
 | Rule | Status | Notes |
 |---|---|---|
-| Module isolation and scoping | Compliant | Narrow scoped readers; scalar IDs |
-| Canonical CRUD/locking/guards | Compliant | Factory, commands, `CrudForm`, `updatedAt` |
-| PII/encryption rules | Compliant | No free text or customer/message data |
-| Sensitive agent view | Compliant | Separate `.view.agents` server authorization |
-| DS/i18n/accessibility | Compliant | Shared primitives, semantic tokens, five locales |
-| Additive BC | Compliant | Existing metrics unchanged |
+| No cross-module ORM; optional peers degrade | Compliant | Sanitized DI facades |
+| Tenant/organization scope | Compliant | Server-derived at source/consumer |
+| API metadata/features/OpenAPI | Compliant | AN-API-01 |
+| Shared UI/i18n/DS/accessibility | Compliant | Explicit UI contract/tests |
+| Additive backward compatibility | Compliant | Phase 1 surfaces unchanged |
+| Encryption and optimistic CRUD | N/A | No storage/write API |
 
 ### Internal Consistency Check
 
-| Check | Status | Notes |
-|---|---|---|
-| Models match APIs/UI | Pass | Cost/report fields align |
-| Commands cover mutations | Pass | All cost writes command-backed |
-| Risks cover reports/writes | Pass | Cost, PII and optionality covered |
-| Cache strategy | Pass | Explicit no-cache v1 |
+Data/API/UI, risks, no-write command status, no-cache strategy, and operational-only scope: **Pass**. Non-compliant items: none.
 
 ### Verdict
 
-Fully compliant and ready after prerequisite contracts and readiness audit.
+Fully compliant; ready for independent scope review and pre-implementation audit.
 
 ## Changelog
 
 ### 2026-08-22
 
-- Initial successor specification; owner chose soft-optional SLA and Phase 2 routing-capacity persistence.
+- Replaced combined skeleton with operational-reporting-only implementation spec; split cost and capacity work.
+- Review: security, performance, cache, commands, and risks passed; fresh-context scope review remains required.
