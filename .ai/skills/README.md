@@ -74,7 +74,7 @@ The default `yarn install-skills` ships the **core** tier plus the entire extern
 | `security` | opt-in | 2 | Security audit skills. Opt-in. |
 | `analysis` | opt-in | 2 | Business/engagement analysis skills (app specs, platform gap analysis). Opt-in. |
 | `migration` | opt-in | 3 | One-shot, version-pinned migrations. Install only when needed. |
-| `infra` | opt-in | 2 | Rare, special-case skills. |
+| `infra` | opt-in | 3 | Rare, special-case skills. |
 | external | always | 26 | Shared pipeline skills from [open-mercato/skills](https://github.com/open-mercato/skills), installed via `npx skills add` and refreshed via `npx skills update` (skip with `--no-external`). |
 
 Run `yarn install-skills --list` at any time to see tier definitions, current memberships, and which tiers are installed locally.
@@ -254,6 +254,7 @@ Moved here from [open-mercato/skills](https://github.com/open-mercato/skills) â€
 | Skill | When to use |
 |-------|-------------|
 | `om-dev-container-maintenance` | Maintain the VS Code Dev Container setup for Open Mercato. MUST use for ANY change to `.devcontainer/` files. Also use when the container fails to build/start, services inside misbehave, or "works locally but not in dev container". Triggers on "dev container", "devcontainer", ".devcontainer". |
+| `om-deploy-mercato-connect` | Deploy an Open Mercato branch (Mercato Connect or any other side instance) as its own isolated Docker stack behind Caddy on a shared host â€” `DEPLOY_ENV` isolation, loopback-only port, `.env` secrets, Caddy vhost + TLS, first-boot init, verification, redeploy and teardown. Triggers on "deploy mercato-connect", "deploy this branch to \<domain\>", "second/third instance next to CRM". |
 | `om-integration-builder` | Build integration provider packages for the Open Mercato Integration Marketplace (payment, shipping, data-sync, webhook). Scaffolds the npm package, adapter, credentials, widget injection, webhook processing, health checks, i18n, tests. Triggers on "build integration", "add provider", "integrate with stripe/paypal/dhl". |
 
 ---
