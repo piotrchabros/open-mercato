@@ -26,6 +26,7 @@ type ProjectionRow = {
   leaseExpiresAt: Date | null
   projectedAt: Date | null
   lastError: string | null
+  createdAt: Date
 }
 
 function createProjection(overrides: Partial<ProjectionRow> = {}): ProjectionRow {
@@ -44,6 +45,8 @@ function createProjection(overrides: Partial<ProjectionRow> = {}): ProjectionRow
     leaseExpiresAt: new Date(),
     projectedAt: null,
     lastError: null,
+    // The staging time the terminal domain event reports as projection lag.
+    createdAt: new Date('2026-08-22T09:00:00.000Z'),
     ...overrides,
   }
 }
@@ -72,6 +75,9 @@ function createCtx(options: Options) {
       }
       return null
     }),
+    // The worker stages a terminal domain event alongside the status change.
+    create: jest.fn((_entity: unknown, data: Record<string, unknown>) => ({ id: 'outbox', ...data })),
+    persist: jest.fn(),
     flush: jest.fn(async () => {}),
     fork: () => em,
   }

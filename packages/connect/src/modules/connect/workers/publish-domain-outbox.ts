@@ -45,7 +45,15 @@ export default async function handle(
     try {
       await emitConnectEvent(
         entry.eventType as ConnectEventId,
-        { ...entry.payload, tenantId: entry.tenantId, organizationId: entry.organizationId },
+        {
+          ...entry.payload,
+          tenantId: entry.tenantId,
+          organizationId: entry.organizationId,
+          // The stable outbox key, carried through so a subscriber can
+          // deduplicate. Publication is at-least-once; without this the
+          // subscriber has no way to tell a redelivery from a new event.
+          sourceEventId: entry.sourceEventId,
+        },
         { persistent: true },
       )
       await markOutboxPublished(em, entry.id)

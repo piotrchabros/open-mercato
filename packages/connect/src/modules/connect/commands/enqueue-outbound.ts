@@ -242,7 +242,16 @@ export async function enqueueOutbound(
       aggregateId: attempt.id,
       aggregateVersion: 1,
       eventType: 'connect.outbound.attempted',
-      payload: { caseId: target.id, messageId: message.id, attemptId: attempt.id, attemptNumber: 1 },
+      payload: {
+        caseId: target.id,
+        messageId: message.id,
+        attemptId: attempt.id,
+        attemptNumber: 1,
+        // Immutable denominator bucket. Outcome counts are reported as
+        // "attempts enqueued on DATE", never by the day a provider answered.
+        enqueueCohortUtcDate: now.toISOString().slice(0, 10),
+        occurredAt: now.toISOString(),
+      },
     })
 
     await em.flush()

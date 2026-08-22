@@ -4,6 +4,7 @@ import { createLogger } from '@open-mercato/shared/lib/logger'
 import { ConnectInboundReceipt } from '../data/entities'
 import { CONNECT_QUEUES } from '../lib/queue'
 import { completeReceipt } from '../lib/receipt-claim'
+import { stageDomainEvent } from '../lib/domain-outbox'
 
 const logger = createLogger('connect').child({ component: 'sweep-inbound-receipts' })
 
@@ -56,6 +57,25 @@ export default async function handle(
       // Terminal, but evidence is preserved: the operator decides whether to
       // replay it or acknowledge it, and neither deletes the row.
       completeReceipt(receipt, { disposition: 'dead_lettered', terminalReason: 'attempts_exhausted' }, now)
+      // Announce the terminal disposition on the receipt's ORIGINAL claim
+      // cohort. Without this the reconciliation equation for that day is short
+      // by one and looks like an unexplained gap rather than a dead letter.
+      stageDomainEvent(em, {
+        tenantId: receipt.tenantId,
+        organizationId: receipt.organizationId,
+        sourceEventId: `connect.inbound.disposed:${receipt.id}`,
+        aggregateId: receipt.id,
+        aggregateVersion: receipt.attempts,
+        eventType: 'connect.inbound.disposed',
+        payload: {
+          receiptId: receipt.id,
+          channelId: receipt.channelId,
+          disposition: 'dead_lettered',
+          reason: 'attempts_exhausted',
+          claimCohortUtcDate: receipt.claimCohortUtcDate,
+          occurredAt: now.toISOString(),
+        },
+      })
       logger.error('inbound receipt dead-lettered after exhausting attempts', {
         receiptId: receipt.id,
         attempts: receipt.attempts,

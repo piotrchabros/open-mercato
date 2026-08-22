@@ -156,7 +156,19 @@ export async function transitionCase(
       aggregateId: target.id,
       aggregateVersion: 1,
       eventType: input.action === 'reopen' ? 'connect.case.reopened' : 'connect.case.resolved',
-      payload: { caseId: target.id, from, to, action: input.action },
+      payload: {
+        caseId: target.id,
+        from,
+        to,
+        action: input.action,
+        // Carried on the EVENT so the metrics aggregation never joins the
+        // mutable Case table: a Case reopened later would otherwise rewrite
+        // the resolution timings of a day that was already reported.
+        firstInboundAt: target.firstInboundAt?.toISOString() ?? null,
+        firstAssignedAt: target.firstAssignedAt?.toISOString() ?? null,
+        resolvedAt: target.resolvedAt?.toISOString() ?? null,
+        occurredAt: now.toISOString(),
+      },
     })
 
     await em.flush()

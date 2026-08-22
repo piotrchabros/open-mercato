@@ -183,6 +183,9 @@ export async function linkIdentity(
         identityId: identity.id,
         action: previousId ? 'relink' : 'link',
         associationEpoch: identity.associationEpoch,
+        fromStatus: previousId ? 'linked' : 'unresolved',
+        toStatus: 'linked',
+        occurredAt: now.toISOString(),
       },
     })
 

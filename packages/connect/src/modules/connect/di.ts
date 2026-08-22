@@ -22,6 +22,8 @@ import {
   ConnectPendingProjection,
   ConnectPendingRetraction,
   ConnectRetractionSaga,
+  ConnectOperationalFact,
+  ConnectMetricDaily,
 } from './data/entities'
 import { createCapabilityReporter } from './lib/activation'
 
@@ -49,6 +51,8 @@ export function register(container: AppContainer) {
     ConnectPendingProjection: asValue(ConnectPendingProjection),
     ConnectPendingRetraction: asValue(ConnectPendingRetraction),
     ConnectRetractionSaga: asValue(ConnectRetractionSaga),
+    ConnectOperationalFact: asValue(ConnectOperationalFact),
+    ConnectMetricDaily: asValue(ConnectMetricDaily),
 
     // Read by `communication_channels` Contract E before it lets an
     // administrator cut a shared channel over to Connect projection. Connect

@@ -79,6 +79,7 @@ export async function applyDeliveryOutcome(
     return { status: 'ignored', reason: 'terminal' }
   }
 
+  const previousStatus = attempt.status
   attempt.status = payload.status
   attempt.deliveryRevision = payload.deliveryRevision
   attempt.providerMessageId = payload.providerMessageId ?? attempt.providerMessageId ?? null
@@ -86,6 +87,9 @@ export async function applyDeliveryOutcome(
   if (payload.status !== 'unknown') attempt.settledAt = now
 
   let caseTransitioned = false
+
+  let firstInboundAt: Date | null = null
+  let firstConfirmedHumanOutboundAt: Date | null = null
 
   if (payload.status === 'sent') {
     // Only a CONFIRMED send moves the Case to waiting_customer. A failed or
@@ -102,6 +106,14 @@ export async function applyDeliveryOutcome(
       if (next !== target.status) {
         target.status = next
         caseTransitioned = true
+      }
+      firstInboundAt = target.firstInboundAt ?? null
+      // Stamped once, on the FIRST confirmed send. Doing it at enqueue would
+      // measure how fast an agent typed rather than when the customer heard
+      // back, and a later retry would keep resetting it.
+      if (!target.firstOutboundSentAt) {
+        target.firstOutboundSentAt = now
+        firstConfirmedHumanOutboundAt = now
       }
     }
   }
@@ -139,8 +151,21 @@ export async function applyDeliveryOutcome(
     payload: {
       caseId: attempt.caseId,
       attemptId: attempt.id,
+      messageId: attempt.messageId,
+      fromStatus: previousStatus,
       status: payload.status,
       deliveryRevision: payload.deliveryRevision,
+      // The attempt's own creation day, frozen. Outcome counts cohort by when
+      // the attempt was ENQUEUED, so a send confirmed three days later still
+      // settles into the bucket whose denominator it belongs to.
+      enqueueCohortUtcDate: attempt.createdAt.toISOString().slice(0, 10),
+      // Both snapshotted here so first-response aggregation joins no mutable
+      // Case table. Non-null only on the first confirmed send.
+      firstInboundAt: firstInboundAt ? firstInboundAt.toISOString() : null,
+      firstConfirmedHumanOutboundAt: firstConfirmedHumanOutboundAt
+        ? firstConfirmedHumanOutboundAt.toISOString()
+        : null,
+      occurredAt: now.toISOString(),
     },
   })
 

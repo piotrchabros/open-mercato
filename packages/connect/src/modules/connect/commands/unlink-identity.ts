@@ -318,7 +318,14 @@ export async function unlinkIdentity(
     aggregateId: prepared.identityId,
     aggregateVersion: prepared.epoch,
     eventType: 'connect.projection.status_changed',
-    payload: { identityId: prepared.identityId, action: 'unlink', sagaId: prepared.sagaId },
+    payload: {
+      identityId: prepared.identityId,
+      action: 'unlink',
+      sagaId: prepared.sagaId,
+      fromStatus: 'linked',
+      toStatus: 'unresolved',
+      occurredAt: now.toISOString(),
+    },
   })
   await em.flush()
 
