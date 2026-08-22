@@ -358,6 +358,72 @@ OM_INTEGRATION_MODULES=communication_channels,channel-imap,channel-gmail \
   yarn test:integration                      # email-foundation slice only
 ```
 
+## Authorized thread reader
+
+A downstream inbox module needs to render inbound thread bodies and direction. It cannot query
+hub tables directly, and a facade in `messages` cannot produce the projection because
+`communication_channels` owns the message-link direction and transport metadata.
+
+Connect upstream Contract C (`.ai/specs/2026-08-21-connect-upstream-thread-reader.md`) adds a
+narrow reader for exactly that. System-authored inbound rows fall outside the existing
+sender-or-recipient participant predicate, so this is a **class (e)** boundary change requiring
+named maintainer sign-off, and its narrowness is the whole compensating control.
+
+Existing participant-scoped message APIs are unchanged. This facade is the explicit, separately
+reviewed exception.
+
+| DI key | Shape |
+|--------|-------|
+| `communicationChannelsThreadReader` | `(container, actor, { channelId, externalConversationIds, pageSize?, cursor? }) => Promise<ThreadReaderResult>` |
+
+### What it will and will not do
+
+- **One channel per call**, authorized through Contract E (scope + active membership +
+  `communication_channels.shared_inbox.read`). Any membership assertion a caller sends is
+  ignored — membership is read from the source.
+- **An explicit conversation allowlist**, non-empty and capped at 200, every entry proven to
+  belong to that channel and scope. The allowlist *narrows* an already authorized channel; it is
+  never itself the grant. Entries that are not bound come back in `unboundConversationIds`
+  without any hint as to whether they exist elsewhere.
+- **Plain, bounded records.** No ORM entity, entity manager, query callback or cross-tenant error
+  distinction crosses DI. Pages are capped at 100 records; bodies at 20 000 characters with an
+  explicit `truncated` flag.
+- **Plain text only**, HTML converted and control characters stripped. Attachments project
+  `{ fileName, mimeType, fileSize }` — Phase 1 exposes **no download URL or handle at all**,
+  because a signed provider URL is itself a credential.
+- **No filter or query interface.** There is nothing for a caller to widen.
+
+### Unrenderable items
+
+A decrypt or render failure yields a stable-position placeholder rather than failing the page:
+
+```ts
+{ kind: 'unavailable', id, externalConversationId, code: 'content_unavailable', retryable: true, occurredAt }
+```
+
+Other items on the page and the cursor stay valid, so one bad row cannot blank a thread, and the
+Inbox can offer a per-item retry. The failure reason never crosses the boundary — it could
+distinguish "encrypted with a key we cannot load" from "malformed", which is source-internal
+detail. Ciphertext never leaves the source.
+
+### Cursors
+
+A cursor is not a bookmark; it is a claim about what the holder was authorized to read. It is
+HMAC-signed (`OM_THREAD_READER_CURSOR_SECRET`, falling back to a `KMS_MASTER_KEY`-derived
+subkey, fail-closed in production) and binds tenant, organization, channel, **authorization
+epoch**, normalized allowlist hash, page size and position.
+
+Continuation re-validates authorization from scratch and re-applies the *current* allowlist. A
+cursor is refused when the caller's membership changed (the epoch is derived from the membership
+row, so revoke-then-regrant invalidates it), when the allowlist changed, when the page size
+changed, or when anything in it was edited.
+
+Ordering is `(createdAt, id)` ascending — a deterministic total order, so paging cannot skip or
+repeat a record when two messages share a timestamp.
+
+Case transfer and cross-Case cursor policy belong to the Inbox wrapper: Contract C does not know
+Case identity.
+
 ## Send correlation and delivery outcomes
 
 Email providers expose no idempotent-send key and no reliable "did message X send?" query. A
