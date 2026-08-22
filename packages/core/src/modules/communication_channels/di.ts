@@ -16,6 +16,7 @@ import { ensureTestSeedAdapterRegistered } from './lib/test-seed'
 import { sendAsUser } from './lib/send-as-user'
 import { checkSharedInboxAuthorization } from './lib/shared-inbox-authorization'
 import { lookupSendStatus } from './lib/send-status-lookup'
+import { readAuthorizedThreads } from './lib/thread-reader'
 
 export function register(container: AppContainer) {
   // Test-only: register the network-free stub channel adapter when
@@ -57,5 +58,12 @@ export function register(container: AppContainer) {
     // original response — it never sends and never resends.
     // See lib/send-status-lookup.ts.
     communicationChannelsSendStatusLookup: asValue(lookupSendStatus),
+
+    // Authorized thread projection for downstream inbox modules (Connect
+    // upstream Contract C). Reads one Contract-E-authorized channel, narrowed to
+    // an explicit conversation allowlist, and returns plain bounded records —
+    // no ORM entity, entity manager or query callback crosses DI.
+    // See lib/thread-reader.ts.
+    communicationChannelsThreadReader: asValue(readAuthorizedThreads),
   })
 }
