@@ -28,6 +28,30 @@ export type CommunicationChannelStatus =
   | 'error'
   | 'disconnected'
 
+/**
+ * Who owns Customer-timeline projection for a channel's traffic.
+ *
+ * - `legacy_customers` — the pre-existing `customers` message subscribers
+ *   (`link-channel-message-received` / `-sent`) create CustomerInteraction rows
+ *   directly. This is the default and covers every channel that existed before
+ *   Connect.
+ * - `connect_managed` — Connect exclusively owns identity resolution, Customer
+ *   timeline projection, and retraction for this channel; the legacy customers
+ *   subscribers skip it entirely.
+ *
+ * A channel can never be observed by both owners, so the value is immutable
+ * once the channel has seen any message or delivery. Changing it afterwards
+ * requires an audited history migration that is out of Phase 1 scope.
+ *
+ * Connect upstream Contract E.
+ */
+export type ChannelProjectionMode = 'legacy_customers' | 'connect_managed'
+
+/** See {@link CommunicationChannel.legacySharedClassification}. */
+export type LegacySharedChannelClassification =
+  | 'tenant_push_infrastructure'
+  | 'email_requires_reprovision'
+
 @Entity({ tableName: 'communication_channels' })
 @Index({ name: 'communication_channels_tenant_provider_idx', properties: ['tenantId', 'providerKey'] })
 // Provider-push webhooks (Gmail Pub/Sub) resolve channels by (provider_key,
@@ -73,6 +97,46 @@ export type CommunicationChannelStatus =
   expression:
     `create unique index "communication_channels_tenant_push_provider_uq" on "communication_channels" ("tenant_id", "provider_key") where "channel_type" = 'push' and "user_id" is null and "deleted_at" is null`,
 })
+// Shared inboxes are organization-owned team mailboxes: exactly one non-null
+// owning organization and no personal owner. Enforced in the database so no
+// code path — migration, admin route, or provisioning service — can produce a
+// shared channel whose authorization scope is ambiguous (Contract E invariant
+// "a shared channel has exactly one tenant+organization owner scope").
+@Check({
+  name: 'communication_channels_shared_inbox_scope_chk',
+  expression: `not "is_shared_inbox" or ("organization_id" is not null and "user_id" is null)`,
+})
+@Check({
+  name: 'communication_channels_projection_mode_chk',
+  expression: `"projection_mode" in ('legacy_customers', 'connect_managed')`,
+})
+// Connect projection only ever applies to an organization-owned shared inbox;
+// a personal or tenant-infrastructure channel can never be `connect_managed`.
+@Check({
+  name: 'communication_channels_connect_managed_shared_chk',
+  expression: `"projection_mode" = 'legacy_customers' or "is_shared_inbox"`,
+})
+@Check({
+  name: 'communication_channels_legacy_classification_chk',
+  expression:
+    `"legacy_shared_classification" is null or "legacy_shared_classification" in ('tenant_push_infrastructure', 'email_requires_reprovision')`,
+})
+// The shared-inbox admin list enumerates by (tenant, organization) — index it
+// so a tenant with many personal mailboxes does not scan them all.
+@Index({
+  name: 'communication_channels_shared_inbox_idx',
+  expression:
+    `create index "communication_channels_shared_inbox_idx" on "communication_channels" ("tenant_id", "organization_id") where "is_shared_inbox" and "deleted_at" is null`,
+})
+// One shared inbox per (tenant, organization, provider, mailbox). The per-user
+// heal index above is partial on `user_id is not null`, so it does not cover
+// shared inboxes; without this a concurrent double-provision would create two
+// channels polling the same mailbox and every message would be ingested twice.
+@Index({
+  name: 'communication_channels_shared_mailbox_uq',
+  expression:
+    `create unique index "communication_channels_shared_mailbox_uq" on "communication_channels" ("tenant_id", "organization_id", "provider_key", "external_identifier") where "is_shared_inbox" and "deleted_at" is null and "external_identifier" is not null`,
+})
 export class CommunicationChannel {
   [OptionalProps]?:
     | 'createdAt'
@@ -90,6 +154,12 @@ export class CommunicationChannel {
     | 'status'
     | 'lastError'
     | 'channelState'
+    | 'isSharedInbox'
+    | 'projectionMode'
+    | 'ownershipFrozenAt'
+    | 'trafficEnabledAt'
+    | 'connectCapabilitySnapshot'
+    | 'legacySharedClassification'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -166,6 +236,69 @@ export class CommunicationChannel {
   @Property({ name: 'channel_state', type: 'json', nullable: true })
   channelState?: Record<string, unknown> | null
 
+  /**
+   * Marks an organization-owned shared team inbox (Contract E). Implies
+   * `organizationId` is set and `userId` is null — enforced by
+   * `communication_channels_shared_inbox_scope_chk`.
+   *
+   * Legacy tenant-wide channels (`user_id IS NULL AND organization_id IS NULL`,
+   * e.g. FCM/APNs/Expo push infrastructure) keep `false` and their existing
+   * tenant-wide semantics; they are NOT shared inboxes.
+   */
+  @Property({ name: 'is_shared_inbox', type: 'boolean', default: false })
+  isSharedInbox: boolean = false
+
+  /** See {@link ChannelProjectionMode}. Immutable once the channel has traffic. */
+  @Property({ name: 'projection_mode', type: 'text', default: 'legacy_customers' })
+  projectionMode: ChannelProjectionMode = 'legacy_customers'
+
+  /**
+   * Set the moment the owning organization becomes immutable — the first time a
+   * membership, credential, conversation, or delivery exists for the channel.
+   * Before it is set, an admin may still reassign ownership (which atomically
+   * revokes and audits memberships); afterwards reassignment is rejected and
+   * rehoming requires a fenced history migration outside Phase 1.
+   */
+  @Property({ name: 'ownership_frozen_at', type: Date, nullable: true })
+  ownershipFrozenAt?: Date | null
+
+  /**
+   * Set by the guarded Connect cutover transaction once the capability
+   * handshake succeeded. NULL on a `connect_managed` channel means "provisioned
+   * but no traffic admitted yet": inbound claim and outbound send are rejected,
+   * so no message can be observed by a projection owner that is not yet ready.
+   * Always NULL for `legacy_customers` channels, whose traffic gating stays
+   * `is_active` + `status` exactly as before.
+   */
+  @Property({ name: 'traffic_enabled_at', type: Date, nullable: true })
+  trafficEnabledAt?: Date | null
+
+  /**
+   * Audit snapshot of the Connect capability handshake that authorized the
+   * cutover (contract versions plus which capabilities answered). Diagnostic
+   * only — authorization never reads it back.
+   */
+  @Property({ name: 'connect_capability_snapshot', type: 'json', nullable: true })
+  connectCapabilitySnapshot?: Record<string, unknown> | null
+
+  /**
+   * How the Contract E migration classified a pre-existing tenant-wide channel
+   * (`user_id IS NULL AND organization_id IS NULL`). The migration never
+   * silently assigns such a channel to an organization:
+   *
+   * - `tenant_push_infrastructure` — FCM/APNs/Expo credentials that are genuine
+   *   tenant infrastructure. They stay legacy and non-Connect forever.
+   * - `email_requires_reprovision` — an email-capable channel that could have
+   *   become a team inbox. It is NOT eligible for Connect until an administrator
+   *   reprovisions it inside an organization; the admin page shows it as a
+   *   disabled legacy channel rather than a newly owned one.
+   *
+   * NULL for personal mailboxes and for every channel created after the
+   * migration.
+   */
+  @Property({ name: 'legacy_shared_classification', type: 'text', nullable: true })
+  legacySharedClassification?: LegacySharedChannelClassification | null
+
   @Property({ name: 'tenant_id', type: 'uuid' })
   tenantId!: string
 
@@ -180,6 +313,157 @@ export class CommunicationChannel {
 
   @Property({ name: 'deleted_at', type: Date, nullable: true })
   deletedAt?: Date | null
+}
+
+// ── SharedChannelMembership ───────────────────────────────────
+
+/**
+ * Explicit per-user membership of an organization-owned shared inbox
+ * (Connect upstream Contract E).
+ *
+ * Membership is one of the three conjuncts of shared-inbox authorization
+ * (scope + membership + ACL feature); it grants nothing on its own. Rows are
+ * never hard-deleted — a revoke flips `isActive` and stamps
+ * `revokedAt`/`revokedByUserId` so a mistaken revocation stays visible in the
+ * recovery/audit view.
+ *
+ * Cross-module references (`userId → auth.user.id`) are plain uuid columns per
+ * the no-cross-module-ORM-relationship rule.
+ */
+@Entity({ tableName: 'communication_channel_shared_members' })
+// One row per (tenant, organization, channel, user) — a revoked member is
+// reactivated in place rather than duplicated, so the audit trail is linear.
+@Unique({
+  name: 'communication_channel_shared_members_uq',
+  properties: ['tenantId', 'organizationId', 'channelId', 'userId'],
+})
+// Authorization reads by (channel, user) and the member list reads by channel.
+@Index({
+  name: 'communication_channel_shared_members_channel_user_idx',
+  properties: ['channelId', 'userId', 'isActive'],
+})
+@Index({
+  name: 'communication_channel_shared_members_user_idx',
+  properties: ['tenantId', 'organizationId', 'userId', 'isActive'],
+})
+export class SharedChannelMembership {
+  [OptionalProps]?:
+    | 'createdAt'
+    | 'updatedAt'
+    | 'isActive'
+    | 'grantedByUserId'
+    | 'revokedByUserId'
+    | 'revokedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  /** NOT NULL by construction — a shared inbox always has an owning organization. */
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  /** Logical link to communication_channels.id (intra-module, kept as plain uuid). */
+  @Property({ name: 'channel_id', type: 'uuid' })
+  channelId!: string
+
+  /** Logical link to auth.user.id (no DB FK — cross-module). */
+  @Property({ name: 'user_id', type: 'uuid' })
+  userId!: string
+
+  @Property({ name: 'is_active', type: 'boolean', default: true })
+  isActive: boolean = true
+
+  @Property({ name: 'granted_by_user_id', type: 'uuid', nullable: true })
+  grantedByUserId?: string | null
+
+  @Property({ name: 'revoked_by_user_id', type: 'uuid', nullable: true })
+  revokedByUserId?: string | null
+
+  @Property({ name: 'revoked_at', type: Date, nullable: true })
+  revokedAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+// ── SharedInboxOAuthState ─────────────────────────────────────
+
+/**
+ * Server-side record of an in-flight shared-mailbox OAuth authorization
+ * (Connect upstream Contract E, AUTH-UP-GMAIL-01).
+ *
+ * The personal-mailbox OAuth flow keeps its whole state in an encrypted cookie,
+ * which is enough when the flow can only ever bind a channel to the browser's
+ * own user. A SHARED mailbox binds a credential to an ORGANIZATION, so the flow
+ * additionally needs properties a cookie cannot provide:
+ *
+ *   - **One-time use.** Consumption is a single conditional UPDATE, so a
+ *     replayed or duplicated callback provably cannot provision twice.
+ *   - **Server-derived scope.** The tenant, organization and initiating
+ *     administrator are read back from the server at callback time rather than
+ *     trusted from the round-tripped cookie.
+ *
+ * Only `stateHash` is stored — never the raw `state` parameter — so a database
+ * read cannot be replayed as a valid callback. PKCE verifiers and other
+ * provider extras stay in the encrypted cookie and never land here.
+ */
+@Entity({ tableName: 'communication_channel_shared_oauth_states' })
+@Unique({
+  name: 'communication_channel_shared_oauth_states_hash_uq',
+  properties: ['stateHash'],
+})
+@Index({
+  name: 'communication_channel_shared_oauth_states_expiry_idx',
+  properties: ['expiresAt'],
+})
+export class SharedInboxOAuthState {
+  [OptionalProps]?: 'createdAt' | 'consumedAt' | 'returnUrl' | 'displayName'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  /** SHA-256 of the OAuth `state` parameter, hex-encoded. */
+  @Property({ name: 'state_hash', type: 'text' })
+  stateHash!: string
+
+  @Property({ name: 'nonce', type: 'text' })
+  nonce!: string
+
+  /** Logical link to auth.user.id (no DB FK — cross-module). */
+  @Property({ name: 'initiated_by_user_id', type: 'uuid' })
+  initiatedByUserId!: string
+
+  @Property({ name: 'provider_key', type: 'text' })
+  providerKey!: string
+
+  /** Operator-chosen inbox name, applied when the channel is created. */
+  @Property({ name: 'display_name', type: 'text', nullable: true })
+  displayName?: string | null
+
+  @Property({ name: 'return_url', type: 'text', nullable: true })
+  returnUrl?: string | null
+
+  @Property({ name: 'expires_at', type: Date })
+  expiresAt!: Date
+
+  /** Set by the single conditional UPDATE that claims this state. */
+  @Property({ name: 'consumed_at', type: Date, nullable: true })
+  consumedAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
 }
 
 // ── ExternalConversation ──────────────────────────────────────

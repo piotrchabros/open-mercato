@@ -88,24 +88,24 @@ export default async function handler(
   const metaJson = (link.channelMetadata ?? null) as Record<string, unknown> | null
   const payloadJson = (link.channelPayload ?? null) as Record<string, unknown> | null
 
-  // ── (2) Resolve the channel to get its owner userId ───────────────────
+  // ── (2) Resolve the channel ───────────────────────────────────────────
   //
-  // The channel.userId is needed for two purposes:
-  //   - authorUserId on the CustomerInteraction row
-  //   - default visibility ('private' for user-scoped, 'shared' for tenant-scoped)
-  //
-  // We look up the channel only when channelId is provided in the event payload.
-  let channelUserId: string | null = null
-  if (typeof payload.channelId === 'string' && payload.channelId) {
-    const channel = (await findOneWithDecryption(
-      em,
-      'CommunicationChannel' as any,
-      { id: payload.channelId, tenantId, organizationId } as any,
-      undefined,
-      dscope,
-    )) as { userId?: string | null } | null
-    channelUserId = channel?.userId ?? null
-  }
+  // The channel is needed for two purposes:
+  //   - its projection mode, which decides whether this subscriber owns the
+  //     Customer timeline for the message at all (see below)
+  //   - its `userId`, used as authorUserId on the CustomerInteraction row and
+  //     for default visibility ('private' user-scoped / 'shared' tenant-scoped)
+  const channel = await resolveChannel(em, payload, link, tenantId, organizationId, dscope)
+
+  // Connect-managed shared inboxes (communication_channels Contract E) are
+  // projected exclusively by Connect, which owns identity resolution AND the
+  // reversible unlink retraction. Creating CustomerInteraction rows here too
+  // would produce a second, unretractable projection of the same message on the
+  // Customer timeline. Legacy channels — every channel that existed before
+  // Contract E — keep the behavior below unchanged.
+  if (channel?.projectionMode === 'connect_managed') return
+
+  const channelUserId: string | null = channel?.userId ?? null
 
   // ── (3) Collect recipient addresses ───────────────────────────────────
   //
@@ -232,6 +232,59 @@ export default async function handler(
       channelProviderKey: providerKey,
     },
   )
+}
+
+// ── Channel resolution ────────────────────────────────────────────────────
+
+type ChannelProjection = {
+  userId?: string | null
+  projectionMode?: string | null
+}
+
+/**
+ * Load the channel that produced this message.
+ *
+ * Prefers the `channelId` carried by the event. When it is absent (older stubs,
+ * partial payloads) we still resolve through the link's ExternalConversation,
+ * because the projection-mode check below must not be skippable: a
+ * Connect-managed channel whose event omitted `channelId` would otherwise fall
+ * through to legacy projection and double-write the Customer timeline.
+ *
+ * Entity classes are referenced by name so the customers module does not import
+ * communication_channels entities (cross-module ORM boundary rule).
+ */
+async function resolveChannel(
+  em: EntityManager,
+  payload: LinkChannelMessagePayload,
+  link: Record<string, unknown>,
+  tenantId: string,
+  organizationId: string,
+  dscope: { tenantId: string; organizationId: string },
+): Promise<ChannelProjection | null> {
+  let channelId = typeof payload.channelId === 'string' && payload.channelId ? payload.channelId : null
+
+  if (!channelId) {
+    const externalConversationId =
+      typeof link.externalConversationId === 'string' ? link.externalConversationId : null
+    if (!externalConversationId) return null
+    const conversation = (await findOneWithDecryption(
+      em,
+      'ExternalConversation' as any,
+      { id: externalConversationId, tenantId, organizationId } as any,
+      undefined,
+      dscope,
+    )) as { channelId?: string | null } | null
+    channelId = conversation?.channelId ?? null
+    if (!channelId) return null
+  }
+
+  return (await findOneWithDecryption(
+    em,
+    'CommunicationChannel' as any,
+    { id: channelId, tenantId, organizationId } as any,
+    undefined,
+    dscope,
+  )) as ChannelProjection | null
 }
 
 // ── Threading-inheritance fallback ────────────────────────────────────────

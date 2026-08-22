@@ -61,6 +61,9 @@ export const setup: ModuleSetupConfig = {
       'communication_channels.admin',
       'communication_channels.channel.import_history',
       'communication_channels.channel.push.manage',
+      'communication_channels.shared_inbox.read',
+      'communication_channels.shared_inbox.send',
+      'communication_channels.shared_inbox.manage',
     ],
     admin: [
       'communication_channels.view',
@@ -72,6 +75,9 @@ export const setup: ModuleSetupConfig = {
       'communication_channels.admin',
       'communication_channels.channel.import_history',
       'communication_channels.channel.push.manage',
+      'communication_channels.shared_inbox.read',
+      'communication_channels.shared_inbox.send',
+      'communication_channels.shared_inbox.manage',
     ],
     manager: [
       'communication_channels.view',
@@ -79,11 +85,15 @@ export const setup: ModuleSetupConfig = {
       'communication_channels.react',
       'communication_channels.assign',
       'communication_channels.connect_user_channel',
+      'communication_channels.shared_inbox.read',
+      'communication_channels.shared_inbox.send',
     ],
     employee: [
       'communication_channels.view',
       'communication_channels.react',
       'communication_channels.connect_user_channel',
+      'communication_channels.shared_inbox.read',
+      'communication_channels.shared_inbox.send',
     ],
   },
 

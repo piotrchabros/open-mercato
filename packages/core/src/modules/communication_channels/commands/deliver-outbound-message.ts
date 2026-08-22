@@ -15,6 +15,7 @@ import {
 import { stringOrUndefined, stripBrackets } from '../lib/email-mime'
 import type { ChannelAdapterRegistry } from '../lib/registry'
 import { isUniqueViolation } from '../lib/pg-errors'
+import { OUTBOUND_DELIVERY_STATUS_DISPATCHING } from '../lib/delivery-status'
 import { Message } from '../../messages/data/entities'
 import {
   ChannelThreadMapping,
@@ -398,16 +399,29 @@ const deliverOutboundMessageCommand: CommandHandler<
         },
       })
 
+      // Record that this send is about to cross the provider boundary.
+      //
+      // Everything before this point is provably undispatched; everything after
+      // it may have reached the provider even if we never see the response.
+      // A shared-inbox disable (Contract E) uses exactly that distinction: a
+      // still-`pending` link becomes a terminal `failed:channel_disabled` that
+      // an operator may explicitly retry, while a `dispatching` one becomes
+      // `unknown` and is reconciliation-only — never auto-resent. Without this
+      // marker the two cases are indistinguishable and disable would have to
+      // treat every queued send as possibly-delivered.
+      link.deliveryStatus = OUTBOUND_DELIVERY_STATUS_DISPATCHING
+      await em.flush()
+
       // NOTE — at-least-once delivery (accepted v1 semantics). This provider
       // send is a non-transactional external side effect. The terminal-status
       // short-circuit above and the `message_channel_links_message_uq` index
       // prevent duplicate link records and re-sends after a *completed*
       // delivery, but if the process crashes in the narrow window between this
-      // call returning and the success flush below, the link stays `pending`
-      // and a worker retry re-invokes the adapter — the recipient may receive a
-      // duplicate. This is deliberate: email providers (Gmail/SMTP) expose no
-      // idempotent-send key nor a reliable "did message X send?" query, so
-      // re-sending is preferred over risking a dropped message.
+      // call returning and the success flush below, the link stays
+      // `dispatching` and a worker retry re-invokes the adapter — the recipient
+      // may receive a duplicate. This is deliberate: email providers
+      // (Gmail/SMTP) expose no idempotent-send key nor a reliable "did message X
+      // send?" query, so re-sending is preferred over risking a dropped message.
       const sendResult = await adapter.sendMessage({
         conversationId: mapping.externalThreadRef,
         content: converted.content,
