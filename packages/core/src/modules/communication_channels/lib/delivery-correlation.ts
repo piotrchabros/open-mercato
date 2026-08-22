@@ -66,8 +66,11 @@ export function computeDeliveryFingerprint(input: {
   body: string
   threadRef?: string | null
 }): string {
+  // Byte-order comparator, not the locale-dependent default: the fingerprint is
+  // compared across processes and must not vary with the server's locale.
+  const compareAddresses = (a: string, b: string): number => (a === b ? 0 : a < b ? -1 : 1)
   const normalizeAddresses = (values: readonly string[] | undefined): string[] =>
-    [...(values ?? [])].map((value) => value.trim().toLowerCase()).sort()
+    [...(values ?? [])].map((value) => value.trim().toLowerCase()).sort(compareAddresses)
 
   const canonical = JSON.stringify({
     to: normalizeAddresses(input.to),

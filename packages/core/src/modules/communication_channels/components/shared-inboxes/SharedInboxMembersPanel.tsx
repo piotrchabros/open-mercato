@@ -21,6 +21,14 @@ import type { SharedInboxMemberRow, SharedInboxMembersResponse } from './types'
  * Revoked members stay in the list as the recovery/audit view: the operator can
  * see who was removed, by whom, and re-grant in one click. That is the whole
  * point of soft revocation — a mistaken click is recoverable without support.
+ *
+ * optimistic-lock-exempt: membership is a junction add/remove, not an edit of a
+ * versioned record. There is no `updatedAt` for a caller to have read and no
+ * lost-update to prevent — a concurrent grant and revoke of the SAME member are
+ * serialized server-side by the per-channel write lock in
+ * `commands/shared-inbox-membership.ts`, and the revoke path additionally
+ * re-checks last-manager protection under that lock. Sending an expected-version
+ * header here would imply a conflict semantics the resource does not have.
  */
 
 type Props = {
