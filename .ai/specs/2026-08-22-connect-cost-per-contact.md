@@ -2,11 +2,11 @@
 
 ## TLDR
 
-- Add independently activatable `connect_cost_reporting`, consuming bounded source-owned monetary and split-lineage denominator summaries.
+- Add independently activatable `connect_cost_reporting`, consuming already-landed bounded monetary and split-lineage denominator contracts.
 - Count canonical root contacts: split descendants collapse into the root and never increase the denominator.
 - Use exact rational allocation, one currency, strict capability/version contracts, and a separate API/page; add no CRUD or report storage.
 
-Prerequisites: cost-input reader contract and the Connect Case reparenting/split lineage contract must land first. Non-goals: cost CRUD, split/merge commands/UI, FX, payroll/time rates, snapshots, operational/SLA reporting, agent drilldown.
+Prerequisites: `2026-08-22-connect-cost-source-contract.md` and the Connect Case reparenting/split-lineage denominator contract must land first. Non-goals: source reader/query/index implementation, cost CRUD, split/merge commands/UI, FX, payroll/time rates, snapshots, operational/SLA reporting, agent drilldown.
 
 ## Overview
 
@@ -18,7 +18,7 @@ Raw Case counts overstate contacts after splits. Phase 1 lacks split lineage, so
 
 ## Proposed Solution
 
-The reparenting prerequisite adds `split_from_case_id` to Connect and a source-owned `connectContactDenominatorReader`. Cost accounting exposes `connectAllocatedCostReader`, which performs exact overlap aggregation at the source and returns at most three rational totals. The new report module soft-resolves both contracts, validates versions/DTOs, computes exact totals/cost per contact, and exposes `/api/connect_cost_reporting/report` and `/backend/connect/analytics/cost-per-contact`.
+The landed reparenting prerequisite exposes `connectContactDenominatorReader`; the landed allocated-cost source spec exposes `connectAllocatedCostReader`. This report module soft-resolves those published contracts, validates versions/DTOs, computes exact totals/cost per contact, and exposes `/api/connect_cost_reporting/report` and `/backend/connect/analytics/cost-per-contact`.
 
 ### Decisions
 
@@ -48,9 +48,9 @@ connect split lineage -> connectContactDenominatorReader ------+
 
 The consumer owns all glue and soft-resolves both readers. It imports public contract types only. Each source authorizes/scopes its own query; report authorization occurs before either call. Calls run concurrently with independent two-second bounds.
 
-## Prerequisite Lineage and Index Contract
+## Prerequisite Lineage Contract
 
-Before implementation, Connect reparenting lands additive nullable `split_from_case_id` on `connect_cases`, an index validating same-scope parent resolution, cycle-prevention in split commands, and a scoped root-date index:
+Before report implementation, Connect reparenting must have landed additive nullable `split_from_case_id`, same-scope/cycle-safe split commands, the source-owned denominator, migration/snapshot, and scoped root-date index:
 
 ```sql
 create index connect_cases_contact_root_date_idx
@@ -60,7 +60,7 @@ where deleted_at is null and split_from_case_id is null;
 
 Every split child points to its immediate parent in the same tenant/organization. Commands reject self/cross-scope/cycles. The denominator does not recursively query descendants: it counts non-deleted canonical roots (`split_from_case_id IS NULL`) whose own `created_at` is in `[start,end)`. Thus descendants never increase the count, including a child created in a later report period. Deleting a descendant does not change the denominator; deleting a root excludes that contact under v1 and is auditable.
 
-Migration/snapshot belong to Connect reparenting and must land before the reader/report. Automation runs `yarn db:generate` as a diff probe and never applies migration.
+Migration/snapshot/reader/index tests belong to the reparenting prerequisite, not this consumer. This spec verifies their public version/behavior through consumer contract tests and does not modify Connect schema.
 
 ## Exact Source and API Schemas
 
@@ -141,15 +141,15 @@ type ConnectContactDenominatorReader = {
 }
 ```
 
-Cost `byType` is unique and sorted `agent,channel,ai`; missing types mean rational zero. Readers validate non-empty range, both scopes, and maximum 366 days. Strict parsing/version checks happen at consumer boundary.
+Cost `byType` is unique and sorted `agent,channel,ai`; missing types mean rational zero. Both landed readers validate non-empty range, both scopes, and maximum 366 days. This consumer strictly parses and version-checks their results but does not implement either source.
 
 ## Formula Contract
 
-Cost source selects live matching-currency rows overlapping report `[Rstart,Rend)`. For each row:
+The allocated-cost source contract defines the source formula for live matching-currency rows overlapping report `[Rstart,Rend)`:
 
 `allocated = amount_minor × milliseconds(intersection(row, report)) / milliseconds(row period)`.
 
-It adds exact fractions by type with arbitrary-precision integers, reduces each returned rational by GCD, and never rounds. Consumer combines source fractions, rounds each displayed type and the exact grand total independently once to nearest minor unit (remainder × 2 >= denominator rounds up; amounts are nonnegative). Display buckets may sum one minor unit differently from grand total; UI labels grand total as authoritative. `costPerContactMinor` rounds the exact grand-total fraction divided by root count using the same rule; denominator zero yields null, not zero.
+The landed source adds/reduces exact fractions and never rounds. This consumer combines source fractions, rounds each displayed type and the exact grand total independently once to nearest minor unit (remainder × 2 >= denominator rounds up; amounts are nonnegative). Display buckets may sum one minor unit differently from grand total; UI labels grand total as authoritative. `costPerContactMinor` rounds the exact grand-total fraction divided by root count using the same rule; denominator zero yields null, not zero.
 
 Canonical denominator is exactly the scoped non-deleted root-created cohort above. Formula/source version changes require new literals and UI annotation; v1 never silently adopts merge or other lineage semantics.
 
@@ -177,13 +177,13 @@ Use `Page/PageHeader/PageBody`, `KpiCard`, `SectionHeader`, semantic table, `Ale
 ## Performance and Cache
 
 - Cost source transfers at most three rational rows regardless of input count; denominator transfers one scalar. No raw cost/Case IDs or N+1.
-- Source cost overlap index comes from cost-input spec; root-date partial index is prerequisite above.
+- Cost overlap index/performance belongs to the allocated-cost source spec; root-date partial index belongs to reparenting. Consumer transfers <=3 rationals plus one scalar.
 - Each source timeout 2s; adapter normal p95 target 250 ms; response <20 kB.
 - No cache: corrections/lineage/freshness must appear immediately. Source aggregation uses parameterized SQL/ORM expressions and arbitrary-precision helpers.
 
 ## Migration & Backward Compatibility
 
-Adapter has no schema. Prerequisite reparenting adds nullable lineage column and indexes additively with Connect migration/snapshot. New module/API/page/ACL/DI/formula contracts are additive/stable. Existing cost CRUD and analytics/SLA/Connect routes/schemas remain unchanged. Disable adapter removes only its surfaces; disabling either source yields unavailable and preserves data.
+Consumer has no schema/migration. Prerequisite source specs own their additive migrations/snapshots. New report module/API/page/ACL/formula contracts are additive/stable; reader DI contracts are consumed unchanged. Existing cost CRUD and analytics/SLA/Connect routes/schemas remain unchanged. Disable consumer removes only its surfaces; disabling either source yields unavailable and preserves data.
 
 ## Testing Strategy and Integration Coverage
 
@@ -196,7 +196,7 @@ Adapter has no schema. Prerequisite reparenting adds nullable lineage column and
 - **CPC-INT-006:** mixed currency exclusion/invalid currency/range/zero denominator.
 - **CPC-INT-007:** forbidden financial/Case/actor/provider/description/ID fields absent from API/log/search.
 - **CPC-INT-008:** generated module/API/backend metadata/ACL/DI manifests and booted route paths; enable/disable/re-enable matrix.
-- **CPC-INT-009:** source aggregation remains three DTO rows for >10k inputs and uses supporting index under `EXPLAIN` evidence.
+- **CPC-INT-009:** consumer remains constant-memory for the contract maximum of three cost DTO rows; source spec owns >10k/EXPLAIN evidence.
 - **CPC-UI-001:** nav coexistence, available/unavailable/zero/rounding states, keyboard/screen-reader/high contrast/hydration/bundle.
 - Module decoupling proves no peer entity import/hard requirement.
 
@@ -204,9 +204,9 @@ Executable tests live at `packages/connect/src/modules/connect_cost_reporting/__
 
 ## Phasing
 
-### Phase 1 — Source Prerequisites
+### Phase 1 — Prerequisite Contract Verification
 
-Land Connect split lineage/root-date index/denominator v1 and cost source-side allocated reader v1 with migrations, snapshots, strict contracts, split/property/isolation/performance tests.
+Verify the landed Connect split-lineage denominator v1 and allocated-cost source v1 exact schemas/versions/disable behavior. Do not implement or modify either source in this spec.
 
 ### Phase 2 — Independent Report API
 
@@ -218,21 +218,15 @@ Add exact page/client/locales and coexistence/accessibility/performance coverage
 
 ## Implementation Plan and File Manifest
 
-1. **CPC-LIN-01:** prerequisite split lineage column/commands/index/migration/snapshot/tests.
-2. **CPC-SRC-01:** exact denominator and source-side allocated-cost readers/DI contracts/tests.
-3. **CPC-MOD-01:** adapter module metadata/ACL/setup/DI resolver/generation.
-4. **CPC-CALC-01:** rational composer/property tests.
-5. **CPC-API-01:** guarded/OpenAPI strict report route/timeouts/reasons.
-6. **CPC-UI-01:** separate exact page/shared components/client/locales.
-7. **CPC-TEST/VAL-01:** integration/browser/EXPLAIN/generated/live gates; generate, migration probe, package test/typecheck/build, root typecheck/lint/i18n/DS.
+1. **CPC-PRE-01:** verify exact landed reader versions/contracts and source disable behavior.
+2. **CPC-MOD-01:** consumer module metadata/ACL/setup/DI resolver/generation.
+3. **CPC-CALC-01:** rational consumer composer/property tests.
+4. **CPC-API-01:** guarded/OpenAPI strict report route/timeouts/reasons.
+5. **CPC-UI-01:** separate exact page/shared components/client/locales.
+6. **CPC-TEST/VAL-01:** integration/browser/generated/live gates; generate, package test/typecheck/build, root typecheck/lint/i18n/DS.
 
 | File | Action |
 |---|---|
-| `packages/connect/src/modules/connect/data/entities.ts` and migration/snapshot | Modify additively in reparenting prerequisite |
-| `packages/connect/src/modules/connect/lib/contact-denominator-reader.ts` | Create |
-| `packages/connect/src/modules/connect/di.ts` | Modify |
-| `packages/connect/src/modules/connect_analytics/lib/allocated-cost-reader.ts` | Create |
-| `packages/connect/src/modules/connect_analytics/di.ts` | Modify |
 | `packages/connect/src/modules/connect_cost_reporting/{index,acl,setup,di}.ts` | Create |
 | `packages/connect/src/modules/connect_cost_reporting/data/validators.ts` | Create |
 | `packages/connect/src/modules/connect_cost_reporting/lib/cost-per-contact.ts` | Create |
@@ -292,14 +286,14 @@ Root, `.ai/specs`, core/customers, shared, UI/backend UI, CLI, QA, `BACKWARD_COM
 | Independent optional module/no ORM | Compliant | Real report module and two source DI facades |
 | Dual scope/ACL/privacy | Compliant | Pre-call guard, source predicates, sanitized DTOs |
 | Exact API/Zod/OpenAPI | Compliant | Strict available/unavailable/error/version contracts |
-| Schema/index migration discipline | Compliant | Additive lineage/index prerequisite and snapshot |
+| Schema/index migration discipline | N/A for consumer | Landed source prerequisites own migrations/snapshots |
 | Integration placement/generated/live | Compliant | Module `__integration__` and activation tests |
 | UI/i18n/DS/accessibility | Compliant | Separate exact page/components/locales/gates |
 | Commands/encryption | N/A for report | Lineage commands owned by prerequisite spec |
 
 ### Internal Consistency Check
 
-Lineage denominator, source bounds, formula/API/UI, no report writes/cache, risks, phases, compatibility, and report-only scope: **Pass**. Non-compliant items: none.
+Landed reader prerequisites, consumer formula/API/UI, no report writes/cache, risks, phases, compatibility, and consumer-only scope: **Pass**. Non-compliant items: none.
 
 ### Verdict
 
@@ -309,5 +303,5 @@ Fully compliant and ready to implement in pinned phase order after/with the land
 
 ### 2026-08-22
 
-- Replaced raw opened-Case denominator with exact split-collapsed root cohort; created independent `connect_cost_reporting`, strict source/API/version/reason contracts, source-side bounded aggregation, root-date index prerequisite, package-local/generated/live/version/split tests, and explicit phases.
+- Narrowed to pure `connect_cost_reporting` consumer over landed allocated-cost and split-lineage denominator prerequisites; source allocation now lives in `2026-08-22-connect-cost-source-contract.md`.
 - Review: security, performance, cache, commands, risks, all 13 BC categories, and scope cohesion passed; Ready in pinned phase order.

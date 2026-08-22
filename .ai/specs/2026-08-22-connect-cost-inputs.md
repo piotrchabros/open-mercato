@@ -5,7 +5,7 @@
 - Add auditable organization-scoped agent, channel, and AI cost rows from manual or provider-invoice sources.
 - Keep cost CRUD/accounting separate from the cost-per-contact report, operational reporting, SLA, and routing capacity.
 
-Scope includes `connect_cost_input` CRUD, optimistic locking, audit/undo, currency and period rules, provenance, isolation, and a sanitized cost-input read facade. Cost-per-contact/report allocation (separate spec), provider integrations/credentials, payroll/time tracking, ledger accounting, FX conversion, and other Phase 2 capabilities are non-goals.
+Scope includes `connect_cost_input` CRUD, optimistic locking, audit/undo, currency and period rules, provenance, and isolation. The planned row-level reader below is superseded before publication by `2026-08-22-connect-cost-source-contract.md`; allocated-cost aggregation and cost-per-contact remain separate capabilities.
 
 ## Overview
 
