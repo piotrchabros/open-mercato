@@ -63,6 +63,19 @@ const entityExtensions: EntityExtension[] = [
    * EXTENSION declaration; the integrations module owns the COLUMN — coordinated
    * change shipped in the same PR.
    */
+  /**
+   * Shared-inbox membership (Connect upstream Contract E). Links every
+   * `communication_channel_shared_members` row back to the member it authorizes,
+   * so the organization-admin member list and revocation-audit view resolve user
+   * identities through the query engine instead of a cross-module ORM relation.
+   */
+  {
+    base: 'auth:user',
+    extension: 'communication_channels:shared_channel_membership',
+    join: { baseKey: 'id', extensionKey: 'user_id' },
+    cardinality: 'one-to-many',
+    description: 'Shared-inbox memberships granted to a user',
+  },
   {
     base: 'auth:user',
     extension: 'integrations:integration_credentials',

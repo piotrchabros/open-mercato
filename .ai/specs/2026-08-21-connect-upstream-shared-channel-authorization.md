@@ -55,6 +55,20 @@ New ACL IDs, membership entity, commands, optional provider capability, and shar
 
 One deployable capability: shared-channel scope and authorization. It neither reads message content nor sends/reconciles delivery.
 
+## Implementation Status
+
+| Phase | Status | Date | Notes |
+|-------|--------|------|-------|
+| AUTH-UP-01 — ACL, ownership/membership/projection-mode schema, customers subscriber skip | Done | 2026-08-22 | Migration `Migration20260822120000_communication_channels` + snapshot; DB check constraints make an ambiguous shared-inbox scope unrepresentable |
+| AUTH-UP-02 — membership commands, authorization service, capability handshake/cutover | Done | 2026-08-22 | `communicationChannelsSharedInboxAuthorization` DI key; per-channel write lock; last-manager protection |
+| AUTH-UP-EMAIL-01 — `sharedMailbox` capability + IMAP shared provisioning | Done | 2026-08-22 | Fail-closed: no channel is created when the credential cannot be stored |
+| AUTH-UP-GMAIL-01 — Gmail shared OAuth initiate/callback | Done | 2026-08-22 | One-time server-side state claimed by a single conditional UPDATE; admin access re-checked after consent |
+| AUTH-UP-RECOVER-01 — disable / reconnect / rotate | Done | 2026-08-22 | `dispatching` marker added to the delivery command so undispatched and possibly-dispatched work are distinguishable |
+| AUTH-UP-03 — isolation, wildcard, concurrency and migration tests | Partial | 2026-08-22 | Unit coverage shipped for authorization, capability handshake, provisioning eligibility, membership, recovery, cutover, OAuth state and the customers projection skip. Integration tests (cross-tenant/org API isolation, two concurrent last-manager revocations under the DB lock, migration + rollback) still pending |
+| AUTH-UP-UI-01 — organization-admin page | Done | 2026-08-22 | Ownership/membership/provisioning/recovery page with loading, empty, error and conflict states; complete locales |
+| AUTH-UP-04 — public contract documentation | Done | 2026-08-22 | `apps/docs/docs/framework/modules/communication-channels.mdx` § Shared inboxes. **Named maintainer sign-off for this class (e) change is still outstanding.** |
+
 ## Changelog
 
+- 2026-08-22: Implemented AUTH-UP-01, -02, -EMAIL-01, -GMAIL-01, -RECOVER-01, -UI-01 and -04; unit coverage for -03 landed, integration coverage and maintainer sign-off outstanding.
 - 2026-08-21: Extracted common organization/membership/ACL ownership from send and thread-reader specs after scope review.

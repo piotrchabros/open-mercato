@@ -70,6 +70,45 @@ const events = [
     category: 'lifecycle',
     clientBroadcast: true,
   },
+  // ── Shared-inbox authorization (Connect upstream Contract E) ──
+  {
+    id: 'communication_channels.shared_inbox.provisioned',
+    label: 'Shared Inbox Provisioned',
+    entity: 'communication_channel',
+    category: 'lifecycle',
+  },
+  {
+    id: 'communication_channels.shared_inbox.member_granted',
+    label: 'Shared Inbox Member Granted',
+    entity: 'shared_channel_membership',
+    category: 'lifecycle',
+  },
+  {
+    id: 'communication_channels.shared_inbox.member_revoked',
+    label: 'Shared Inbox Member Revoked',
+    entity: 'shared_channel_membership',
+    category: 'lifecycle',
+  },
+  {
+    id: 'communication_channels.shared_inbox.connect_enabled',
+    label: 'Shared Inbox Switched To Connect Projection',
+    entity: 'communication_channel',
+    category: 'lifecycle',
+  },
+  {
+    id: 'communication_channels.shared_inbox.disabled',
+    label: 'Shared Inbox Provider Disabled',
+    entity: 'communication_channel',
+    category: 'lifecycle',
+    clientBroadcast: true,
+  },
+  {
+    id: 'communication_channels.shared_inbox.reconnected',
+    label: 'Shared Inbox Provider Reconnected',
+    entity: 'communication_channel',
+    category: 'lifecycle',
+    clientBroadcast: true,
+  },
   // ── Reaction events ──────────────────────────────────────
   {
     id: 'communication_channels.reaction.added',

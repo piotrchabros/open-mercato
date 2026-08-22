@@ -2,8 +2,8 @@ import type { EntityExtension } from '@open-mercato/shared/modules/entities'
 import { extensions } from '../extensions'
 
 describe('communication_channels extensions', () => {
-  it('declares 6 cross-module extensions (4 from slice 2a + 2 per-user added in slice 3a)', () => {
-    expect(extensions).toHaveLength(6)
+  it('declares 7 cross-module extensions (4 from slice 2a, 2 per-user from slice 3a, 1 shared-inbox membership)', () => {
+    expect(extensions).toHaveLength(7)
   })
 
   it('every extension has the canonical EntityExtension shape', () => {

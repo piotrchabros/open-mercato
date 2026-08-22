@@ -53,6 +53,13 @@ const logger = createLogger('channel_imap')
 class ImapChannelAdapter implements ChannelAdapter {
   readonly providerKey = 'imap'
   readonly channelType = 'email'
+  /**
+   * Eligible to back an organization-owned shared team inbox: an IMAP/SMTP
+   * secret for a `support@` mailbox is naturally a team credential, and the
+   * shared provisioning route stores it with `user_id IS NULL` under the owning
+   * organization. See `communication_channels` Contract E.
+   */
+  readonly sharedMailbox = true
   readonly capabilities = imapCapabilities
 
   async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {

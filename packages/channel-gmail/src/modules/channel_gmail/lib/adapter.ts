@@ -80,6 +80,13 @@ const logger = createLogger('channel_gmail')
 class GmailChannelAdapter implements ChannelAdapter {
   readonly providerKey = 'gmail'
   readonly channelType = 'email'
+  /**
+   * Eligible to back an organization-owned shared team inbox. The shared OAuth
+   * flow consents a Google Workspace group/shared mailbox and stores the tokens
+   * with `user_id IS NULL` under the owning organization, distinct from the
+   * per-user "connect my mailbox" flow. See `communication_channels` Contract E.
+   */
+  readonly sharedMailbox = true
   readonly capabilities = gmailCapabilities
 
   async sendMessage(input: SendMessageInput): Promise<SendMessageResult> {

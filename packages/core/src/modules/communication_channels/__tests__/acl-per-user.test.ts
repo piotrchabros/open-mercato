@@ -37,8 +37,36 @@ describe('communication_channels ACL — slice 3a additions', () => {
     expect(setup.defaultRoleFeatures?.employee ?? []).not.toContain('communication_channels.admin')
   })
 
-  it('has exactly nine ACL features after the tenant-wide channel addition', () => {
-    expect(features).toHaveLength(9)
+  it('has exactly twelve ACL features after the shared-inbox authorization triad', () => {
+    expect(features).toHaveLength(12)
+  })
+
+  // Shared-inbox authorization (Connect upstream Contract E). `.manage` is an
+  // administrative grant and must not leak to non-admin default roles, while
+  // `.read`/`.send` are the everyday team-inbox grants — they still do nothing
+  // without an explicit membership row.
+  it('grants shared-inbox management only to superadmin + admin', () => {
+    for (const feature of [
+      'communication_channels.shared_inbox.read',
+      'communication_channels.shared_inbox.send',
+      'communication_channels.shared_inbox.manage',
+    ]) {
+      expect(features.map((f) => f.id)).toContain(feature)
+    }
+    expect(setup.defaultRoleFeatures?.superadmin).toContain('communication_channels.shared_inbox.manage')
+    expect(setup.defaultRoleFeatures?.admin).toContain('communication_channels.shared_inbox.manage')
+    expect(setup.defaultRoleFeatures?.manager ?? []).not.toContain(
+      'communication_channels.shared_inbox.manage',
+    )
+    expect(setup.defaultRoleFeatures?.employee ?? []).not.toContain(
+      'communication_channels.shared_inbox.manage',
+    )
+    expect(setup.defaultRoleFeatures?.employee ?? []).toContain(
+      'communication_channels.shared_inbox.read',
+    )
+    expect(setup.defaultRoleFeatures?.employee ?? []).toContain(
+      'communication_channels.shared_inbox.send',
+    )
   })
 
   it('exports the connect_tenant_channel feature granted only to superadmin + admin', () => {

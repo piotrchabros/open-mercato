@@ -47,6 +47,29 @@ export const features = [
    * push or polling, the system handles it.
    */
   { id: 'communication_channels.channel.push.manage', title: 'Manage push delivery', module: 'communication_channels' },
+  /**
+   * Shared-inbox authorization triad (Connect upstream Contract E). A shared
+   * inbox is an organization-owned channel (`organization_id` NOT NULL,
+   * `user_id IS NULL`, `is_shared_inbox`) that a team operates together.
+   *
+   * Authorization for a shared inbox is always the CONJUNCTION of:
+   *   1. the channel's tenant + organization scope matching the caller's scope,
+   *   2. an active `SharedChannelMembership` row for the caller, and
+   *   3. the corresponding feature below.
+   *
+   * None of the three alone grants access: a member without `.read` cannot read,
+   * and a user holding `.read` without membership cannot read either. Personal
+   * mailboxes (`user_id` set) are untouched by these features and keep the
+   * strict owner-only model in `lib/access-control.ts`.
+   */
+  { id: 'communication_channels.shared_inbox.read', title: 'Read shared inbox messages', module: 'communication_channels' },
+  { id: 'communication_channels.shared_inbox.send', title: 'Send from a shared inbox', module: 'communication_channels' },
+  /**
+   * Administer shared-inbox ownership, provisioning and membership. Required —
+   * on top of an active organization-admin scope — by every provision / member
+   * add / member revoke / reconnect / rotate / disable operation.
+   */
+  { id: 'communication_channels.shared_inbox.manage', title: 'Manage shared inboxes and members', module: 'communication_channels' },
 ] as const
 
 export default features

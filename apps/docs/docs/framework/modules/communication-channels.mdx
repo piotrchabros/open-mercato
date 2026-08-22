@@ -358,6 +358,132 @@ OM_INTEGRATION_MODULES=communication_channels,channel-imap,channel-gmail \
   yarn test:integration                      # email-foundation slice only
 ```
 
+## Shared inboxes (organization-owned team mailboxes)
+
+A **shared inbox** is a `CommunicationChannel` with `is_shared_inbox = true`, a non-null
+`organization_id`, and `user_id IS NULL`. It is the mailbox several people answer from —
+`support@`, `billing@` — as opposed to a personal mailbox (`user_id` set, strict owner-only)
+or legacy tenant infrastructure (`user_id IS NULL AND organization_id IS NULL`, e.g. push
+credentials). Database check constraints make an ambiguous shared-inbox scope
+unrepresentable.
+
+Introduced by Connect upstream Contract E
+(`.ai/specs/2026-08-21-connect-upstream-shared-channel-authorization.md`). It is a
+**class (e) authorization change** and requires named maintainer sign-off.
+
+### Authorization contract
+
+Shared-inbox access is the **conjunction of three independent facts**. None of them grants
+access alone:
+
+1. **Scope** — the channel's `(tenantId, organizationId)` equals the caller's server-derived
+   scope.
+2. **Membership** — an active `SharedChannelMembership` row exists for the caller.
+3. **Feature** — the caller holds the matching ACL feature, evaluated wildcard-aware.
+
+| Feature | Grants |
+|---------|--------|
+| `communication_channels.shared_inbox.read` | Read messages of a shared inbox they are a member of |
+| `communication_channels.shared_inbox.send` | Send from a shared inbox they are a member of |
+| `communication_channels.shared_inbox.manage` | Administer ownership, provisioning, membership and provider recovery |
+
+`.manage` additionally requires an **active organization-admin scope**
+(`directory.organizations.manage` over the target organization). Splitting the two lets policy
+hand shared-inbox setup to a channel operator without handing over organization
+administration, or vice versa.
+
+Every failure for a channel the caller cannot see returns the same opaque `not_found`, so a
+foreign channel id is indistinguishable from a missing one.
+
+### DI surface
+
+| DI key | Shape |
+|--------|-------|
+| `communicationChannelsSharedInboxAuthorization` | `(container, channelId, actor, requiredFeature, options?) => Promise<SharedInboxAuthorizationDecision>` |
+
+`actor` is `{ userId, tenantId, organizationId, features }`, all server-derived. The result is a
+plain projection — no ORM entity crosses DI. Pass `{ requireTrafficEnabled: true }` on send and
+inbound-claim paths so a Connect-managed channel that has not been cut over yet cannot carry
+traffic. This facade is the single canonical authorization rule; the send, thread-reader and
+inbound-envelope contracts delegate to it rather than re-deriving it.
+
+### Provider eligibility
+
+A provider must opt in explicitly with `sharedMailbox: true` on its `ChannelAdapter` **and** be
+an email provider (`channelType: 'email'`). Opting in is additive: adapters that omit the flag
+are simply not eligible and behave exactly as before. Gmail and IMAP opt in; push providers
+stay tenant infrastructure.
+
+### Projection ownership
+
+Each channel carries an immutable `projection_mode`:
+
+- `legacy_customers` (default) — the `customers` message subscribers create
+  `CustomerInteraction` rows directly. Every channel that predates Contract E is in this mode
+  and its behaviour is unchanged.
+- `connect_managed` — Connect exclusively owns identity resolution, Customer timeline
+  projection and retraction; the legacy customers subscribers skip the channel entirely.
+
+Switching to `connect_managed` requires a **capability handshake**: Connect must register
+`connectCapabilityReporter` in DI and report a matching contract version plus live ingest,
+inbound-envelope contract, Customer projection and recovery schedules. Mode and
+`traffic_enabled_at` flip in one transaction under the channel write lock, so a channel is
+never observable as Connect-managed with traffic flowing but no projection owner. The cutover
+is refused once the channel has any message — re-pointing existing history at a different
+projection owner needs an audited history migration that is out of scope.
+
+### Admin API
+
+All routes require `communication_channels.shared_inbox.manage` plus organization-admin scope,
+and none of them ever return a provider secret.
+
+| Method | Path |
+|--------|------|
+| `GET` / `POST` | `/api/communication_channels/shared-inboxes` |
+| `GET` / `POST` / `DELETE` | `/api/communication_channels/shared-inboxes/{channelId}/members` |
+| `POST` | `/api/communication_channels/shared-inboxes/gmail/oauth/start` |
+| `GET` | `/api/communication_channels/shared-inboxes/gmail/oauth/callback` |
+| `POST` | `/api/communication_channels/shared-inboxes/{channelId}/imap/rotate` |
+| `POST` | `/api/communication_channels/shared-inboxes/{channelId}/reconnect` |
+| `POST` | `/api/communication_channels/shared-inboxes/{channelId}/disable` |
+| `POST` | `/api/communication_channels/shared-inboxes/{channelId}/connect-projection` |
+
+The revoked user id travels in a validated DELETE **body**, not the URL, so it is not captured
+in access logs alongside the channel id.
+
+The Gmail shared flow uses its own `redirect_uri`
+(`/api/communication_channels/shared-inboxes/gmail/oauth/callback`) — register it in the Google
+Cloud console alongside the per-user callback. Its state is recorded server-side and claimed by
+a single conditional UPDATE, so a replayed callback provisions nothing, and the initiating
+administrator's access is re-checked **after** consent.
+
+### Recovery semantics
+
+Disabling a shared inbox blocks new sends and classifies in-flight outbound work in one
+transaction, using the `dispatching` marker the delivery command sets immediately before the
+provider call:
+
+| Prior state | Becomes | Meaning |
+|-------------|---------|---------|
+| `pending` | `failed` (`reasonCode: channel_disabled`, retryable) | Provably never reached the provider |
+| `dispatching` | `unknown` (not retryable) | May already be in the recipient's mailbox |
+
+Reconnect only allows **new** sends. It never revives a terminal attempt and never auto-resends
+`unknown` work — resolving those is an explicit operator decision. Secret rotation replaces the
+credential but not the identity: a credential bag for a different mailbox is rejected, so a
+rotation cannot silently re-point a team's inbox (with its history and membership) at another
+address.
+
+### Migration and rollback
+
+The Contract E migration **classifies** pre-existing tenant-wide channels rather than assigning
+them to an organization. Push channels are labelled `tenant_push_infrastructure` and stay legacy
+forever; email-capable ones are labelled `email_requires_reprovision` and surface on the admin
+page as disabled legacy channels an administrator must reprovision inside an organization.
+Existing encrypted credentials are neither decrypted nor copied across scopes. Rollback disables
+newly provisioned shared-email channels and restores the pre-migration classification without
+erasing membership or audit history.
+
 ## Provider package contract
 
 A `ChannelAdapter` is the only thing a provider package must expose. The complete contract lives at `packages/core/src/modules/communication_channels/lib/adapter.ts`. Methods are split into required core, optional extensions, and OAuth helpers — providers only implement the methods that match their declared capabilities (the registry validates consistency on registration).

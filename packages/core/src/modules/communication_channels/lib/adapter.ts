@@ -519,6 +519,23 @@ export interface ChannelAdapter {
    */
   readonly channelScope?: 'tenant' | 'user'
 
+  /**
+   * Whether this provider can back an ORGANIZATION-owned shared team inbox
+   * (Connect upstream Contract E) — a channel with `is_shared_inbox`,
+   * `organization_id` NOT NULL and `user_id IS NULL`, operated by an explicit
+   * member list rather than by one owner.
+   *
+   * Providers must opt in EXPLICITLY. A shared inbox lets every authorized
+   * member read and send through one credential, so silently inheriting the
+   * capability from `channelScope` would widen a provider's blast radius
+   * without its author ever considering it. Phase 1 opt-ins are Gmail (shared
+   * OAuth) and IMAP (shared secret); push providers stay tenant infrastructure.
+   *
+   * ADDITIVE-ONLY (BACKWARD_COMPATIBILITY.md): adapters that omit it are simply
+   * not eligible for shared-inbox provisioning, and behave exactly as before.
+   */
+  readonly sharedMailbox?: boolean
+
   /** Declare supported features */
   readonly capabilities: ChannelCapabilities
 

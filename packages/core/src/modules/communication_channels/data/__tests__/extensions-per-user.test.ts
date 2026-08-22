@@ -34,7 +34,7 @@ describe('communication_channels extensions — per-user additions (slice 3a)', 
     }
   })
 
-  it('exports 6 extensions (4 from earlier slices + 2 added in slice 3a)', () => {
-    expect(extensions).toHaveLength(6)
+  it('exports 7 extensions (4 from earlier slices, 2 from slice 3a, 1 shared-inbox membership)', () => {
+    expect(extensions).toHaveLength(7)
   })
 })
