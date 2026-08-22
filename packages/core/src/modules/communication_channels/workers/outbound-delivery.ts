@@ -1,5 +1,11 @@
+import type { EntityManager } from '@mikro-orm/postgresql'
 import type { JobContext, QueuedJob, WorkerMeta } from '@open-mercato/queue'
 import type { CommandBus } from '@open-mercato/shared/lib/commands'
+import {
+  DELIVERY_REASON_RETRIES_EXHAUSTED,
+  findAttemptForMessage,
+  publishDeliveryOutcome,
+} from '../lib/delivery-outcome'
 import {
   COMMUNICATION_CHANNELS_DELIVER_OUTBOUND_COMMAND_ID,
   type DeliverOutboundMessageInput,
@@ -133,9 +139,44 @@ export default async function handle(
       }
       // Permanent or attempts exhausted — `.delivery_failed` was already emitted
       // by the command, so we stop here.
+      //
+      // The command records a terminal delivery outcome for a permanent failure
+      // but deliberately leaves a retryable one `pending`, because a later
+      // attempt could still succeed. Only the worker knows when there will be no
+      // later attempt, so exhausting retries is where a correlated send becomes
+      // terminally `failed` (Connect upstream Contract A).
+      if (outcome.transient) {
+        await recordRetriesExhausted(ctx, messageId, scope)
+      }
       logger.error('giving up on message delivery', { messageId, attempt, providerKey: outcome.providerKey, reason: outcome.error })
       return
     }
+  }
+}
+
+/**
+ * Close out a correlated send whose retries ran out.
+ *
+ * Best-effort: the delivery already failed, and a bookkeeping error here must
+ * not turn a finished job into a queue failure that would re-run the send.
+ */
+async function recordRetriesExhausted(
+  ctx: HandlerContext,
+  messageId: string,
+  scope: { tenantId: string; organizationId: string | null },
+): Promise<void> {
+  try {
+    const em = (ctx.resolve<EntityManager>('em')).fork()
+    const attempt = await findAttemptForMessage(em, messageId, scope)
+    if (!attempt) return
+    await publishDeliveryOutcome({
+      em,
+      attempt,
+      status: 'failed',
+      reasonCode: DELIVERY_REASON_RETRIES_EXHAUSTED,
+    })
+  } catch (err) {
+    logger.warn('could not record the terminal outcome for an exhausted delivery', { messageId, err })
   }
 }
 
