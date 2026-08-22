@@ -698,6 +698,11 @@ export class ExternalMessage {
 @Index({ name: 'message_channel_links_ext_conv_idx', properties: ['externalConversationId'] })
 @Index({ name: 'message_channel_links_ext_msg_idx', properties: ['externalMessageId'] })
 @Unique({ name: 'message_channel_links_message_uq', properties: ['messageId'] })
+@Check({
+  name: 'message_channel_links_projection_mode_chk',
+  expression:
+    `"projection_mode_at_ingest" is null or "projection_mode_at_ingest" in ('legacy_customers', 'connect_managed')`,
+})
 export class MessageChannelLink {
   [OptionalProps]?: 'createdAt' | 'deliveryStatus' | 'externalMessageId' | 'channelPayload' | 'channelContentType' | 'interactiveState' | 'channelMetadata' | 'organizationId'
 
@@ -738,6 +743,26 @@ export class MessageChannelLink {
 
   @Property({ name: 'channel_metadata', type: 'json', nullable: true })
   channelMetadata?: Record<string, unknown> | null
+
+  /**
+   * The channel's projection mode AT THE MOMENT this message was ingested
+   * (Connect upstream Contract D).
+   *
+   * Snapshotted rather than read live, because a later reprovision, reconnect
+   * or cutover must never change how an ALREADY EMITTED
+   * `communication_channels.message.received` event is classified. Without the
+   * snapshot, a message ingested while the channel was legacy could later be
+   * handed to Connect (double projection) or vice versa (no projection at all).
+   *
+   * NULL on every row written before Contract D; the envelope reader treats
+   * that as `legacy_customers`, which is what those channels were.
+   */
+  @Property({ name: 'projection_mode_at_ingest', type: 'text', nullable: true })
+  projectionModeAtIngest?: ChannelProjectionMode | null
+
+  /** Whether Connect traffic was enabled on the channel at ingest time. */
+  @Property({ name: 'traffic_enabled_at_ingest', type: 'boolean', nullable: true })
+  trafficEnabledAtIngest?: boolean | null
 
   @Property({ name: 'tenant_id', type: 'uuid' })
   tenantId!: string

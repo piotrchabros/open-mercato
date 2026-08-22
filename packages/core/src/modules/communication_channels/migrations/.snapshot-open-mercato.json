@@ -2781,6 +2781,23 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
+        "projection_mode_at_ingest": {
+          "name": "projection_mode_at_ingest",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
         "provider_key": {
           "name": "provider_key",
           "type": "text",
@@ -2814,6 +2831,23 @@
           "collation": null,
           "enumItems": [],
           "mappedType": "uuid"
+        },
+        "traffic_enabled_at_ingest": {
+          "name": "traffic_enabled_at_ingest",
+          "type": "boolean",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "boolean"
         }
       },
       "indexes": [
@@ -2868,7 +2902,13 @@
           "unique": true
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "message_channel_links_projection_mode_chk",
+          "expression": "\"projection_mode_at_ingest\" is null or \"projection_mode_at_ingest\" in ('legacy_customers', 'connect_managed')",
+          "definition": "check (\"projection_mode_at_ingest\" is null or \"projection_mode_at_ingest\" in ('legacy_customers', 'connect_managed'))"
+        }
+      ],
       "triggers": [],
       "foreignKeys": {},
       "comment": null

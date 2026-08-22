@@ -491,6 +491,11 @@ const ingestInboundMessageCommand: CommandHandler<IngestInboundMessageInput, Ing
       channelPayload: m.channelPayload,
       channelContentType: m.channelContentType,
       channelMetadata: matcherAnnotatedMetadata,
+      // Freeze how this message must be projected (Connect upstream Contract D).
+      // A later reprovision or cutover changes the channel, never the
+      // classification of a message that was already ingested and announced.
+      projectionModeAtIngest: channel.projectionMode,
+      trafficEnabledAtIngest: channel.trafficEnabledAt != null,
       tenantId: input.scope.tenantId,
       organizationId: input.scope.organizationId ?? null,
     })

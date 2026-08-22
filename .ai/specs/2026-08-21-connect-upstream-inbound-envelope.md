@@ -45,6 +45,16 @@ The DI key and plain schemas are additive STABLE surfaces. Document exact fields
 
 One deployable capability: bounded inbound metadata projection. It does not create Cases, identities, or UI.
 
+## Implementation Status
+
+| Phase | Status | Date | Notes |
+|-------|--------|------|-------|
+| ENV-UP-01 — envelope + opaque reply-target schemas and Reply-To policy | Done | 2026-08-22 | `lib/inbound-envelope.ts`; references are HMAC-signed and carry a source version so a policy change invalidates them |
+| ENV-UP-02 — reader + `resolveInboundReplyTarget` + hub DI registration | Done | 2026-08-22 | `communicationChannelsInboundEnvelopeReader`; event-time classification backed by new `projection_mode_at_ingest` / `traffic_enabled_at_ingest` columns on `message_channel_links` (`Migration20260822180000_communication_channels`) |
+| ENV-UP-03 — union, tuple, mode, reply and secrecy tests | Partial | 2026-08-22 | Unit coverage for every envelope and reply union member, each mixed-tuple component returning an undifferentiated `missing`, ingest-time vs current mode, pre-contract rows read as legacy, Reply-To precedence, ambiguous multi-party refusal, stale/forged/wrong-scope references, transient-before-provider retry, bounded fields, excluded fields and masked display. Foundation owns the retry/exception integration tests |
+| ENV-UP-04 — contract documentation + class (e) sign-off | Partial | 2026-08-22 | Documented in `apps/docs/docs/framework/modules/communication-channels.mdx` § Inbound envelope reader, including the explicit trusted-computing-base statement. **Named maintainer/security sign-off is still outstanding.** |
+
 ## Changelog
 
+- 2026-08-22: Implemented ENV-UP-01 and -02; unit coverage for -03 landed; docs written and sign-off outstanding for -04.
 - 2026-08-21: Added after implementer review proved the identifier-only event cannot support ingest decisions.
