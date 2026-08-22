@@ -87,7 +87,7 @@ export async function claimInboundReceipt(
     // The row vanished between the violation and this read — only possible if
     // something deleted it concurrently. Surface it rather than inventing a
     // second claim path.
-    throw new Error('[connect] inbound receipt conflict resolved to no winner')
+    throw new Error('[internal] inbound receipt conflict resolved to no winner')
   }
 
   if (winner.status === 'completed') return { status: 'duplicate', receipt: winner }

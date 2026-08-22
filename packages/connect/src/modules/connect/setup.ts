@@ -37,6 +37,9 @@ type SchedulerServiceLike = {
 /** Bounded, documented intervals. Recovery is a safety net, not a hot path. */
 const OUTBOX_SWEEP_INTERVAL_SECONDS = 60
 const RECEIPT_SWEEP_INTERVAL_SECONDS = 300
+const OUTBOUND_DISPATCH_SWEEP_INTERVAL_SECONDS = 60
+const RECONCILE_SWEEP_INTERVAL_SECONDS = 900
+const AUTO_CLOSE_SWEEP_INTERVAL_SECONDS = 3600
 
 /**
  * `scheduled_jobs.id` is a uuid column, so a module-owned schedule's stable key
@@ -51,9 +54,22 @@ function stableScheduleUuid(stableKey: string): string {
 
 export const setup: ModuleSetupConfig = {
   defaultRoleFeatures: {
-    superadmin: ['connect.settings.view', 'connect.settings.manage', 'connect.inbound.remediate'],
-    admin: ['connect.settings.view', 'connect.settings.manage', 'connect.inbound.remediate'],
-    manager: ['connect.settings.view'],
+    superadmin: ['connect.*'],
+    admin: ['connect.*'],
+    // A manager supervises the queue: sees everything in the organization,
+    // assigns and closes, and works the unknown-delivery queue.
+    manager: [
+      'connect.settings.view',
+      'connect.inbox.handle',
+      'connect.cases.view.all',
+      'connect.cases.assign',
+      'connect.cases.manage',
+      'connect.inbox.recovery.view',
+      'connect.inbox.recovery.acknowledge',
+    ],
+    // A front-line agent handles their own work and claims from the unassigned
+    // queue. Deliberately no `cases.view.all`, `assign` or `manage`.
+    employee: ['connect.inbox.handle'],
   },
 
   async seedDefaults({ container, organizationId, tenantId }) {
@@ -82,6 +98,30 @@ export const setup: ModuleSetupConfig = {
         seconds: RECEIPT_SWEEP_INTERVAL_SECONDS,
         description:
           'Recovers inbound receipts left processing by a crash, and dead-letters exhausted ones.',
+      },
+      {
+        key: `connect:${organizationId}:outbound-dispatch-sweep`,
+        name: 'Connect outbound dispatch sweep',
+        queue: CONNECT_QUEUES.outboundDispatch,
+        seconds: OUTBOUND_DISPATCH_SWEEP_INTERVAL_SECONDS,
+        description:
+          'Submits durable outbound rows the after-commit wake job did not pick up (crash, lost job).',
+      },
+      {
+        key: `connect:${organizationId}:outbound-reconcile-sweep`,
+        name: 'Connect outbound reconciliation sweep',
+        queue: CONNECT_QUEUES.outboundReconcile,
+        seconds: RECONCILE_SWEEP_INTERVAL_SECONDS,
+        description:
+          'Re-checks deliveries whose outcome is unknown, using the read-only status lookup. Never resends.',
+      },
+      {
+        key: `connect:${organizationId}:case-auto-close-sweep`,
+        name: 'Connect case auto-close sweep',
+        queue: CONNECT_QUEUES.caseAutoClose,
+        seconds: AUTO_CLOSE_SWEEP_INTERVAL_SECONDS,
+        description:
+          'Closes resolved cases whose quiet window has passed, through the same guarded transition command as an agent.',
       },
     ]
 

@@ -746,3 +746,367 @@ export class ConnectDomainOutboxEntry {
   @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
   updatedAt: Date = new Date()
 }
+
+// ── Outbound (Inbox Operations) ───────────────────────────────
+
+/**
+ * The agent's reply, as a LOGICAL message.
+ *
+ * Separate from the attempts that try to deliver it, because a retry must not
+ * duplicate the customer-visible message: one logical reply may have several
+ * attempts, and the client command key is what makes a lost 202 resolvable
+ * without sending twice.
+ */
+@Entity({ tableName: 'connect_outbound_messages' })
+@Unique({
+  name: 'connect_outbound_messages_command_uq',
+  properties: ['tenantId', 'organizationId', 'caseId', 'clientCommandKey'],
+})
+@Index({ name: 'connect_outbound_messages_case_idx', properties: ['tenantId', 'caseId', 'createdAt'] })
+export class ConnectOutboundMessage {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'maskedRecipientLabel' | 'erasedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'case_id', type: 'uuid' })
+  caseId!: string
+
+  @Property({ name: 'conversation_id', type: 'uuid' })
+  conversationId!: string
+
+  /**
+   * Browser-generated, stable for the life of a draft. A lost 202 is retried
+   * with the SAME key, which resolves to this row instead of enqueuing a second
+   * customer reply.
+   */
+  @Property({ name: 'client_command_key', type: 'text' })
+  clientCommandKey!: string
+
+  /** Encrypted at rest — this is the agent's message to the customer. */
+  @Property({ name: 'payload', type: 'text' })
+  payload!: string
+
+  /**
+   * Hash of the submitted content. A response retry must carry the same
+   * fingerprint; a different one under the same key means the draft changed,
+   * which is a new message rather than a retry.
+   */
+  @Property({ name: 'payload_fingerprint', type: 'text' })
+  payloadFingerprint!: string
+
+  /** Opaque Contract D reference. Connect never stores a chosen address. */
+  @Property({ name: 'reply_target_ref', type: 'text' })
+  replyTargetRef!: string
+
+  /** Masked label, safe to render. */
+  @Property({ name: 'masked_recipient_label', type: 'text', nullable: true })
+  maskedRecipientLabel?: string | null
+
+  @Property({ name: 'actor_user_id', type: 'uuid' })
+  actorUserId!: string
+
+  @Property({ name: 'channel_id', type: 'uuid' })
+  channelId!: string
+
+  /** Set when retention erased the ciphertext; the row itself is kept. */
+  @Property({ name: 'erased_at', type: Date, nullable: true })
+  erasedAt?: Date | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+/**
+ * Delivery states for one attempt.
+ *
+ * `unknown` is the state this whole design exists for: the provider may have
+ * accepted the message and we cannot tell. It is NEVER automatically resent,
+ * because a duplicate reply to a customer is worse than a delayed one.
+ */
+export type ConnectAttemptStatus = 'queued' | 'sending' | 'sent' | 'failed' | 'unknown'
+
+@Entity({ tableName: 'connect_outbound_attempts' })
+@Index({ name: 'connect_outbound_attempts_message_idx', properties: ['tenantId', 'messageId'] })
+@Index({ name: 'connect_outbound_attempts_status_idx', properties: ['tenantId', 'status', 'updatedAt'] })
+@Unique({ name: 'connect_outbound_attempts_correlation_uq', properties: ['tenantId', 'hubCorrelationId'] })
+// One child per predecessor: two operators clicking retry at once must not fork
+// an attempt chain and send the customer two replies.
+@Index({
+  name: 'connect_outbound_attempts_predecessor_uq',
+  expression:
+    `create unique index "connect_outbound_attempts_predecessor_uq" on "connect_outbound_attempts" ("tenant_id", "predecessor_attempt_id") where "predecessor_attempt_id" is not null`,
+})
+@Check({
+  name: 'connect_outbound_attempts_status_chk',
+  expression: `"status" in ('queued', 'sending', 'sent', 'failed', 'unknown')`,
+})
+export class ConnectOutboundAttempt {
+  [OptionalProps]?:
+    | 'createdAt'
+    | 'updatedAt'
+    | 'status'
+    | 'predecessorAttemptId'
+    | 'providerMessageId'
+    | 'errorReason'
+    | 'dispatchedAt'
+    | 'settledAt'
+    | 'deliveryRevision'
+    | 'consumedByRetry'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'message_id', type: 'uuid' })
+  messageId!: string
+
+  @Property({ name: 'case_id', type: 'uuid' })
+  caseId!: string
+
+  /** The attempt this one replaces. Only a FAILED attempt may have a child. */
+  @Property({ name: 'predecessor_attempt_id', type: 'uuid', nullable: true })
+  predecessorAttemptId?: string | null
+
+  @Property({ name: 'attempt_number', type: 'int' })
+  attemptNumber!: number
+
+  /**
+   * Immutable per attempt, generated BEFORE enqueue. Contract A binds it to the
+   * attempt, so an outcome event that carries a different correlation cannot be
+   * applied to this attempt.
+   */
+  @Property({ name: 'hub_correlation_id', type: 'text' })
+  hubCorrelationId!: string
+
+  @Property({ name: 'status', type: 'text', default: 'queued' })
+  status: ConnectAttemptStatus = 'queued'
+
+  @Property({ name: 'provider_message_id', type: 'text', nullable: true })
+  providerMessageId?: string | null
+
+  @Property({ name: 'error_reason', type: 'text', nullable: true })
+  errorReason?: string | null
+
+  /**
+   * Highest delivery revision applied. Outcomes arrive out of order, so a lower
+   * revision is ignored rather than allowed to regress a terminal decision.
+   */
+  @Property({ name: 'delivery_revision', type: 'int', default: 0 })
+  deliveryRevision: number = 0
+
+  @Property({ name: 'dispatched_at', type: Date, nullable: true })
+  dispatchedAt?: Date | null
+
+  @Property({ name: 'settled_at', type: Date, nullable: true })
+  settledAt?: Date | null
+
+  /** Set when a retry consumed this failed attempt, so it cannot be retried twice. */
+  @Property({ name: 'consumed_by_retry', type: 'boolean', default: false })
+  consumedByRetry: boolean = false
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+export type ConnectOutboxDispatchStatus = 'pending' | 'dispatched' | 'abandoned'
+
+/**
+ * The dispatch outbox row, written in the SAME transaction as the message and
+ * its first attempt.
+ *
+ * That is what makes a crash between "202 returned" and "job enqueued"
+ * recoverable: the durable row is the instruction, and the queue job is only an
+ * optimisation.
+ */
+@Entity({ tableName: 'connect_outbox' })
+@Unique({ name: 'connect_outbox_attempt_uq', properties: ['tenantId', 'attemptId'] })
+@Index({ name: 'connect_outbox_pending_idx', properties: ['status', 'leaseExpiresAt'] })
+@Check({
+  name: 'connect_outbox_status_chk',
+  expression: `"status" in ('pending', 'dispatched', 'abandoned')`,
+})
+export class ConnectOutbox {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'status' | 'leaseExpiresAt' | 'dispatchedAt' | 'attempts'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'attempt_id', type: 'uuid' })
+  attemptId!: string
+
+  @Property({ name: 'payload_fingerprint', type: 'text' })
+  payloadFingerprint!: string
+
+  @Property({ name: 'status', type: 'text', default: 'pending' })
+  status: ConnectOutboxDispatchStatus = 'pending'
+
+  @Property({ name: 'lease_expires_at', type: Date, nullable: true })
+  leaseExpiresAt?: Date | null
+
+  @Property({ name: 'dispatched_at', type: Date, nullable: true })
+  dispatchedAt?: Date | null
+
+  @Property({ name: 'attempts', type: 'int', default: 0 })
+  attempts: number = 0
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+/** Append-only record of who moved a Case between agents, and why. */
+@Entity({ tableName: 'connect_assignment_audits' })
+@Index({ name: 'connect_assignment_audits_case_idx', properties: ['tenantId', 'caseId', 'createdAt'] })
+export class ConnectAssignmentAudit {
+  [OptionalProps]?: 'createdAt' | 'fromAssigneeUserId' | 'toAssigneeUserId' | 'reason'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'case_id', type: 'uuid' })
+  caseId!: string
+
+  @Property({ name: 'actor_user_id', type: 'uuid' })
+  actorUserId!: string
+
+  @Property({ name: 'from_assignee_user_id', type: 'uuid', nullable: true })
+  fromAssigneeUserId?: string | null
+
+  @Property({ name: 'to_assignee_user_id', type: 'uuid', nullable: true })
+  toAssigneeUserId?: string | null
+
+  @Property({ name: 'reason', type: 'text', nullable: true })
+  reason?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+}
+
+/**
+ * Per-user unread watermark.
+ *
+ * Per USER, not per Case: unread is a property of one agent's attention, so it
+ * must not transfer with an assignment — a manager reassigning a Case should not
+ * silently mark it read for the new owner.
+ */
+@Entity({ tableName: 'connect_case_read_states' })
+@Unique({
+  name: 'connect_case_read_states_user_uq',
+  properties: ['tenantId', 'organizationId', 'caseId', 'userId'],
+})
+export class ConnectCaseReadState {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'lastReadAt' | 'lastReadExternalMessageId'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'case_id', type: 'uuid' })
+  caseId!: string
+
+  @Property({ name: 'user_id', type: 'uuid' })
+  userId!: string
+
+  @Property({ name: 'last_read_at', type: Date, nullable: true })
+  lastReadAt?: Date | null
+
+  @Property({ name: 'last_read_external_message_id', type: 'uuid', nullable: true })
+  lastReadExternalMessageId?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+/**
+ * An attempt whose outcome could not be determined, surfaced for a human.
+ *
+ * Phase 1 supports refresh and acknowledge ONLY — no force-sent / force-failed.
+ * Asserting an outcome the provider never confirmed is exactly how a customer
+ * gets a duplicate reply or a silently dropped one.
+ */
+@Entity({ tableName: 'connect_unknown_deliveries' })
+@Unique({ name: 'connect_unknown_deliveries_attempt_uq', properties: ['tenantId', 'attemptId'] })
+@Index({ name: 'connect_unknown_deliveries_open_idx', properties: ['tenantId', 'organizationId', 'acknowledgedAt'] })
+export class ConnectUnknownDelivery {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'acknowledgedAt' | 'acknowledgedByUserId' | 'acknowledgeReason' | 'lookupSupported' | 'lastCheckedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'case_id', type: 'uuid' })
+  caseId!: string
+
+  @Property({ name: 'attempt_id', type: 'uuid' })
+  attemptId!: string
+
+  @Property({ name: 'channel_id', type: 'uuid' })
+  channelId!: string
+
+  /** Whether the provider can corroborate at all — drives the operator's options. */
+  @Property({ name: 'lookup_supported', type: 'boolean', nullable: true })
+  lookupSupported?: boolean | null
+
+  @Property({ name: 'last_checked_at', type: Date, nullable: true })
+  lastCheckedAt?: Date | null
+
+  @Property({ name: 'acknowledged_at', type: Date, nullable: true })
+  acknowledgedAt?: Date | null
+
+  @Property({ name: 'acknowledged_by_user_id', type: 'uuid', nullable: true })
+  acknowledgedByUserId?: string | null
+
+  @Property({ name: 'acknowledge_reason', type: 'text', nullable: true })
+  acknowledgeReason?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}

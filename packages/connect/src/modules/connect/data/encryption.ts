@@ -25,6 +25,13 @@ export const defaultEncryptionMaps: ModuleEncryptionMap[] = [
     entityId: 'connect:connect_contact_identity',
     fields: [{ field: 'handle_value', hashField: 'handle_hash' }],
   },
+  {
+    // The agent's reply to the customer. Retention erases the ciphertext once
+    // no retry or reconciliation still needs it; the row itself is kept so the
+    // delivery history stays auditable.
+    entityId: 'connect:connect_outbound_message',
+    fields: [{ field: 'payload' }],
+  },
 ]
 
 export default defaultEncryptionMaps

@@ -46,6 +46,40 @@ const events = [
     category: 'lifecycle',
     clientBroadcast: true,
   },
+  {
+    id: 'connect.case.assigned',
+    label: 'Case Assigned',
+    entity: 'case',
+    category: 'lifecycle',
+    clientBroadcast: true,
+  },
+  {
+    id: 'connect.case.resolved',
+    label: 'Case Resolved',
+    entity: 'case',
+    category: 'lifecycle',
+    clientBroadcast: true,
+  },
+  {
+    id: 'connect.case.reopened',
+    label: 'Case Reopened',
+    entity: 'case',
+    category: 'lifecycle',
+    clientBroadcast: true,
+  },
+  {
+    id: 'connect.outbound.attempted',
+    label: 'Outbound Reply Attempted',
+    entity: 'outbound_attempt',
+    category: 'lifecycle',
+  },
+  {
+    id: 'connect.outbound.status_changed',
+    label: 'Outbound Delivery Status Changed',
+    entity: 'outbound_attempt',
+    category: 'lifecycle',
+    clientBroadcast: true,
+  },
   /**
    * Emitted when a handle could not be matched to a customer with enough
    * confidence. Downstream matching/curation reacts to this; it deliberately
