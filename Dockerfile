@@ -28,6 +28,7 @@ COPY packages/channel-gmail/package.json ./packages/channel-gmail/
 COPY packages/channel-imap/package.json ./packages/channel-imap/
 COPY packages/checkout/package.json ./packages/checkout/
 COPY packages/cli/package.json ./packages/cli/
+COPY packages/connect/package.json ./packages/connect/
 COPY packages/content/package.json ./packages/content/
 COPY packages/core/package.json ./packages/core/
 COPY packages/create-app/package.json ./packages/create-app/
@@ -104,6 +105,7 @@ COPY packages/channel-gmail/package.json ./packages/channel-gmail/
 COPY packages/channel-imap/package.json ./packages/channel-imap/
 COPY packages/checkout/package.json ./packages/checkout/
 COPY packages/cli/package.json ./packages/cli/
+COPY packages/connect/package.json ./packages/connect/
 COPY packages/content/package.json ./packages/content/
 COPY packages/core/package.json ./packages/core/
 COPY packages/create-app/package.json ./packages/create-app/
@@ -230,6 +232,7 @@ COPY --from=builder /app/packages/channel-gmail/package.json ./packages/channel-
 COPY --from=builder /app/packages/channel-imap/package.json ./packages/channel-imap/
 COPY --from=builder /app/packages/checkout/package.json ./packages/checkout/
 COPY --from=builder /app/packages/cli/package.json ./packages/cli/
+COPY --from=builder /app/packages/connect/package.json ./packages/connect/
 COPY --from=builder /app/packages/content/package.json ./packages/content/
 COPY --from=builder /app/packages/core/package.json ./packages/core/
 COPY --from=builder /app/packages/create-app/package.json ./packages/create-app/
