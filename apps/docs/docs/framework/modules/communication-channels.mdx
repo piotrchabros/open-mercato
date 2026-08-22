@@ -358,6 +358,76 @@ OM_INTEGRATION_MODULES=communication_channels,channel-imap,channel-gmail \
   yarn test:integration                      # email-foundation slice only
 ```
 
+## Inbound envelope reader
+
+`communication_channels.message.received` is identifier-only by design — a persistent event
+store must not hold raw PII. But Connect's ingest cannot classify a mail loop, hash an identity,
+or set a Case subject from identifiers alone, and it must not query peer tables to get them.
+
+Connect upstream Contract D (`.ai/specs/2026-08-21-connect-upstream-inbound-envelope.md`) is the
+bounded, server-only way across that gap.
+
+| DI key | Operations |
+|--------|-----------|
+| `communicationChannelsInboundEnvelopeReader` | `readEnvelope(container, tuple)`, `resolveReplyTarget(container, input)` |
+
+### Threat model, stated plainly
+
+Open Mercato modules share one trusted server process, and DI is **not** a sandbox against
+malicious installed code. This is a class (e) contract that deliberately enlarges the trusted
+computing base, and a caller-supplied module id would be theatre rather than authorization.
+Named maintainer/security approval of that threat model is required.
+
+What the contract *does* provide is that accidental misuse by a trusted module is structurally
+hard, and that the blast radius stays small:
+
+- the caller must present the **complete tuple** from one event (tenant, organization, channel,
+  conversation, message, external message, link). A mixed or partial tuple returns `missing`
+  **without saying which component failed**;
+- the projection is length- and enum-bounded and excludes raw headers, HTML, body, attachments,
+  credentials and ORM entities;
+- the sender handle is available only here. Connect encrypts or hashes it immediately, and it is
+  never logged or persisted in an event;
+- the reply address never crosses the boundary at all — only an opaque reference and a masked
+  label.
+
+### Event-time classification
+
+Each inbound link stores `projection_mode_at_ingest` and `traffic_enabled_at_ingest`. The reader
+classifies from that snapshot, never from the channel's current state, so a later reprovision,
+reconnect or cutover **cannot change how an already emitted event is classified**. Without it, a
+message ingested while a channel was legacy could later be handed to Connect (double projection)
+or vice versa (no projection at all). Rows written before this contract have no snapshot and are
+read as `legacy_customers` — which is what those channels were.
+
+Direction and historical ownership are likewise validated from the immutable ingest record, so
+deactivating a channel does not invalidate a legitimate past event.
+
+`readEnvelope` returns `found | missing | not_connect_managed | channel_disabled |
+transient_error | permanent_invalid`. A database blip is `transient_error` (retryable); an
+inbound record with no sender is `permanent_invalid` (it will never become resolvable).
+
+### Reply targets
+
+`found` carries an opaque `replyTargetRef` and a masked label such as `a…e@example.com`.
+`resolveReplyTarget` turns that reference back into an address at send enqueue and again at
+dispatch. It returns
+`resolved:{ kind: 'reply_to' | 'sender', canonicalRecipientInternal, maskedLabel } |
+transient_error | stale_or_wrong_ref | ambiguous_multi_party | unavailable`.
+
+- The reference is HMAC-signed (`OM_INBOUND_REPLY_REF_SECRET`, falling back to a
+  `KMS_MASTER_KEY`-derived subkey, fail-closed in production) and binds the tenant, organization,
+  channel, conversation and link plus a **source version**. Bumping the version when the
+  resolution policy changes means a stored reference can never quietly start meaning a different
+  address.
+- **Reply-To takes precedence over the sender** — that is what the sender asked for.
+- **Multiple Reply-To addresses are refused, not guessed.** Picking one on a customer's behalf is
+  a disclosure decision the hub is not entitled to make.
+- No outcome here is ever `unknown`; that status is reserved for a send that may have crossed
+  provider dispatch. Every failure except `transient_error` is definitive *before* any provider
+  call, and `transient_error` keeps the send queued for a bounded retry.
+- The browser never chooses an address: it only ever sees the masked label.
+
 ## Authorized thread reader
 
 A downstream inbox module needs to render inbound thread bodies and direction. It cannot query

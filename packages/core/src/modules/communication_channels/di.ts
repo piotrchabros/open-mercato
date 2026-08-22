@@ -17,6 +17,7 @@ import { sendAsUser } from './lib/send-as-user'
 import { checkSharedInboxAuthorization } from './lib/shared-inbox-authorization'
 import { lookupSendStatus } from './lib/send-status-lookup'
 import { readAuthorizedThreads } from './lib/thread-reader'
+import { readInboundEnvelope, resolveInboundReplyTarget } from './lib/inbound-envelope'
 
 export function register(container: AppContainer) {
   // Test-only: register the network-free stub channel adapter when
@@ -65,5 +66,15 @@ export function register(container: AppContainer) {
     // no ORM entity, entity manager or query callback crosses DI.
     // See lib/thread-reader.ts.
     communicationChannelsThreadReader: asValue(readAuthorizedThreads),
+
+    // Bounded inbound metadata projection for Connect ingest (Connect upstream
+    // Contract D). `readEnvelope` classifies one event's exact tuple;
+    // `resolveReplyTarget` turns an opaque reference back into a recipient at
+    // send time. The raw address never crosses the boundary.
+    // See lib/inbound-envelope.ts.
+    communicationChannelsInboundEnvelopeReader: asValue({
+      readEnvelope: readInboundEnvelope,
+      resolveReplyTarget: resolveInboundReplyTarget,
+    }),
   })
 }
