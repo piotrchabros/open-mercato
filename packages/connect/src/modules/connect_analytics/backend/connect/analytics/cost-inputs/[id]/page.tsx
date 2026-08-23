@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
 import { Page, PageBody } from '@open-mercato/ui/backend/Page'
 import { CrudForm } from '@open-mercato/ui/backend/CrudForm'
@@ -49,10 +49,9 @@ function toDateTimeLocalUtc(value: string | null): string {
   return date.toISOString().slice(0, 16)
 }
 
-export default function EditConnectCostInputPage() {
+export default function EditConnectCostInputPage({ params }: { params?: { id?: string } }) {
   const translate = useT()
   const router = useRouter()
-  const params = useParams<{ id: string }>()
   const recordId = typeof params?.id === 'string' ? params.id : ''
   const { fields, groups, currency } = useCostInputFormLayout(translate)
 
@@ -64,7 +63,11 @@ export default function EditConnectCostInputPage() {
   React.useEffect(() => {
     let cancelled = false
     async function load() {
-      if (!recordId) return
+      if (!recordId) {
+        setLoadFailed(true)
+        setLoading(false)
+        return
+      }
       setLoading(true)
       const call = await apiCall<CostInputDetailResponse>(
         `/api/connect_analytics/cost-inputs?id=${encodeURIComponent(recordId)}`,
