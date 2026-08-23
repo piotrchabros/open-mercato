@@ -3,6 +3,7 @@ import {
   CONNECT_ANALYTICS_OPERATIONAL_FORMULA_VERSION,
   composeOperationalReport,
   countUtcDays,
+  defaultOperationalRange,
   emptyOperationalReport,
   operationalReportSchema,
   resolveOperationalRange,
@@ -37,6 +38,10 @@ function day(overrides: Partial<ConnectOperationalMetricDay> = {}): ConnectOpera
 }
 
 describe('resolveOperationalRange', () => {
+  it('builds the default 30 complete-day cohort without a client-module dependency', () => {
+    expect(defaultOperationalRange('2026-08-23')).toEqual({ from: '2026-07-24', to: '2026-08-22' })
+  })
+
   it('rejects an inverted range', () => {
     expect(resolveOperationalRange({ from: '2026-08-10', to: '2026-08-01', todayUtc: '2026-08-23' }))
       .toEqual({ kind: 'invalid_range' })

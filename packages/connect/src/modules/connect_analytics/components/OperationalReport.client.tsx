@@ -33,20 +33,7 @@ import type { OperationalReport } from '../lib/report-composer'
 
 export type OperationalReportFailure = 'unavailable' | 'load'
 
-const DEFAULT_RANGE_DAYS = 30
-
 type ApiFailureBody = { code?: string }
-
-function shiftUtcDate(day: string, delta: number): string {
-  return new Date(new Date(`${day}T00:00:00.000Z`).getTime() + delta * 86_400_000)
-    .toISOString()
-    .slice(0, 10)
-}
-
-export function defaultOperationalRange(todayUtc: string): { from: string; to: string } {
-  const to = shiftUtcDate(todayUtc, -1)
-  return { from: shiftUtcDate(to, -(DEFAULT_RANGE_DAYS - 1)), to }
-}
 
 function formatSeconds(value: number | null): string | null {
   if (value === null) return null

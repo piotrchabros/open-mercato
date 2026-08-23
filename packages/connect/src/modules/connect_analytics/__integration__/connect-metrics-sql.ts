@@ -120,10 +120,11 @@ export async function deleteMetricDays(
   utcDates: string[],
 ): Promise<void> {
   if (!utcDates.length) return
+  const datePlaceholders = utcDates.map(() => '?').join(', ')
   await em.getConnection().execute(
     `delete from connect_metric_daily
-      where tenant_id = ? and organization_id = ? and utc_date = any(?)`,
-    [scope.tenantId, scope.organizationId, utcDates],
+      where tenant_id = ? and organization_id = ? and utc_date in (${datePlaceholders})`,
+    [scope.tenantId, scope.organizationId, ...utcDates],
   )
 }
 
@@ -132,10 +133,12 @@ export async function countMetricDays(
   scope: MetricDayScope,
   utcDates: string[],
 ): Promise<number> {
+  if (!utcDates.length) return 0
+  const datePlaceholders = utcDates.map(() => '?').join(', ')
   const rows = await em.getConnection().execute<{ count: string }[]>(
     `select count(*)::text as count from connect_metric_daily
-      where tenant_id = ? and organization_id = ? and utc_date = any(?)`,
-    [scope.tenantId, scope.organizationId, utcDates],
+      where tenant_id = ? and organization_id = ? and utc_date in (${datePlaceholders})`,
+    [scope.tenantId, scope.organizationId, ...utcDates],
   )
   return Number(rows[0]?.count ?? '0')
 }
