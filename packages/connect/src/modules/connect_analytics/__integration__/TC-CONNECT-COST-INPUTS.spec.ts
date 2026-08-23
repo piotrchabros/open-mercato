@@ -278,13 +278,13 @@ test.describe('TC-CONNECT-COST-INPUTS', () => {
       expect(crossScopeUpdate.status()).toBe(404)
       expect((await readCostInputRow(em, siblingId))?.amount_minor).toBe('777')
 
-      // A client-supplied scope is refused outright by the strict create
-      // schema — it never reaches the command, so it can never be honoured.
+      // The platform's mutation guard rejects client-supplied scope before the
+      // route command runs, so the spoofed scope can never be honoured.
       const spoofed = await apiRequest(request, 'POST', COLLECTION, {
         token,
         data: { ...manualRow(currencyCode), tenantId: foreignTenantId, organizationId: siblingOrganizationId },
       })
-      expect(spoofed.status()).toBe(422)
+      expect(spoofed.status()).toBe(403)
       expect(await countCostInputs(em, { tenantId: foreignTenantId, organizationId: siblingOrganizationId })).toBe(0)
     } finally {
       await hardDeleteCostInputs(em, created)

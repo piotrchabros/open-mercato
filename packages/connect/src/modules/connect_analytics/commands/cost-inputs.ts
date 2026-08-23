@@ -304,12 +304,20 @@ function requireScope(ctx: { auth: { tenantId?: string | null } | null; selected
   return { tenantId, organizationId }
 }
 
+function withoutCommandScope(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw
+  const input = { ...raw } as Record<string, unknown>
+  delete input.tenantId
+  delete input.organizationId
+  return input
+}
+
 // ── create ────────────────────────────────────────────────────
 
 const createCostInputCommand: CommandHandler<Record<string, unknown>, CostInputCommandResult> = {
   id: 'connect_analytics.cost_input.create',
   async execute(rawInput, ctx) {
-    const parsed = costInputCreateSchema.parse(rawInput)
+    const parsed = costInputCreateSchema.parse(withoutCommandScope(rawInput))
     const scope = requireScope(ctx, rawInput)
     ensureTenantScope(ctx, scope.tenantId)
     ensureOrganizationScope(ctx, scope.organizationId)
@@ -448,7 +456,7 @@ const createCostInputCommand: CommandHandler<Record<string, unknown>, CostInputC
 const updateCostInputCommand: CommandHandler<Record<string, unknown>, CostInputCommandResult> = {
   id: 'connect_analytics.cost_input.update',
   async prepare(rawInput, ctx) {
-    const parsed = costInputUpdateSchema.parse(rawInput)
+    const parsed = costInputUpdateSchema.parse(withoutCommandScope(rawInput))
     const scope = requireScope(ctx, rawInput)
     const em = (ctx.container.resolve('em') as EntityManager).fork()
     const record = await findCostInput(em, parsed.id, scope, false)
@@ -458,7 +466,7 @@ const updateCostInputCommand: CommandHandler<Record<string, unknown>, CostInputC
     return { before: snapshotOf(record) }
   },
   async execute(rawInput, ctx) {
-    const parsed = costInputUpdateSchema.parse(rawInput)
+    const parsed = costInputUpdateSchema.parse(withoutCommandScope(rawInput))
     const scope = requireScope(ctx, rawInput)
     ensureTenantScope(ctx, scope.tenantId)
     ensureOrganizationScope(ctx, scope.organizationId)

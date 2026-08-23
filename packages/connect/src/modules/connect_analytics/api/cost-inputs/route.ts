@@ -59,6 +59,14 @@ function requireScope(ctx: CrudCtx, translate: TranslateFn): { tenantId: string;
   return { tenantId, organizationId }
 }
 
+function stripFactoryScope(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw
+  const input = { ...raw } as Record<string, unknown>
+  delete input.tenantId
+  delete input.organizationId
+  return input
+}
+
 /**
  * Re-throws a Zod failure as the published 422 vocabulary so a client can branch
  * on `code` instead of parsing issue paths.
@@ -226,7 +234,7 @@ async function mapCreateInput({ raw, ctx }: { raw: unknown; ctx: CrudCtx }) {
   const scope = requireScope(ctx, translate)
   let parsed: z.infer<typeof costInputCreateSchema>
   try {
-    parsed = costInputCreateSchema.parse(raw ?? {})
+    parsed = costInputCreateSchema.parse(stripFactoryScope(raw) ?? {})
   } catch (err) {
     rethrowAsCostInputError(err, translate)
   }
@@ -247,7 +255,7 @@ async function mapUpdateInput({ raw, ctx }: { raw: unknown; ctx: CrudCtx }) {
   const scope = requireScope(ctx, translate)
   let parsed: z.infer<typeof costInputUpdateSchema>
   try {
-    parsed = costInputUpdateSchema.parse(raw ?? {})
+    parsed = costInputUpdateSchema.parse(stripFactoryScope(raw) ?? {})
   } catch (err) {
     rethrowAsCostInputError(err, translate)
   }
