@@ -93,7 +93,7 @@ Unique operation identity; index `(tenant_id, organization_id, user_id, created_
 
 ## Audit and Undo
 
-Real changes log only command/resource/operation tokens, before/after kinds, and flags. Full input/user ID are excluded. Replay/no-op skips generic logging; the ledger remains authoritative.
+The redacted immutable Connect ledger is the authoritative audit record. Generic command logging is skipped for every ensure/undo outcome because the shared command bus automatically embeds the original input for redo, which would persist the prohibited user ID/reference payload. Logs outside the action log expose only bounded operation tokens/counts. This is the external-only equivalent of the intended sanitized log and avoids a Core change.
 
 Undo is system-only with a fresh operation ID and a strict contract:
 
@@ -221,6 +221,12 @@ Validation: generate, targeted Connect tests/build/typecheck, integration, decou
 **Ready to implement after the Connect classification extension.**
 
 ## Changelog
+
+### 2026-08-23
+
+- Undo now accepts a ledger entry that only created the classification, making the tombstone path reachable; manifest retirement previously always failed with `retirement_conflict`.
+- The request fingerprint covers operation intent only and excludes `expectedUpdatedAt` and absent optional fields, so a reconcile pass that newly observes a version replays instead of conflicting.
+- The durable manifest entry stores the `revision` that the spec already required in the deterministic operation ID, so re-registering a retired external key provisions a fresh classification rather than replaying the retired operation.
 
 ### 2026-08-22
 

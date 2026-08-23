@@ -35,6 +35,188 @@ export type ConnectCaseStatus =
 
 export type ConnectCasePriority = 'low' | 'normal' | 'high' | 'urgent'
 
+export type ConnectPrincipalKind = 'human' | 'system_bot' | 'integration'
+
+@Entity({ tableName: 'connect_principal_classifications' })
+@Unique({
+  name: 'connect_principal_classifications_scope_user_uq',
+  properties: ['tenantId', 'organizationId', 'userId'],
+})
+@Index({
+  name: 'connect_principal_classifications_scope_user_idx',
+  properties: ['tenantId', 'organizationId', 'userId'],
+})
+@Check({
+  name: 'connect_principal_classifications_kind_chk',
+  expression: `"kind" in ('human', 'system_bot', 'integration')`,
+})
+export class ConnectPrincipalClassification {
+  [OptionalProps]?: 'createdAt' | 'updatedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'user_id', type: 'uuid' })
+  userId!: string
+
+  @Property({ name: 'kind', type: 'text' })
+  kind!: ConnectPrincipalKind
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+export type ConnectPrincipalClassificationChangeOutcome = 'completed' | 'undone'
+
+@Entity({ tableName: 'connect_principal_classification_changes' })
+@Unique({
+  name: 'connect_principal_classification_changes_operation_uq',
+  properties: ['tenantId', 'organizationId', 'source', 'operationId'],
+})
+@Index({
+  name: 'connect_principal_classification_changes_user_idx',
+  properties: ['tenantId', 'organizationId', 'userId', 'createdAt'],
+})
+@Check({
+  name: 'connect_principal_classification_changes_kind_chk',
+  expression: `("tombstoned_classification" = true and "before_kind" is not null and "after_kind" is null and "result_updated_at" is null) or ("tombstoned_classification" = false and "after_kind" is not null and "result_updated_at" is not null)`,
+})
+@Check({
+  name: 'connect_principal_classification_changes_outcome_chk',
+  expression: `"outcome" in ('completed', 'undone')`,
+})
+export class ConnectPrincipalClassificationChange {
+  [OptionalProps]?: 'createdAt' | 'beforeKind' | 'referenceId' | 'inverseOfId'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'operation_id', type: 'uuid' })
+  operationId!: string
+
+  @Property({ name: 'source', type: 'string', length: 100 })
+  source!: string
+
+  @Property({ name: 'request_fingerprint', type: 'string', length: 64 })
+  requestFingerprint!: string
+
+  @Property({ name: 'classification_id', type: 'uuid' })
+  classificationId!: string
+
+  @Property({ name: 'user_id', type: 'uuid' })
+  userId!: string
+
+  @Property({ name: 'before_kind', type: 'text', nullable: true })
+  beforeKind?: ConnectPrincipalKind | null
+
+  @Property({ name: 'after_kind', type: 'text', nullable: true })
+  afterKind!: ConnectPrincipalKind | null
+
+  @Property({ name: 'created_classification', type: 'boolean' })
+  createdClassification!: boolean
+
+  @Property({ name: 'changed_classification', type: 'boolean' })
+  changedClassification!: boolean
+
+  @Property({ name: 'tombstoned_classification', type: 'boolean' })
+  tombstonedClassification!: boolean
+
+  @Property({ name: 'result_updated_at', type: Date, nullable: true })
+  resultUpdatedAt!: Date | null
+
+  @Property({ name: 'outcome', type: 'text' })
+  outcome!: ConnectPrincipalClassificationChangeOutcome
+
+  @Property({ name: 'reason_code', type: 'string', length: 100 })
+  reasonCode!: string
+
+  @Property({ name: 'reference_id', type: 'string', length: 160, nullable: true })
+  referenceId?: string | null
+
+  @Property({ name: 'inverse_of_id', type: 'uuid', nullable: true })
+  inverseOfId?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+}
+
+@Entity({ tableName: 'connect_principal_classification_manifest_entries' })
+@Unique({
+  name: 'connect_principal_manifest_scope_external_key_uq',
+  properties: ['tenantId', 'organizationId', 'externalKey'],
+})
+@Unique({
+  name: 'connect_principal_manifest_scope_user_uq',
+  properties: ['tenantId', 'organizationId', 'userId'],
+})
+@Check({
+  name: 'connect_principal_manifest_kind_chk',
+  expression: `"kind" in ('human', 'system_bot', 'integration')`,
+})
+export class ConnectPrincipalClassificationManifestEntry {
+  [OptionalProps]?: 'active' | 'revision' | 'lastReconciledAt' | 'lastResultCode' | 'createdAt' | 'updatedAt' | 'referenceId'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'external_key', type: 'string', length: 100 })
+  externalKey!: string
+
+  @Property({ name: 'user_id', type: 'uuid' })
+  userId!: string
+
+  @Property({ name: 'kind', type: 'text' })
+  kind!: ConnectPrincipalKind
+
+  @Property({ name: 'reason_code', type: 'string', length: 100 })
+  reasonCode!: string
+
+  @Property({ name: 'reference_id', type: 'string', length: 160, nullable: true })
+  referenceId?: string | null
+
+  @Property({ name: 'operation_id', type: 'uuid' })
+  operationId!: string
+
+  @Property({ name: 'revision', type: 'integer', default: 1 })
+  revision: number = 1
+
+  @Property({ name: 'active', type: 'boolean', default: true })
+  active: boolean = true
+
+  @Property({ name: 'last_reconciled_at', type: Date, nullable: true })
+  lastReconciledAt?: Date | null
+
+  @Property({ name: 'last_result_code', type: 'string', length: 100, nullable: true })
+  lastResultCode?: string | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
 @Entity({ tableName: 'connect_cases' })
 @Unique({ name: 'connect_cases_number_uq', properties: ['tenantId', 'organizationId', 'number'] })
 // The attach rule enumerates eligible legacy candidates by
