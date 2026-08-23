@@ -59,7 +59,7 @@ export default function EditConnectCostInputPage() {
   const [record, setRecord] = React.useState<CostInputRecord | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [notFound, setNotFound] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
+  const [loadFailed, setLoadFailed] = React.useState(false)
 
   React.useEffect(() => {
     let cancelled = false
@@ -73,7 +73,7 @@ export default function EditConnectCostInputPage() {
       )
       if (cancelled) return
       if (!call.ok) {
-        setError(translate('connect_analytics.costInputs.form.loadError'))
+        setLoadFailed(true)
         setLoading(false)
         return
       }
@@ -86,7 +86,7 @@ export default function EditConnectCostInputPage() {
     return () => {
       cancelled = true
     }
-  }, [recordId, translate])
+  }, [recordId])
 
   const initialValues = React.useMemo<CostInputFormValues | null>(() => {
     if (!record) return null
@@ -131,11 +131,11 @@ export default function EditConnectCostInputPage() {
     )
   }
 
-  if (error || !record || !initialValues) {
+  if (loadFailed || !record || !initialValues) {
     return (
       <Page>
         <PageBody>
-          <ErrorMessage label={error ?? translate('connect_analytics.costInputs.form.loadError')} />
+          <ErrorMessage label={translate('connect_analytics.costInputs.form.loadError')} />
         </PageBody>
       </Page>
     )

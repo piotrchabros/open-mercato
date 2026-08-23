@@ -23,6 +23,7 @@ import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { surfaceRecordConflict } from '@open-mercato/ui/backend/conflicts'
 import { Button } from '@open-mercato/ui/primitives/button'
 import { StatusBadge } from '@open-mercato/ui/primitives/status-badge'
+import { formatCostAmount } from '../../../../lib/format-cost-amount'
 
 type CostInputRow = {
   id: string
@@ -51,17 +52,6 @@ function formatUtcDay(value: string | null, emptyLabel: string): string {
   if (!value) return emptyLabel
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? emptyLabel : date.toISOString().slice(0, 10)
-}
-
-/**
- * Renders minor units without ever converting the string to a JavaScript
- * number: `Intl.NumberFormat` accepts a decimal string, and a 64-bit minor-unit
- * amount does not survive IEEE-754.
- */
-function formatAmount(amountMinor: string | null, currencyCode: string | null, locale: string, emptyLabel: string): string {
-  if (!amountMinor || !/^\d+$/.test(amountMinor)) return emptyLabel
-  const formatted = new Intl.NumberFormat(locale || undefined).format(BigInt(amountMinor))
-  return currencyCode ? `${formatted} ${currencyCode}` : formatted
 }
 
 export default function ConnectCostInputsPage() {
@@ -220,7 +210,7 @@ export default function ConnectCostInputsPage() {
     {
       accessorKey: 'amountMinor',
       header: translate('connect_analytics.costInputs.list.columns.amount'),
-      cell: ({ row }) => formatAmount(row.original.amountMinor, row.original.currencyCode, locale, emptyLabel),
+      cell: ({ row }) => formatCostAmount(row.original.amountMinor, row.original.currencyCode, locale, emptyLabel),
       meta: { align: 'right' },
     },
     {
