@@ -4,11 +4,11 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import {
   OperationalReportClient,
-  defaultOperationalRange,
   type OperationalReportFailure,
 } from '@open-mercato/connect/modules/connect_analytics/components/OperationalReport.client'
 import { loadOperationalReport } from '@open-mercato/connect/modules/connect_analytics/lib/load-operational-report'
 import {
+  defaultOperationalRange,
   shiftUtcDate,
   utcToday,
   type OperationalReport,

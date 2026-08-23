@@ -22,6 +22,7 @@ import {
 
 export const CONNECT_ANALYTICS_OPERATIONAL_FORMULA_VERSION = 'connect_analytics.operational.v1'
 export const CONNECT_ANALYTICS_MAX_RANGE_DAYS = 92
+export const CONNECT_ANALYTICS_DEFAULT_RANGE_DAYS = 30
 
 const MS_PER_DAY = 86_400_000
 
@@ -86,6 +87,11 @@ export function shiftUtcDate(day: string, delta: number): string {
   return new Date(new Date(`${day}T00:00:00.000Z`).getTime() + delta * MS_PER_DAY)
     .toISOString()
     .slice(0, 10)
+}
+
+export function defaultOperationalRange(todayUtc: string): { from: string; to: string } {
+  const to = shiftUtcDate(todayUtc, -1)
+  return { from: shiftUtcDate(to, -(CONNECT_ANALYTICS_DEFAULT_RANGE_DAYS - 1)), to }
 }
 
 export function countUtcDays(from: string, to: string): number {
