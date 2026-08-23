@@ -140,6 +140,45 @@ export const features = [
    * it recomputes aggregates over a date range — and because it is the only
    * write on this surface.
    */
+  /**
+   * Case reparenting — splitting conversations out of a Case, and merging two
+   * Cases into one.
+   *
+   * Four features rather than one, because the acts differ in what they can
+   * cost:
+   *
+   * - `.reparent` performs a correction between Cases the caller can already
+   *   see. It is supervisory, not front-line: a wrong merge shows one
+   *   customer's conversation to the agent working another's.
+   * - `.reparent.override` waives the same-customer safeguard. It exists so the
+   *   safeguard can be a hard default rather than a warning, and it is granted
+   *   only to admins — deliberately NOT to the managers who hold `.reparent`.
+   * - `.reparent.undo` reverses a correction. Separate because undo is
+   *   conditional and touches records that may have moved on since.
+   * - `.reparent.audit` reads the full audit trail including the operator's
+   *   free-text reason, which describes the mistake and therefore the customer.
+   */
+  {
+    id: 'connect.cases.reparent',
+    title: 'Split and merge Connect cases',
+    module: 'connect',
+  },
+  {
+    id: 'connect.cases.reparent.override',
+    title: 'Merge Connect cases across a customer mismatch',
+    module: 'connect',
+  },
+  {
+    id: 'connect.cases.reparent.undo',
+    title: 'Undo a Connect case split or merge',
+    module: 'connect',
+  },
+  {
+    id: 'connect.cases.reparent.audit',
+    title: 'Read Connect case reparenting audit reasons (restricted)',
+    module: 'connect',
+  },
+
   {
     id: 'connect.metrics.view',
     title: 'View Connect operational metrics and exceptions',

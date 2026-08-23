@@ -229,6 +229,26 @@ export class ConnectPrincipalClassificationManifestEntry {
   name: 'connect_cases_assignee_idx',
   properties: ['tenantId', 'organizationId', 'assigneeUserId', 'status'],
 })
+// Lineage lookups are always "which Cases point at this one", so both indexes
+// are partial: the overwhelming majority of Cases have never been reparented
+// and would otherwise pay for an index entry that answers nothing.
+@Index({
+  name: 'connect_cases_merged_into_idx',
+  expression:
+    `create index "connect_cases_merged_into_idx" on "connect_cases" ("tenant_id", "organization_id", "merged_into_case_id") where "merged_into_case_id" is not null`,
+})
+@Index({
+  name: 'connect_cases_split_from_idx',
+  expression:
+    `create index "connect_cases_split_from_idx" on "connect_cases" ("tenant_id", "organization_id", "split_from_case_id") where "split_from_case_id" is not null`,
+})
+// The contact denominator counts canonical ROOTS in a date window. Without the
+// partial index that count degrades to a scan of every Case in the scope.
+@Index({
+  name: 'connect_cases_root_created_idx',
+  expression:
+    `create index "connect_cases_root_created_idx" on "connect_cases" ("tenant_id", "organization_id", "created_at") where "split_from_case_id" is null and "deleted_at" is null`,
+})
 @Check({
   name: 'connect_cases_status_chk',
   expression: `"status" in ('new', 'in_progress', 'waiting_customer', 'resolved', 'closed')`,
@@ -257,6 +277,9 @@ export class ConnectCase {
     | 'previousCaseId'
     | 'firstAssignedAt'
     | 'firstOutboundSentAt'
+    | 'mergedIntoCaseId'
+    | 'splitFromCaseId'
+    | 'lineageVersion'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -343,6 +366,29 @@ export class ConnectCase {
   /** Set on a successor Case opened after its predecessor closed. */
   @Property({ name: 'previous_case_id', type: 'uuid', nullable: true })
   previousCaseId?: string | null
+
+  /**
+   * Canonical target of a MERGE, set only on the merged source.
+   *
+   * The source keeps `status = 'closed'` rather than gaining a `merged` status,
+   * because every existing status consumer would otherwise have to learn a sixth
+   * value. This column is what distinguishes "a supervisor merged this away" from
+   * an ordinary close, and it makes the source read-only everywhere.
+   */
+  @Property({ name: 'merged_into_case_id', type: 'uuid', nullable: true })
+  mergedIntoCaseId?: string | null
+
+  /** Parent of a SPLIT child. Immutable once set; identifies a non-root Case. */
+  @Property({ name: 'split_from_case_id', type: 'uuid', nullable: true })
+  splitFromCaseId?: string | null
+
+  /**
+   * Bumped on every reparent or undo touching this Case. An optional consumer
+   * reconciling derived state compares it to decide whether its own projection
+   * predates a lineage change, without needing to read Connect's audit tables.
+   */
+  @Property({ name: 'lineage_version', type: 'int', default: 0 })
+  lineageVersion: number = 0
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
@@ -456,6 +502,15 @@ export class ConnectConversation {
 @Index({
   name: 'connect_conversation_case_bindings_case_idx',
   properties: ['tenantId', 'caseId'],
+})
+// At most ONE open interval per conversation. Reparenting reads "the active
+// binding" as a singular fact and closes it before opening a replacement; a
+// second open interval would make that read ambiguous and let an undo restore
+// the wrong one.
+@Index({
+  name: 'connect_conversation_case_bindings_active_uq',
+  expression:
+    `create unique index "connect_conversation_case_bindings_active_uq" on "connect_conversation_case_bindings" ("tenant_id", "organization_id", "conversation_id") where "unbound_at" is null`,
 })
 export class ConnectConversationCaseBinding {
   [OptionalProps]?: 'createdAt' | 'unboundAt' | 'reason'
@@ -673,6 +728,244 @@ export class ConnectCaseTransition {
   /** Non-PII context only — never the message subject or body. */
   @Property({ name: 'payload', type: 'json', nullable: true })
   payload?: Record<string, unknown> | null
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+}
+
+// ── Case reparenting ──────────────────────────────────────────
+
+/**
+ * Per-organization Case number allocator.
+ *
+ * Replaces `max(number) + 1`, which is not an allocation at all: two concurrent
+ * openers read the same maximum and both try to claim it, so one of them dies on
+ * the unique constraint. This row is locked `FOR UPDATE` instead, which turns the
+ * allocation into a queue rather than a race.
+ */
+@Entity({ tableName: 'connect_case_number_sequences' })
+@Unique({ name: 'connect_case_number_sequences_scope_uq', properties: ['tenantId', 'organizationId'] })
+@Check({ name: 'connect_case_number_sequences_next_chk', expression: `"next_number" > 0` })
+export class ConnectCaseNumberSequence {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'nextNumber'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  /** The next value to hand out, not the last one handed out. */
+  @Property({ name: 'next_number', type: 'int', default: 1 })
+  nextNumber: number = 1
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+export type ConnectReparentOperation = 'split' | 'merge' | 'undo_split' | 'undo_merge'
+export type ConnectReparentStatus = 'completed' | 'reversed'
+export type ConnectLineageInstruction =
+  | 'child_of_source'
+  | 'source_into_target'
+  | 'inverse_of_reparenting'
+
+/**
+ * One reparenting operation, and the exact state it must be able to restore.
+ *
+ * The snapshots are deliberately typed identifiers, enums and timestamps only.
+ * They are compared byte-for-byte during undo, so they must stay plaintext — an
+ * encrypted snapshot could not be compared without decrypting every candidate,
+ * and a subject or wrap-up has no part in deciding whether a reversal is safe.
+ * Only `reason` is free text, and only `reason` is encrypted.
+ */
+@Entity({ tableName: 'connect_case_reparentings' })
+@Unique({
+  name: 'connect_case_reparentings_command_uq',
+  properties: ['tenantId', 'organizationId', 'clientCommandKey'],
+})
+// One inverse per original: two undo attempts racing must not both append a
+// reversal and move the same conversations twice.
+@Index({
+  name: 'connect_case_reparentings_reverses_uq',
+  expression:
+    `create unique index "connect_case_reparentings_reverses_uq" on "connect_case_reparentings" ("reverses_reparenting_id") where "reverses_reparenting_id" is not null`,
+})
+@Index({
+  name: 'connect_case_reparentings_source_idx',
+  properties: ['tenantId', 'organizationId', 'sourceCaseId', 'createdAt', 'id'],
+})
+@Index({
+  name: 'connect_case_reparentings_destination_idx',
+  properties: ['tenantId', 'organizationId', 'destinationCaseId', 'createdAt', 'id'],
+})
+@Index({
+  name: 'connect_case_reparentings_keyset_idx',
+  properties: ['tenantId', 'organizationId', 'createdAt', 'id'],
+})
+@Check({
+  name: 'connect_case_reparentings_operation_chk',
+  expression: `"operation" in ('split', 'merge', 'undo_split', 'undo_merge')`,
+})
+@Check({
+  name: 'connect_case_reparentings_status_chk',
+  expression: `"status" in ('completed', 'reversed')`,
+})
+// An inverse row names what it reverses; an original never does. Expressed here
+// because a mislabelled row would make undo either unreachable or repeatable.
+@Check({
+  name: 'connect_case_reparentings_inverse_chk',
+  expression:
+    `("operation" in ('split', 'merge') and "reverses_reparenting_id" is null)
+     or ("operation" in ('undo_split', 'undo_merge') and "reverses_reparenting_id" is not null)`,
+})
+// Only an original can be reversed. An inverse row is itself terminal — there is
+// no redo, so nothing may ever mark one `reversed`.
+@Check({
+  name: 'connect_case_reparentings_reversed_chk',
+  expression: `"status" = 'completed' or "operation" in ('split', 'merge')`,
+})
+export class ConnectCaseReparenting {
+  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'status' | 'reversesReparentingId' | 'destinationBefore'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'operation', type: 'text' })
+  operation!: ConnectReparentOperation
+
+  @Property({ name: 'source_case_id', type: 'uuid' })
+  sourceCaseId!: string
+
+  /** Split child or merge target. For an inverse row, the Case work moved back from. */
+  @Property({ name: 'destination_case_id', type: 'uuid' })
+  destinationCaseId!: string
+
+  /** Idempotency key. A byte-equivalent retry resolves to this row. */
+  @Property({ name: 'client_command_key', type: 'text' })
+  clientCommandKey!: string
+
+  /** SHA-256 over canonical request JSON. Safe to log; it is a hash, not a secret. */
+  @Property({ name: 'payload_fingerprint', type: 'text' })
+  payloadFingerprint!: string
+
+  @Property({ name: 'actor_user_id', type: 'uuid' })
+  actorUserId!: string
+
+  /** Encrypted at rest — a supervisor's note routinely names the customer. */
+  @Property({ name: 'reason', type: 'text' })
+  reason!: string
+
+  @Property({ name: 'source_before', type: 'json' })
+  sourceBefore!: Record<string, unknown>
+
+  @Property({ name: 'destination_before', type: 'json', nullable: true })
+  destinationBefore?: Record<string, unknown> | null
+
+  /** Exact post-operation tokens. Undo is safe only while both still match. */
+  @Property({ name: 'source_post_updated_at', type: Date })
+  sourcePostUpdatedAt!: Date
+
+  @Property({ name: 'destination_post_updated_at', type: Date })
+  destinationPostUpdatedAt!: Date
+
+  @Property({ name: 'reverses_reparenting_id', type: 'uuid', nullable: true })
+  reversesReparentingId?: string | null
+
+  @Property({ name: 'status', type: 'text', default: 'completed' })
+  status: ConnectReparentStatus = 'completed'
+
+  @Property({ name: 'occurred_at', type: Date })
+  occurredAt!: Date
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+
+  @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
+  updatedAt: Date = new Date()
+}
+
+/**
+ * One moved Conversation, normalized out of the parent row.
+ *
+ * A merge can move an unbounded number of Conversations. Keeping them as a JSON
+ * array on the parent would grow one row without bound and put the same array in
+ * every event payload; normalizing gives undo an exact per-Conversation
+ * fingerprint and keeps the event a count.
+ */
+@Entity({ tableName: 'connect_case_reparenting_items' })
+@Unique({
+  name: 'connect_case_reparenting_items_conversation_uq',
+  properties: ['tenantId', 'organizationId', 'reparentingId', 'conversationId'],
+})
+@Index({
+  name: 'connect_case_reparenting_items_from_idx',
+  properties: ['tenantId', 'organizationId', 'fromCaseId'],
+})
+@Index({
+  name: 'connect_case_reparenting_items_to_idx',
+  properties: ['tenantId', 'organizationId', 'toCaseId'],
+})
+@Index({
+  name: 'connect_case_reparenting_items_keyset_idx',
+  properties: ['reparentingId', 'conversationId'],
+})
+export class ConnectCaseReparentingItem {
+  [OptionalProps]?: 'createdAt' | 'lastMessageAtAtExecution'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'reparenting_id', type: 'uuid' })
+  reparentingId!: string
+
+  @Property({ name: 'conversation_id', type: 'uuid' })
+  conversationId!: string
+
+  @Property({ name: 'from_case_id', type: 'uuid' })
+  fromCaseId!: string
+
+  @Property({ name: 'to_case_id', type: 'uuid' })
+  toCaseId!: string
+
+  /** The interval this operation closed, and the one it opened. */
+  @Property({ name: 'before_binding_id', type: 'uuid' })
+  beforeBindingId!: string
+
+  @Property({ name: 'after_binding_id', type: 'uuid' })
+  afterBindingId!: string
+
+  @Property({ name: 'before_conversation_updated_at', type: Date })
+  beforeConversationUpdatedAt!: Date
+
+  @Property({ name: 'after_conversation_updated_at', type: Date })
+  afterConversationUpdatedAt!: Date
+
+  /**
+   * The conversation's last message at execution time. Undo compares it: a
+   * message that arrived afterwards makes a mechanical reversal a decision about
+   * traffic nobody reviewed, so it must fail instead.
+   */
+  @Property({ name: 'last_message_at_at_execution', type: Date, nullable: true })
+  lastMessageAtAtExecution?: Date | null
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()

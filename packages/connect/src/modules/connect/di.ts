@@ -28,8 +28,13 @@ import {
   ConnectPrincipalClassification,
   ConnectPrincipalClassificationChange,
   ConnectPrincipalClassificationManifestEntry,
+  ConnectCaseNumberSequence,
+  ConnectCaseReparenting,
+  ConnectCaseReparentingItem,
 } from './data/entities'
 import { createCapabilityReporter } from './lib/activation'
+import { createConnectCaseReparentingReader } from './lib/case-reparenting-reader'
+import { createConnectContactDenominatorReader } from './lib/contact-denominator-reader'
 import { createDefaultConnectPrincipalKindReader } from './lib/principal-classification'
 import { createConnectPrincipalClassificationProvisioningService } from './lib/principal-classification-provisioning'
 import { createConnectPrincipalClassificationManifestService } from './lib/principal-classification-manifest'
@@ -63,6 +68,9 @@ export function register(container: AppContainer) {
     ConnectPrincipalClassification: asValue(ConnectPrincipalClassification),
     ConnectPrincipalClassificationChange: asValue(ConnectPrincipalClassificationChange),
     ConnectPrincipalClassificationManifestEntry: asValue(ConnectPrincipalClassificationManifestEntry),
+    ConnectCaseNumberSequence: asValue(ConnectCaseNumberSequence),
+    ConnectCaseReparenting: asValue(ConnectCaseReparenting),
+    ConnectCaseReparentingItem: asValue(ConnectCaseReparentingItem),
     // The container runs in Awilix CLASSIC injection mode, which resolves each
     // dependency by parameter name. A destructured `({ em })` parameter has no
     // resolvable name and silently arrives as undefined: the reader then returns
@@ -82,6 +90,20 @@ export function register(container: AppContainer) {
       em,
       provisioningService: connectPrincipalClassificationProvisioningService,
     })).scoped(),
+
+    /**
+     * The two outward-facing read contracts optional consumers resolve through
+     * `tryResolve`. Named `em` parameters, not a destructured object: CLASSIC
+     * injection resolves by parameter NAME, so `({ em })` would silently hand
+     * the factory `undefined` and the reader would answer "no rows" for every
+     * scope — a failure that reads exactly like an empty database.
+     */
+    connectCaseReparentingReader: asFunction((em: EntityManager) =>
+      createConnectCaseReparentingReader(em),
+    ).scoped(),
+    connectContactDenominatorReader: asFunction((em: EntityManager) =>
+      createConnectContactDenominatorReader(em),
+    ).scoped(),
 
     // Read by `communication_channels` Contract E before it lets an
     // administrator cut a shared channel over to Connect projection. Connect
