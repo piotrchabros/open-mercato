@@ -85,6 +85,10 @@ export async function readCustomerContexts(
       where "tenant_id" = ?
         and "organization_id" = ?
         and "deleted_at" is null
+        -- A merged source is not a second Case for this customer. Counting it
+        -- would inflate "open cases" with a Case nobody can work, and let the
+        -- "latest" status be one a supervisor deliberately retired.
+        and "merged_into_case_id" is null
         and "customer_id" is not null
         and ("customer_kind", "customer_id") in (${pairs})
       group by "customer_kind", "customer_id"`,

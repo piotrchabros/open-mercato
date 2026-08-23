@@ -67,6 +67,37 @@ const events = [
     category: 'lifecycle',
     clientBroadcast: true,
   },
+  /**
+   * Case reparenting. These three carry LINEAGE INSTRUCTIONS, not consumer
+   * state: Connect says what it did to which Case, and an optional consumer such
+   * as an SLA module decides under its own contract what that means for a clock.
+   * Connect never imports, resolves or requires such a consumer, so its absence
+   * changes no reparenting outcome.
+   *
+   * `sourceEventId` is the reparenting row's own id, which makes it stable
+   * across the outbox's at-least-once publication.
+   */
+  {
+    id: 'connect.case.split',
+    label: 'Case Split',
+    entity: 'case',
+    category: 'lifecycle',
+    clientBroadcast: true,
+  },
+  {
+    id: 'connect.case.merged',
+    label: 'Case Merged',
+    entity: 'case',
+    category: 'lifecycle',
+    clientBroadcast: true,
+  },
+  {
+    id: 'connect.case.reparenting_undone',
+    label: 'Case Reparenting Undone',
+    entity: 'case',
+    category: 'lifecycle',
+    clientBroadcast: true,
+  },
   {
     id: 'connect.outbound.attempted',
     label: 'Outbound Reply Attempted',

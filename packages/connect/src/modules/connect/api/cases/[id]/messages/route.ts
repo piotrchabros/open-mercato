@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { readJsonSafe } from '@open-mercato/shared/lib/http/readJsonSafe'
 import { runRouteMutationGuards } from '@open-mercato/shared/lib/crud/route-mutation-guard'
 import { enqueueOutbound } from '../../../../commands/enqueue-outbound'
-import { inboxNotFound, resolveInboxContext } from '../../../../lib/inbox-route-context'
+import { caseMergedConflict, inboxNotFound, resolveInboxContext } from '../../../../lib/inbox-route-context'
 import { CONNECT_QUEUES } from '../../../../lib/queue'
 
 /**
@@ -90,6 +90,7 @@ export async function POST(req: Request, context: RouteContext): Promise<Respons
       { status: 403 },
     )
   }
+  if (result.status === 'case_merged') return caseMergedConflict(result.canonicalCaseId)
   if (result.status === 'case_closed') {
     return NextResponse.json(
       { error: 'This case is closed. A new message from the customer opens a new case.', code: 'case_closed' },

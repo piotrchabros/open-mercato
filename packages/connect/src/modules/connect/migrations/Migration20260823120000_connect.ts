@@ -1,86 +1,123 @@
 import { Migration } from '@mikro-orm/migrations';
 
 /**
- * Mercato Connect — SLA-agnostic source facts.
+ * Mercato Connect — case reparenting (split, merge, conditional undo).
  *
- * Three append-only tables plus the columns that feed them. Nothing here knows
- * about calendars, targets or clocks: it records what happened, so an optional
- * consumer can compute a clock without inferring one from mutable Case rows
- * that a reopen would silently rewrite.
+ * Additive throughout: new nullable columns, one defaulted integer, three new
+ * tables and a set of indexes. Nothing existing is rewritten, so the schema can
+ * roll out ahead of the code that uses it.
  *
- * Backfill is deliberately pessimistic. Every outbound message that already
- * exists becomes `response_evidence = 'unknown'`, because nobody resolved its
- * author's classification at the time it was sent and resolving it now would
- * retro-credit a person from today's data — the exact false claim the evidence
- * exists to prevent. `content_origin` defaults to `human_authored` since the
- * human reply route was the only writer, but with no author kind behind it that
- * still yields `unknown`.
+ * Two steps deserve explanation.
+ *
+ * The active-binding unique index is a real invariant change, not bookkeeping.
+ * Reparenting reads "the conversation's open interval" as a singular fact; if
+ * two ever existed, an undo could close the wrong one. The migration therefore
+ * PREFLIGHTS for duplicates and aborts with a named, actionable error rather
+ * than picking a winner — silently unbinding one of a customer's conversations
+ * is exactly the class of damage this feature exists to prevent.
+ *
+ * The Case-number sequence is seeded from each scope's existing maximum with an
+ * upsert that keeps the greater value. That makes the migration safe to re-run
+ * while traffic continues: a rerun can only ever move a sequence forward, and
+ * the Case-number unique constraint remains the final guard either way.
  */
 export class Migration20260823120000_connect extends Migration {
 
   override up(): void | Promise<void> {
-    // Round 0 for every Case that already exists. Only a reopen advances it.
-    this.addSql(`alter table "connect_cases" add column "sla_generation" int not null default 0;`);
-    this.addSql(`alter table "connect_cases" add constraint "connect_cases_sla_generation_chk" check ("sla_generation" >= 0);`);
+    // ── Case lineage ──────────────────────────────────────────
+    this.addSql(`alter table "connect_cases" add column "merged_into_case_id" uuid null;`);
+    this.addSql(`alter table "connect_cases" add column "split_from_case_id" uuid null;`);
+    // Defaulted rather than backfilled: Postgres 11+ stores the default in the
+    // catalog, so this is a metadata-only change even on a large table.
+    this.addSql(`alter table "connect_cases" add column "lineage_version" int not null default 0;`);
 
-    this.addSql(`alter table "connect_outbound_messages" add column "case_generation" int not null default 0;`);
-    this.addSql(`alter table "connect_outbound_messages" add column "content_origin" text not null default 'human_authored';`);
-    this.addSql(`alter table "connect_outbound_messages" add column "author_principal_kind" text null;`);
-    this.addSql(`alter table "connect_outbound_messages" add column "accepted_by_user_id" uuid null;`);
-    this.addSql(`alter table "connect_outbound_messages" add column "accepted_by_principal_kind" text null;`);
-    // Historical sends are unverifiable, and unverifiable is `unknown`.
-    this.addSql(`alter table "connect_outbound_messages" add column "response_evidence" text not null default 'unknown';`);
-    this.addSql(`alter table "connect_outbound_messages" add column "response_evidence_version" int not null default 1;`);
-    this.addSql(`alter table "connect_outbound_messages" add constraint "connect_outbound_messages_content_origin_chk" check ("content_origin" in ('human_authored', 'ai_draft', 'automation'));`);
-    this.addSql(`alter table "connect_outbound_messages" add constraint "connect_outbound_messages_author_kind_chk" check ("author_principal_kind" is null or "author_principal_kind" in ('human', 'system_bot', 'integration'));`);
-    this.addSql(`alter table "connect_outbound_messages" add constraint "connect_outbound_messages_acceptor_kind_chk" check ("accepted_by_principal_kind" is null or "accepted_by_principal_kind" in ('human', 'system_bot', 'integration'));`);
-    this.addSql(`alter table "connect_outbound_messages" add constraint "connect_outbound_messages_response_evidence_chk" check ("response_evidence" in ('human', 'human_accepted_ai', 'unknown'));`);
+    this.addSql(`create index "connect_cases_merged_into_idx" on "connect_cases" ("tenant_id", "organization_id", "merged_into_case_id") where "merged_into_case_id" is not null;`);
+    this.addSql(`create index "connect_cases_split_from_idx" on "connect_cases" ("tenant_id", "organization_id", "split_from_case_id") where "split_from_case_id" is not null;`);
+    // Supports the canonical-root denominator, which counts only Cases that are
+    // not split descendants.
+    this.addSql(`create index "connect_cases_root_created_idx" on "connect_cases" ("tenant_id", "organization_id", "created_at") where "split_from_case_id" is null and "deleted_at" is null;`);
 
-    this.addSql(`create table "connect_case_generation_facts" ("id" uuid not null default gen_random_uuid(), "tenant_id" uuid not null, "organization_id" uuid not null, "source_event_id" text not null, "case_id" uuid not null, "generation" int not null, "channel_id" uuid not null, "boundary" text not null, "cause" text not null, "started_at" timestamptz not null, "resolved_at" timestamptz null, "merged_into_case_id" uuid null, "lineage_version" int not null default 0, "occurred_at" timestamptz not null, "created_at" timestamptz not null, primary key ("id"));`);
-    this.addSql(`alter table "connect_case_generation_facts" add constraint "connect_case_generation_facts_boundary_chk" check ("boundary" in ('started', 'resolved'));`);
-    this.addSql(`alter table "connect_case_generation_facts" add constraint "connect_case_generation_facts_cause_chk" check ("cause" in ('opened', 'reopened', 'resolved'));`);
-    this.addSql(`alter table "connect_case_generation_facts" add constraint "connect_case_generation_facts_generation_chk" check ("generation" >= 0);`);
-    // The idempotency arbiter: a replayed write resolves to the same key.
-    this.addSql(`alter table "connect_case_generation_facts" add constraint "connect_case_generation_facts_source_uq" unique ("tenant_id", "organization_id", "source_event_id");`);
-    // Exactly the reader's two access paths: the scoped keyset sweep and the
-    // per-Case, per-generation drill-down.
-    this.addSql(`create index "connect_case_generation_facts_keyset_idx" on "connect_case_generation_facts" ("tenant_id", "organization_id", "occurred_at", "id");`);
-    this.addSql(`create index "connect_case_generation_facts_case_idx" on "connect_case_generation_facts" ("tenant_id", "organization_id", "case_id", "generation", "occurred_at", "id");`);
+    // ── One open interval per conversation ────────────────────
+    // Abort loudly if the data does not already satisfy the invariant. A
+    // migration that resolved duplicates by choosing one would be deciding,
+    // unsupervised, which Case a customer's conversation belongs to.
+    this.addSql(`do $$
+declare
+  offenders int;
+begin
+  select count(*) into offenders from (
+    select "tenant_id", "organization_id", "conversation_id"
+      from "connect_conversation_case_bindings"
+     where "unbound_at" is null
+     group by "tenant_id", "organization_id", "conversation_id"
+    having count(*) > 1
+  ) duplicates;
+  if offenders > 0 then
+    raise exception 'connect_conversation_case_bindings_active_uq preflight failed: % conversation(s) have more than one open binding interval. Resolve them before migrating; see .ai/specs/2026-08-22-connect-case-reparenting-contract.md', offenders;
+  end if;
+end $$;`);
+    // Dropped first so a retry after a failed/interrupted creation does not trip
+    // over an invalid index stub left behind.
+    this.addSql(`drop index if exists "connect_conversation_case_bindings_active_uq";`);
+    this.addSql(`create unique index "connect_conversation_case_bindings_active_uq" on "connect_conversation_case_bindings" ("tenant_id", "organization_id", "conversation_id") where "unbound_at" is null;`);
 
-    this.addSql(`create table "connect_case_wait_facts" ("id" uuid not null default gen_random_uuid(), "tenant_id" uuid not null, "organization_id" uuid not null, "source_event_id" text not null, "case_id" uuid not null, "generation" int not null, "boundary" text not null, "started_at" timestamptz not null, "ended_at" timestamptz null, "occurred_at" timestamptz not null, "created_at" timestamptz not null, primary key ("id"));`);
-    this.addSql(`alter table "connect_case_wait_facts" add constraint "connect_case_wait_facts_boundary_chk" check ("boundary" in ('started', 'ended'));`);
-    this.addSql(`alter table "connect_case_wait_facts" add constraint "connect_case_wait_facts_generation_chk" check ("generation" >= 0);`);
-    this.addSql(`alter table "connect_case_wait_facts" add constraint "connect_case_wait_facts_source_uq" unique ("tenant_id", "organization_id", "source_event_id");`);
-    this.addSql(`create index "connect_case_wait_facts_keyset_idx" on "connect_case_wait_facts" ("tenant_id", "organization_id", "occurred_at", "id");`);
-    this.addSql(`create index "connect_case_wait_facts_case_idx" on "connect_case_wait_facts" ("tenant_id", "organization_id", "case_id", "generation", "occurred_at", "id");`);
+    // ── Case number sequence ──────────────────────────────────
+    this.addSql(`create table "connect_case_number_sequences" ("id" uuid not null default gen_random_uuid(), "tenant_id" uuid not null, "organization_id" uuid not null, "next_number" int not null default 1, "created_at" timestamptz not null, "updated_at" timestamptz not null, constraint "connect_case_number_sequences_pkey" primary key ("id"));`);
+    this.addSql(`alter table "connect_case_number_sequences" add constraint "connect_case_number_sequences_scope_uq" unique ("tenant_id", "organization_id");`);
+    this.addSql(`alter table "connect_case_number_sequences" add constraint "connect_case_number_sequences_next_chk" check ("next_number" > 0);`);
+    this.addSql(`insert into "connect_case_number_sequences" ("tenant_id", "organization_id", "next_number", "created_at", "updated_at")
+select "tenant_id", "organization_id", max("number") + 1, now(), now()
+  from "connect_cases"
+ group by "tenant_id", "organization_id"
+on conflict ("tenant_id", "organization_id") do update
+   set "next_number" = greatest("connect_case_number_sequences"."next_number", excluded."next_number"),
+       "updated_at" = now();`);
 
-    this.addSql(`create table "connect_outbound_delivery_facts" ("id" uuid not null default gen_random_uuid(), "tenant_id" uuid not null, "organization_id" uuid not null, "source_event_id" text not null, "case_id" uuid not null, "generation" int not null, "outbound_message_id" uuid not null, "attempt_id" uuid not null, "delivery_revision" int not null, "confirmed_at" timestamptz not null, "response_evidence" text not null, "response_evidence_version" int not null default 1, "author_user_id" uuid null, "accepted_by_user_id" uuid null, "occurred_at" timestamptz not null, "created_at" timestamptz not null, primary key ("id"));`);
-    this.addSql(`alter table "connect_outbound_delivery_facts" add constraint "connect_outbound_delivery_facts_evidence_chk" check ("response_evidence" in ('human', 'human_accepted_ai', 'unknown'));`);
-    this.addSql(`alter table "connect_outbound_delivery_facts" add constraint "connect_outbound_delivery_facts_generation_chk" check ("generation" >= 0);`);
-    this.addSql(`alter table "connect_outbound_delivery_facts" add constraint "connect_outbound_delivery_facts_source_uq" unique ("tenant_id", "organization_id", "source_event_id");`);
-    this.addSql(`create index "connect_outbound_delivery_facts_keyset_idx" on "connect_outbound_delivery_facts" ("tenant_id", "organization_id", "occurred_at", "id");`);
-    this.addSql(`create index "connect_outbound_delivery_facts_case_idx" on "connect_outbound_delivery_facts" ("tenant_id", "organization_id", "case_id", "generation", "occurred_at", "id");`);
+    // ── Reparenting audit ─────────────────────────────────────
+    this.addSql(`create table "connect_case_reparentings" ("id" uuid not null default gen_random_uuid(), "tenant_id" uuid not null, "organization_id" uuid not null, "operation" text not null, "source_case_id" uuid not null, "destination_case_id" uuid not null, "client_command_key" text not null, "payload_fingerprint" text not null, "actor_user_id" uuid not null, "reason" text not null, "source_before" jsonb not null, "destination_before" jsonb null, "source_post_updated_at" timestamptz not null, "destination_post_updated_at" timestamptz not null, "reverses_reparenting_id" uuid null, "status" text not null default 'completed', "occurred_at" timestamptz not null, "created_at" timestamptz not null, "updated_at" timestamptz not null, constraint "connect_case_reparentings_pkey" primary key ("id"));`);
+    this.addSql(`alter table "connect_case_reparentings" add constraint "connect_case_reparentings_operation_chk" check ("operation" in ('split', 'merge', 'undo_split', 'undo_merge'));`);
+    this.addSql(`alter table "connect_case_reparentings" add constraint "connect_case_reparentings_status_chk" check ("status" in ('completed', 'reversed'));`);
+    // An inverse row names what it reverses; an original never does.
+    this.addSql(`alter table "connect_case_reparentings" add constraint "connect_case_reparentings_inverse_chk" check (("operation" in ('split', 'merge') and "reverses_reparenting_id" is null) or ("operation" in ('undo_split', 'undo_merge') and "reverses_reparenting_id" is not null));`);
+    // Only an original can be reversed. An inverse row is terminal — there is no
+    // redo, so nothing may ever mark one reversed.
+    this.addSql(`alter table "connect_case_reparentings" add constraint "connect_case_reparentings_reversed_chk" check ("status" = 'completed' or "operation" in ('split', 'merge'));`);
+    this.addSql(`alter table "connect_case_reparentings" add constraint "connect_case_reparentings_command_uq" unique ("tenant_id", "organization_id", "client_command_key");`);
+    // One inverse per original: two undo attempts racing must not both append a
+    // reversal and move the same conversations twice.
+    this.addSql(`create unique index "connect_case_reparentings_reverses_uq" on "connect_case_reparentings" ("reverses_reparenting_id") where "reverses_reparenting_id" is not null;`);
+    this.addSql(`create index "connect_case_reparentings_source_idx" on "connect_case_reparentings" ("tenant_id", "organization_id", "source_case_id", "created_at", "id");`);
+    this.addSql(`create index "connect_case_reparentings_destination_idx" on "connect_case_reparentings" ("tenant_id", "organization_id", "destination_case_id", "created_at", "id");`);
+    this.addSql(`create index "connect_case_reparentings_keyset_idx" on "connect_case_reparentings" ("tenant_id", "organization_id", "created_at", "id");`);
+
+    this.addSql(`create table "connect_case_reparenting_items" ("id" uuid not null default gen_random_uuid(), "tenant_id" uuid not null, "organization_id" uuid not null, "reparenting_id" uuid not null, "conversation_id" uuid not null, "from_case_id" uuid not null, "to_case_id" uuid not null, "before_binding_id" uuid not null, "after_binding_id" uuid not null, "before_conversation_updated_at" timestamptz not null, "after_conversation_updated_at" timestamptz not null, "last_message_at_at_execution" timestamptz null, "created_at" timestamptz not null, constraint "connect_case_reparenting_items_pkey" primary key ("id"));`);
+    this.addSql(`alter table "connect_case_reparenting_items" add constraint "connect_case_reparenting_items_conversation_uq" unique ("tenant_id", "organization_id", "reparenting_id", "conversation_id");`);
+    this.addSql(`create index "connect_case_reparenting_items_from_idx" on "connect_case_reparenting_items" ("tenant_id", "organization_id", "from_case_id");`);
+    this.addSql(`create index "connect_case_reparenting_items_to_idx" on "connect_case_reparenting_items" ("tenant_id", "organization_id", "to_case_id");`);
+    this.addSql(`create index "connect_case_reparenting_items_keyset_idx" on "connect_case_reparenting_items" ("reparenting_id", "conversation_id");`);
   }
 
+  /**
+   * Reversible only while no correction has been recorded.
+   *
+   * The audit tables are dropped because a rollback of THIS migration means the
+   * feature never shipped; an operator rolling back after real use must export
+   * the evidence first. The Case columns are dropped for the same reason —
+   * `merged_into_case_id` is the only thing distinguishing a merged source from
+   * an ordinary closed Case, and leaving it behind without the code that reads
+   * it would be worse than removing it.
+   */
   override down(): void | Promise<void> {
-    this.addSql(`drop table if exists "connect_outbound_delivery_facts" cascade;`);
-    this.addSql(`drop table if exists "connect_case_wait_facts" cascade;`);
-    this.addSql(`drop table if exists "connect_case_generation_facts" cascade;`);
-
-    this.addSql(`alter table "connect_outbound_messages" drop constraint if exists "connect_outbound_messages_response_evidence_chk";`);
-    this.addSql(`alter table "connect_outbound_messages" drop constraint if exists "connect_outbound_messages_acceptor_kind_chk";`);
-    this.addSql(`alter table "connect_outbound_messages" drop constraint if exists "connect_outbound_messages_author_kind_chk";`);
-    this.addSql(`alter table "connect_outbound_messages" drop constraint if exists "connect_outbound_messages_content_origin_chk";`);
-    this.addSql(`alter table "connect_outbound_messages" drop column "response_evidence_version";`);
-    this.addSql(`alter table "connect_outbound_messages" drop column "response_evidence";`);
-    this.addSql(`alter table "connect_outbound_messages" drop column "accepted_by_principal_kind";`);
-    this.addSql(`alter table "connect_outbound_messages" drop column "accepted_by_user_id";`);
-    this.addSql(`alter table "connect_outbound_messages" drop column "author_principal_kind";`);
-    this.addSql(`alter table "connect_outbound_messages" drop column "content_origin";`);
-    this.addSql(`alter table "connect_outbound_messages" drop column "case_generation";`);
-
-    this.addSql(`alter table "connect_cases" drop constraint if exists "connect_cases_sla_generation_chk";`);
-    this.addSql(`alter table "connect_cases" drop column "sla_generation";`);
+    this.addSql(`drop table if exists "connect_case_reparenting_items" cascade;`);
+    this.addSql(`drop table if exists "connect_case_reparentings" cascade;`);
+    this.addSql(`drop table if exists "connect_case_number_sequences" cascade;`);
+    this.addSql(`drop index if exists "connect_conversation_case_bindings_active_uq";`);
+    this.addSql(`drop index if exists "connect_cases_root_created_idx";`);
+    this.addSql(`drop index if exists "connect_cases_split_from_idx";`);
+    this.addSql(`drop index if exists "connect_cases_merged_into_idx";`);
+    this.addSql(`alter table "connect_cases" drop column if exists "lineage_version";`);
+    this.addSql(`alter table "connect_cases" drop column if exists "split_from_case_id";`);
+    this.addSql(`alter table "connect_cases" drop column if exists "merged_into_case_id";`);
   }
 
 }

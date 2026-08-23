@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { readJsonSafe } from '@open-mercato/shared/lib/http/readJsonSafe'
 import { runRouteMutationGuards } from '@open-mercato/shared/lib/crud/route-mutation-guard'
 import { transitionCase } from '../../../../commands/transition-case'
-import { inboxNotFound, resolveInboxContext } from '../../../../lib/inbox-route-context'
+import { caseMergedConflict, inboxNotFound, resolveInboxContext } from '../../../../lib/inbox-route-context'
 
 /**
  * Named lifecycle command. Generic CRUD deliberately cannot perform it: status
@@ -98,6 +98,7 @@ export async function POST(req: Request, context: RouteContext): Promise<Respons
       { status: 409 },
     )
   }
+  if (result.status === 'case_merged') return caseMergedConflict(result.canonicalCaseId)
   if (result.status === 'conflict') {
     return NextResponse.json(
       {

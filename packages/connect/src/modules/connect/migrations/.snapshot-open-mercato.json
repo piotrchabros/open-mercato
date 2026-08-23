@@ -440,7 +440,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -518,6 +518,147 @@
           "name": "connect_case_generation_facts_generation_chk",
           "expression": "\"generation\" >= 0",
           "definition": "check (\"generation\" >= 0)"
+        }
+      ],
+      "triggers": [],
+      "foreignKeys": {},
+      "comment": null
+    },
+    {
+      "name": "connect_case_number_sequences",
+      "schema": "public",
+      "columns": {
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "gen_random_uuid()",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "next_number": {
+          "name": "next_number",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "1",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "indexes": [
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "connect_case_number_sequences_pkey",
+          "primary": true,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "connect_case_number_sequences_scope_uq",
+          "primary": false,
+          "unique": true
+        }
+      ],
+      "checks": [
+        {
+          "name": "connect_case_number_sequences_next_chk",
+          "expression": "\"next_number\" > 0",
+          "definition": "check (\"next_number\" > 0)"
         }
       ],
       "triggers": [],
@@ -637,7 +778,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -708,6 +849,725 @@
         }
       ],
       "checks": [],
+      "triggers": [],
+      "foreignKeys": {},
+      "comment": null
+    },
+    {
+      "name": "connect_case_reparenting_items",
+      "schema": "public",
+      "columns": {
+        "after_binding_id": {
+          "name": "after_binding_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "after_conversation_updated_at": {
+          "name": "after_conversation_updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "before_binding_id": {
+          "name": "before_binding_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "before_conversation_updated_at": {
+          "name": "before_conversation_updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "from_case_id": {
+          "name": "from_case_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "gen_random_uuid()",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "last_message_at_at_execution": {
+          "name": "last_message_at_at_execution",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "reparenting_id": {
+          "name": "reparenting_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "to_case_id": {
+          "name": "to_case_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        }
+      },
+      "indexes": [
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "reparenting_id",
+            "conversation_id"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "connect_case_reparenting_items_conversation_uq",
+          "primary": false,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "from_case_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "connect_case_reparenting_items_from_idx",
+          "primary": false,
+          "unique": false
+        },
+        {
+          "columnNames": [
+            "reparenting_id",
+            "conversation_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "connect_case_reparenting_items_keyset_idx",
+          "primary": false,
+          "unique": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "connect_case_reparenting_items_pkey",
+          "primary": true,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "to_case_id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "connect_case_reparenting_items_to_idx",
+          "primary": false,
+          "unique": false
+        }
+      ],
+      "checks": [],
+      "triggers": [],
+      "foreignKeys": {},
+      "comment": null
+    },
+    {
+      "name": "connect_case_reparentings",
+      "schema": "public",
+      "columns": {
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "client_command_key": {
+          "name": "client_command_key",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "destination_before": {
+          "name": "destination_before",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
+        "destination_case_id": {
+          "name": "destination_case_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "destination_post_updated_at": {
+          "name": "destination_post_updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": true,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "gen_random_uuid()",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "operation": {
+          "name": "operation",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "payload_fingerprint": {
+          "name": "payload_fingerprint",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "reverses_reparenting_id": {
+          "name": "reverses_reparenting_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "source_before": {
+          "name": "source_before",
+          "type": "jsonb",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "json"
+        },
+        "source_case_id": {
+          "name": "source_case_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "source_post_updated_at": {
+          "name": "source_post_updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "'completed'",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "text"
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": true,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamptz(6)",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": 6,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "datetime"
+        }
+      },
+      "indexes": [
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "client_command_key"
+          ],
+          "composite": true,
+          "constraint": true,
+          "keyName": "connect_case_reparentings_command_uq",
+          "primary": false,
+          "unique": true
+        },
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "destination_case_id",
+            "created_at",
+            "id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "connect_case_reparentings_destination_idx",
+          "primary": false,
+          "unique": false
+        },
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "created_at",
+            "id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "connect_case_reparentings_keyset_idx",
+          "primary": false,
+          "unique": false
+        },
+        {
+          "columnNames": [
+            "id"
+          ],
+          "composite": false,
+          "constraint": true,
+          "keyName": "connect_case_reparentings_pkey",
+          "primary": true,
+          "unique": true
+        },
+        {
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "keyName": "connect_case_reparentings_reverses_uq",
+          "primary": false,
+          "unique": false,
+          "expression": "create unique index \"connect_case_reparentings_reverses_uq\" on \"connect_case_reparentings\" (\"reverses_reparenting_id\") where \"reverses_reparenting_id\" is not null"
+        },
+        {
+          "columnNames": [
+            "tenant_id",
+            "organization_id",
+            "source_case_id",
+            "created_at",
+            "id"
+          ],
+          "composite": true,
+          "constraint": false,
+          "keyName": "connect_case_reparentings_source_idx",
+          "primary": false,
+          "unique": false
+        }
+      ],
+      "checks": [
+        {
+          "name": "connect_case_reparentings_inverse_chk",
+          "expression": "(\"operation\" in ('split', 'merge') and \"reverses_reparenting_id\" is null)\n     or (\"operation\" in ('undo_split', 'undo_merge') and \"reverses_reparenting_id\" is not null)",
+          "definition": "check ((\"operation\" in ('split', 'merge') and \"reverses_reparenting_id\" is null)\n     or (\"operation\" in ('undo_split', 'undo_merge') and \"reverses_reparenting_id\" is not null))"
+        },
+        {
+          "name": "connect_case_reparentings_operation_chk",
+          "expression": "\"operation\" in ('split', 'merge', 'undo_split', 'undo_merge')",
+          "definition": "check (\"operation\" in ('split', 'merge', 'undo_split', 'undo_merge'))"
+        },
+        {
+          "name": "connect_case_reparentings_reversed_chk",
+          "expression": "\"status\" = 'completed' or \"operation\" in ('split', 'merge')",
+          "definition": "check (\"status\" = 'completed' or \"operation\" in ('split', 'merge'))"
+        },
+        {
+          "name": "connect_case_reparentings_status_chk",
+          "expression": "\"status\" in ('completed', 'reversed')",
+          "definition": "check (\"status\" in ('completed', 'reversed'))"
+        }
+      ],
       "triggers": [],
       "foreignKeys": {},
       "comment": null
@@ -1097,7 +1957,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -1401,6 +2261,40 @@
           "enumItems": [],
           "mappedType": "datetime"
         },
+        "lineage_version": {
+          "name": "lineage_version",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "0",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
+        },
+        "merged_into_case_id": {
+          "name": "merged_into_case_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
         "number": {
           "name": "number",
           "type": "int",
@@ -1503,6 +2397,23 @@
           "enumItems": [],
           "mappedType": "integer"
         },
+        "split_from_case_id": {
+          "name": "split_from_case_id",
+          "type": "uuid",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": true,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": null,
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "uuid"
+        },
         "status": {
           "name": "status",
           "type": "text",
@@ -1544,7 +2455,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -1618,6 +2529,15 @@
           "unique": false
         },
         {
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "keyName": "connect_cases_merged_into_idx",
+          "primary": false,
+          "unique": false,
+          "expression": "create index \"connect_cases_merged_into_idx\" on \"connect_cases\" (\"tenant_id\", \"organization_id\", \"merged_into_case_id\") where \"merged_into_case_id\" is not null"
+        },
+        {
           "columnNames": [
             "tenant_id",
             "organization_id",
@@ -1638,14 +2558,27 @@
           "keyName": "connect_cases_pkey",
           "primary": true,
           "unique": true
+        },
+        {
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "keyName": "connect_cases_root_created_idx",
+          "primary": false,
+          "unique": false,
+          "expression": "create index \"connect_cases_root_created_idx\" on \"connect_cases\" (\"tenant_id\", \"organization_id\", \"created_at\") where \"split_from_case_id\" is null and \"deleted_at\" is null"
+        },
+        {
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "keyName": "connect_cases_split_from_idx",
+          "primary": false,
+          "unique": false,
+          "expression": "create index \"connect_cases_split_from_idx\" on \"connect_cases\" (\"tenant_id\", \"organization_id\", \"split_from_case_id\") where \"split_from_case_id\" is not null"
         }
       ],
       "checks": [
-        {
-          "name": "connect_cases_status_chk",
-          "expression": "\"status\" in ('new', 'in_progress', 'waiting_customer', 'resolved', 'closed')",
-          "definition": "check (\"status\" in ('new', 'in_progress', 'waiting_customer', 'resolved', 'closed'))"
-        },
         {
           "name": "connect_cases_priority_chk",
           "expression": "\"priority\" in ('low', 'normal', 'high', 'urgent')",
@@ -1655,6 +2588,11 @@
           "name": "connect_cases_sla_generation_chk",
           "expression": "\"sla_generation\" >= 0",
           "definition": "check (\"sla_generation\" >= 0)"
+        },
+        {
+          "name": "connect_cases_status_chk",
+          "expression": "\"status\" in ('new', 'in_progress', 'waiting_customer', 'resolved', 'closed')",
+          "definition": "check (\"status\" in ('new', 'in_progress', 'waiting_customer', 'resolved', 'closed'))"
         }
       ],
       "triggers": [],
@@ -1910,7 +2848,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -2179,6 +3117,15 @@
         }
       },
       "indexes": [
+        {
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "keyName": "connect_conversation_case_bindings_active_uq",
+          "primary": false,
+          "unique": false,
+          "expression": "create unique index \"connect_conversation_case_bindings_active_uq\" on \"connect_conversation_case_bindings\" (\"tenant_id\", \"organization_id\", \"conversation_id\") where \"unbound_at\" is null"
+        },
         {
           "columnNames": [
             "tenant_id",
@@ -2450,7 +3397,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -2733,7 +3680,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -2902,7 +3849,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -3452,7 +4399,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -3536,19 +4483,19 @@
       ],
       "checks": [
         {
-          "name": "connect_inbound_receipts_status_chk",
-          "expression": "\"status\" in ('processing', 'completed')",
-          "definition": "check (\"status\" in ('processing', 'completed'))"
-        },
-        {
           "name": "connect_inbound_receipts_disposition_chk",
           "expression": "\"disposition\" is null or \"disposition\" in ('opened', 'attached', 'suppressed', 'dead_lettered')",
           "definition": "check (\"disposition\" is null or \"disposition\" in ('opened', 'attached', 'suppressed', 'dead_lettered'))"
         },
         {
           "name": "connect_inbound_receipts_shape_chk",
-          "expression": "(\"status\" = 'processing' and \"disposition\" is null and \"case_id\" is null) or (\"status\" = 'completed' and \"disposition\" in ('opened', 'attached') and \"case_id\" is not null) or (\"status\" = 'completed' and \"disposition\" in ('suppressed', 'dead_lettered') and \"case_id\" is null)",
-          "definition": "check ((\"status\" = 'processing' and \"disposition\" is null and \"case_id\" is null) or (\"status\" = 'completed' and \"disposition\" in ('opened', 'attached') and \"case_id\" is not null) or (\"status\" = 'completed' and \"disposition\" in ('suppressed', 'dead_lettered') and \"case_id\" is null))"
+          "expression": "(\"status\" = 'processing' and \"disposition\" is null and \"case_id\" is null)\n     or (\"status\" = 'completed' and \"disposition\" in ('opened', 'attached') and \"case_id\" is not null)\n     or (\"status\" = 'completed' and \"disposition\" in ('suppressed', 'dead_lettered') and \"case_id\" is null)",
+          "definition": "check ((\"status\" = 'processing' and \"disposition\" is null and \"case_id\" is null)\n     or (\"status\" = 'completed' and \"disposition\" in ('opened', 'attached') and \"case_id\" is not null)\n     or (\"status\" = 'completed' and \"disposition\" in ('suppressed', 'dead_lettered') and \"case_id\" is null))"
+        },
+        {
+          "name": "connect_inbound_receipts_status_chk",
+          "expression": "\"status\" in ('processing', 'completed')",
+          "definition": "check (\"status\" in ('processing', 'completed'))"
         }
       ],
       "triggers": [],
@@ -3685,7 +4632,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -4513,7 +5460,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -4887,7 +5834,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -4965,13 +5912,7 @@
           "unique": true
         }
       ],
-      "checks": [
-        {
-          "name": "connect_operational_facts_type_chk",
-          "expression": "\"fact_type\" in ('inbound_claimed', 'inbound_opened', 'inbound_attached', 'inbound_suppressed', 'inbound_dead_lettered', 'outbound_attempted', 'outbound_sent', 'outbound_failed', 'outbound_unknown', 'case_assigned', 'case_resolved', 'case_reopened', 'first_response_seconds', 'elapsed_assigned_to_resolution_seconds', 'projection_lag_ms', 'projection_failed')",
-          "definition": "check (\"fact_type\" in ('inbound_claimed', 'inbound_opened', 'inbound_attached', 'inbound_suppressed', 'inbound_dead_lettered', 'outbound_attempted', 'outbound_sent', 'outbound_failed', 'outbound_unknown', 'case_assigned', 'case_resolved', 'case_reopened', 'first_response_seconds', 'elapsed_assigned_to_resolution_seconds', 'projection_lag_ms', 'projection_failed'))"
-        }
-      ],
+      "checks": [],
       "triggers": [],
       "foreignKeys": {},
       "comment": null
@@ -5242,7 +6183,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -5602,7 +6543,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -6032,7 +6973,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -6099,9 +7040,9 @@
       ],
       "checks": [
         {
-          "name": "connect_outbound_messages_content_origin_chk",
-          "expression": "\"content_origin\" in ('human_authored', 'ai_draft', 'automation')",
-          "definition": "check (\"content_origin\" in ('human_authored', 'ai_draft', 'automation'))"
+          "name": "connect_outbound_messages_acceptor_kind_chk",
+          "expression": "\"accepted_by_principal_kind\" is null or \"accepted_by_principal_kind\" in ('human', 'system_bot', 'integration')",
+          "definition": "check (\"accepted_by_principal_kind\" is null or \"accepted_by_principal_kind\" in ('human', 'system_bot', 'integration'))"
         },
         {
           "name": "connect_outbound_messages_author_kind_chk",
@@ -6109,9 +7050,9 @@
           "definition": "check (\"author_principal_kind\" is null or \"author_principal_kind\" in ('human', 'system_bot', 'integration'))"
         },
         {
-          "name": "connect_outbound_messages_acceptor_kind_chk",
-          "expression": "\"accepted_by_principal_kind\" is null or \"accepted_by_principal_kind\" in ('human', 'system_bot', 'integration')",
-          "definition": "check (\"accepted_by_principal_kind\" is null or \"accepted_by_principal_kind\" in ('human', 'system_bot', 'integration'))"
+          "name": "connect_outbound_messages_content_origin_chk",
+          "expression": "\"content_origin\" in ('human_authored', 'ai_draft', 'automation')",
+          "definition": "check (\"content_origin\" in ('human_authored', 'ai_draft', 'automation'))"
         },
         {
           "name": "connect_outbound_messages_response_evidence_chk",
@@ -6287,7 +7228,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -6626,7 +7567,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -6961,7 +7902,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -7556,23 +8497,6 @@
           "enumItems": [],
           "mappedType": "uuid"
         },
-        "revision": {
-          "name": "revision",
-          "type": "int",
-          "unsigned": false,
-          "autoincrement": false,
-          "primary": false,
-          "nullable": false,
-          "unique": false,
-          "length": null,
-          "precision": null,
-          "scale": null,
-          "default": "1",
-          "comment": null,
-          "collation": null,
-          "enumItems": [],
-          "mappedType": "integer"
-        },
         "organization_id": {
           "name": "organization_id",
           "type": "uuid",
@@ -7623,6 +8547,23 @@
           "collation": null,
           "enumItems": [],
           "mappedType": "string"
+        },
+        "revision": {
+          "name": "revision",
+          "type": "int",
+          "unsigned": false,
+          "autoincrement": false,
+          "primary": false,
+          "nullable": false,
+          "unique": false,
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "default": "1",
+          "comment": null,
+          "collation": null,
+          "enumItems": [],
+          "mappedType": "integer"
         },
         "tenant_id": {
           "name": "tenant_id",
@@ -8160,7 +9101,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -8226,14 +9167,14 @@
       ],
       "checks": [
         {
-          "name": "connect_retraction_sagas_phase_chk",
-          "expression": "\"phase\" in ('pending_hide', 'committing', 'finalizing', 'completed', 'aborted')",
-          "definition": "check (\"phase\" in ('pending_hide', 'committing', 'finalizing', 'completed', 'aborted'))"
-        },
-        {
           "name": "connect_retraction_sagas_decision_chk",
           "expression": "\"decision\" in ('undecided', 'commit', 'abort')",
           "definition": "check (\"decision\" in ('undecided', 'commit', 'abort'))"
+        },
+        {
+          "name": "connect_retraction_sagas_phase_chk",
+          "expression": "\"phase\" in ('pending_hide', 'committing', 'finalizing', 'completed', 'aborted')",
+          "definition": "check (\"phase\" in ('pending_hide', 'committing', 'finalizing', 'completed', 'aborted'))"
         }
       ],
       "triggers": [],
@@ -8404,7 +9345,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,
@@ -8664,7 +9605,7 @@
           "autoincrement": false,
           "primary": false,
           "nullable": false,
-          "unique": false,
+          "unique": true,
           "length": null,
           "precision": null,
           "scale": null,

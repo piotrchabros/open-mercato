@@ -12,7 +12,12 @@ import {
   ConnectSettings,
   type ConnectCaseStatus,
 } from '../data/entities'
-import { evaluateAttach, type AttachCandidate } from '../lib/case-lifecycle'
+import {
+  evaluateAttach,
+  evaluateConversationOwnership,
+  type AttachCandidate,
+} from '../lib/case-lifecycle'
+import { allocateConnectCaseNumber } from '../lib/case-number'
 import { classifyInbound, mayAcknowledge } from '../lib/inbound-classifier'
 import { recordInboundHit } from '../lib/inbound-rate-limiter'
 import { hashHandle, resolveIdentity } from '../lib/identity-resolver'
@@ -127,19 +132,6 @@ async function loadSettings(
   }
 }
 
-/** Per-organization Case numbers, allocated from the current maximum. */
-async function nextCaseNumber(
-  em: EntityManager,
-  tenantId: string,
-  organizationId: string,
-): Promise<number> {
-  const rows = (await em.execute(
-    `select coalesce(max("number"), 0) + 1 as "next" from "connect_cases"
-      where "tenant_id" = ? and "organization_id" = ?`,
-    [tenantId, organizationId],
-  )) as Array<{ next: number }>
-  return Number(rows[0]?.next ?? 1)
-}
 
 export async function ingestInboundMessage(
   container: ContainerLike,
@@ -328,79 +320,82 @@ export async function ingestInboundMessage(
     await em.flush()
   }
 
+  /**
+   * The Case decision AND the conversation binding, in ONE transaction.
+   *
+   * They used to be two: the Case was decided under the identity lock, then the
+   * conversation pointer was updated afterwards. That gap is where a reparenting
+   * gets silently undone — a supervisor moves a Conversation to another Case,
+   * and the next message reassigns it from outside any lock the supervisor held.
+   *
+   * Lock order is Conversation, then identity binding, then the Case. The
+   * Conversation lock is the one reparenting also takes, so the two paths
+   * serialize on it instead of interleaving.
+   */
   const outcome = await em.transactional(async (tem) => {
-    const binding = await lockIdentityBinding(tem as EntityManager, scope, resolved.identity.id)
+    const txEm = tem as EntityManager
 
-    const boundCase = binding.currentCaseId
-      ? await (tem as EntityManager).findOne(ConnectCase, {
-          id: binding.currentCaseId,
+    const conversation = await txEm.findOne(
+      ConnectConversation,
+      {
+        tenantId: scope.tenantId,
+        organizationId: scope.organizationId,
+        externalConversationId: input.conversationId,
+      },
+      { lockMode: LockMode.PESSIMISTIC_WRITE },
+    )
+
+    const binding = await lockIdentityBinding(txEm, scope, resolved.identity.id)
+
+    // (a) The Conversation's own Case wins, when it is still live. This is the
+    // supported correction override that split and merge create.
+    const owner = conversation?.currentCaseId
+      ? await txEm.findOne(ConnectCase, {
+          id: conversation.currentCaseId,
           tenantId: scope.tenantId,
           organizationId: scope.organizationId,
           deletedAt: null,
         })
       : null
+    const ownership = evaluateConversationOwnership(
+      owner
+        ? { caseId: owner.id, status: owner.status, mergedIntoCaseId: owner.mergedIntoCaseId ?? null }
+        : null,
+    )
 
-    const legacyCandidates: AttachCandidate[] =
-      resolved.identity.linkState === 'linked' && resolved.identity.customerId
-        ? (
-            await (tem as EntityManager).find(
-              ConnectCase,
-              {
-                tenantId: scope.tenantId,
-                organizationId: scope.organizationId,
-                customerId: resolved.identity.customerId,
-                deletedAt: null,
-              },
-              { orderBy: { lastInboundAt: 'desc', id: 'asc' }, limit: 20 },
-            )
-          ).map(toCandidate)
-        : []
-
-    const decision = evaluateAttach({
-      identityLinked: resolved.identity.linkState === 'linked',
-      boundCase: boundCase ? toCandidate(boundCase) : null,
-      legacyCandidates,
-      windows: settings,
-      now,
-    })
-
-    if (decision.decision === 'attach' && boundCase && decision.caseId === boundCase.id) {
-      return applyAttach(tem as EntityManager, scope, boundCase, decision.nextStatus, receipt.id, now)
-    }
-    if (decision.decision === 'attach') {
-      const target = await (tem as EntityManager).findOne(ConnectCase, {
-        id: decision.caseId,
-        tenantId: scope.tenantId,
-        organizationId: scope.organizationId,
-        deletedAt: null,
+    let decided: CaseDecision
+    if (ownership.decision === 'attach' && owner) {
+      decided = await applyAttach(txEm, scope, owner, ownership.nextStatus, receipt.id, now)
+    } else {
+      decided = await decideByIdentity(txEm, {
+        scope,
+        channelId: input.channelId,
+        identity: resolved.identity,
+        binding,
+        envelope,
+        settings,
+        // A Conversation whose Case closed chains to it directly. The identity
+        // binding may point somewhere else entirely after a split.
+        conversationSuccessorOf: ownership.decision === 'fall_through' ? ownership.successorOf : null,
+        receiptId: receipt.id,
+        now,
       })
-      if (target) {
-        return applyAttach(tem as EntityManager, scope, target, decision.nextStatus, receipt.id, now)
-      }
     }
 
-    return openCase(tem as EntityManager, {
+    // (b) Pointer, interval and reply target, still inside this transaction.
+    await applyConversationBinding(txEm, {
       scope,
       channelId: input.channelId,
-      identity: resolved.identity,
-      binding,
+      externalConversationId: input.conversationId,
+      existing: conversation,
+      caseId: decided.caseId,
+      externalMessageId: input.externalMessageId,
+      messageId: input.messageId,
       envelope,
-      previousCaseId: boundCase?.status === 'closed' ? boundCase.id : null,
-      receiptId: receipt.id,
       now,
     })
-  })
 
-  // Conversation binding + reply target, then close the receipt out.
-  await upsertConversation(em, {
-    scope,
-    channelId: input.channelId,
-    externalConversationId: input.conversationId,
-    caseId: outcome.caseId,
-    externalMessageId: input.externalMessageId,
-    messageId: input.messageId,
-    envelope,
-    now,
+    return decided
   })
 
   completeReceipt(
@@ -499,6 +494,96 @@ async function lockIdentityBinding(
   return created
 }
 
+export type CaseDecision = { caseId: string; opened: boolean }
+
+/**
+ * The pre-existing identity/customer attach rule, unchanged.
+ *
+ * Reached only when the Conversation has no live Case of its own — a brand-new
+ * conversation, or one whose Case closed or was merged away. A new conversation
+ * for a known identity still follows this rule by design: nobody has said where
+ * it belongs, so the identity binding is the best available evidence.
+ */
+async function decideByIdentity(
+  em: EntityManager,
+  args: {
+    scope: { tenantId: string; organizationId: string }
+    channelId: string
+    identity: ConnectContactIdentity
+    binding: ConnectIdentityCaseBinding
+    envelope: { subject: string; replyTargetMaskedLabel: string }
+    settings: typeof DEFAULT_SETTINGS
+    conversationSuccessorOf: string | null
+    receiptId: string
+    now: Date
+  },
+): Promise<CaseDecision> {
+  const { scope, identity, binding, now } = args
+
+  const boundCase = binding.currentCaseId
+    ? await em.findOne(ConnectCase, {
+        id: binding.currentCaseId,
+        tenantId: scope.tenantId,
+        organizationId: scope.organizationId,
+        deletedAt: null,
+      })
+    : null
+
+  const legacyCandidates: AttachCandidate[] =
+    identity.linkState === 'linked' && identity.customerId
+      ? (
+          await em.find(
+            ConnectCase,
+            {
+              tenantId: scope.tenantId,
+              organizationId: scope.organizationId,
+              customerId: identity.customerId,
+              deletedAt: null,
+              // A merged source is historical and must never absorb new inbound;
+              // its canonical target is a candidate in its own right.
+              mergedIntoCaseId: null,
+            },
+            { orderBy: { lastInboundAt: 'desc', id: 'asc' }, limit: 20 },
+          )
+        ).map(toCandidate)
+      : []
+
+  const eligibleBound = boundCase && !boundCase.mergedIntoCaseId ? boundCase : null
+
+  const decision = evaluateAttach({
+    identityLinked: identity.linkState === 'linked',
+    boundCase: eligibleBound ? toCandidate(eligibleBound) : null,
+    legacyCandidates,
+    windows: args.settings,
+    now,
+  })
+
+  if (decision.decision === 'attach' && eligibleBound && decision.caseId === eligibleBound.id) {
+    return applyAttach(em, scope, eligibleBound, decision.nextStatus, args.receiptId, now)
+  }
+  if (decision.decision === 'attach') {
+    const target = await em.findOne(ConnectCase, {
+      id: decision.caseId,
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      deletedAt: null,
+    })
+    if (target) return applyAttach(em, scope, target, decision.nextStatus, args.receiptId, now)
+  }
+
+  return openCase(em, {
+    scope,
+    channelId: args.channelId,
+    identity,
+    binding,
+    envelope: args.envelope,
+    previousCaseId:
+      args.conversationSuccessorOf ?? (boundCase?.status === 'closed' ? boundCase.id : null),
+    receiptId: args.receiptId,
+    now,
+  })
+}
+
 async function applyAttach(
   em: EntityManager,
   scope: { tenantId: string; organizationId: string },
@@ -574,7 +659,10 @@ async function openCase(
   },
 ): Promise<{ caseId: string; opened: true }> {
   const { scope, now } = args
-  const number = await nextCaseNumber(em, scope.tenantId, scope.organizationId)
+  // From the locked sequence, shared with split-child creation. `max(number)+1`
+  // is a read rather than an allocation: two openers race, both claim the same
+  // number, and one dies on the unique constraint after all its other work.
+  const number = await allocateConnectCaseNumber(em, scope)
 
   const created = em.create(ConnectCase, {
     tenantId: scope.tenantId,
@@ -630,17 +718,22 @@ async function openCase(
 }
 
 /**
- * Upsert the conversation row and its reply target.
+ * Write the conversation row, its reply target and its Case interval.
+ *
+ * Runs inside the Case-decision transaction on the ALREADY-LOCKED conversation
+ * (`existing`), rather than re-finding and re-locking it. Re-reading here would
+ * reopen the window the single transaction exists to close.
  *
  * Only a NEWER accepted inbound replaces the reply target: a late-arriving older
  * message must not re-point future replies at a stale address.
  */
-async function upsertConversation(
+async function applyConversationBinding(
   em: EntityManager,
   args: {
     scope: { tenantId: string; organizationId: string }
     channelId: string
     externalConversationId: string
+    existing: ConnectConversation | null
     caseId: string
     externalMessageId: string
     messageId: string
@@ -648,19 +741,9 @@ async function upsertConversation(
     now: Date
   },
 ): Promise<void> {
-  const { scope } = args
+  const { scope, existing } = args
   const occurredAt = new Date(args.envelope.occurredAt)
   const messageAt = Number.isNaN(occurredAt.getTime()) ? args.now : occurredAt
-
-  const existing = await em.findOne(
-    ConnectConversation,
-    {
-      tenantId: scope.tenantId,
-      organizationId: scope.organizationId,
-      externalConversationId: args.externalConversationId,
-    },
-    { lockMode: LockMode.PESSIMISTIC_WRITE },
-  )
 
   if (!existing) {
     const conversation = em.create(ConnectConversation, {
@@ -705,17 +788,19 @@ async function upsertConversation(
   }
 
   if (existing.currentCaseId !== args.caseId) {
-    const previousCaseId = existing.currentCaseId
     existing.currentCaseId = args.caseId
     await em.flush()
-    if (previousCaseId) {
-      await em.execute(
-        `update "connect_conversation_case_bindings"
-            set "unbound_at" = ?
-          where "tenant_id" = ? and "conversation_id" = ? and "case_id" = ? and "unbound_at" is null`,
-        [args.now, scope.tenantId, existing.id, previousCaseId],
-      )
-    }
+    // Close EVERY open interval for this conversation, not just the one naming
+    // the previous Case. At most one may exist — the partial unique index says
+    // so — and closing by conversation is what keeps that true even if the
+    // pointer and the intervals ever disagreed.
+    await em.execute(
+      `update "connect_conversation_case_bindings"
+          set "unbound_at" = ?
+        where "tenant_id" = ? and "organization_id" = ? and "conversation_id" = ?
+          and "unbound_at" is null`,
+      [args.now, scope.tenantId, scope.organizationId, existing.id],
+    )
     em.persist(
       em.create(ConnectConversationCaseBinding, {
         tenantId: scope.tenantId,

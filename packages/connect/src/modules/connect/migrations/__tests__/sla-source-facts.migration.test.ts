@@ -1,10 +1,10 @@
 import { jest } from '@jest/globals'
-import { Migration20260823120000_connect } from '../Migration20260823120000_connect'
+import { Migration20260823210000_connect_sla_source_facts } from '../Migration20260823210000_connect_sla_source_facts'
 
 async function collectSql(direction: 'up' | 'down'): Promise<string[]> {
   const migration = Object.create(
-    Migration20260823120000_connect.prototype,
-  ) as Migration20260823120000_connect
+    Migration20260823210000_connect_sla_source_facts.prototype,
+  ) as Migration20260823210000_connect_sla_source_facts
   const statements: string[] = []
   Object.defineProperty(migration, 'addSql', {
     value: jest.fn((sql: string) => statements.push(sql.replace(/\s+/g, ' ').trim())),

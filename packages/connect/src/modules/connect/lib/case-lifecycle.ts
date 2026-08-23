@@ -72,6 +72,47 @@ export function statusAfterInbound(current: ConnectCaseStatus): ConnectCaseStatu
   return current
 }
 
+export type ConversationOwner = {
+  caseId: string
+  status: ConnectCaseStatus
+  mergedIntoCaseId: string | null
+}
+
+/**
+ * Does the Conversation's OWN current Case decide where this inbound lands?
+ *
+ * Once split and merge exist, the identity binding is no longer the last word.
+ * A supervisor who moves a Conversation to another Case has made an explicit,
+ * audited statement about where its traffic belongs; the identity binding still
+ * names the Case that person was last working in, which for a partial split is
+ * deliberately the OTHER one. Letting the identity binding win would quietly
+ * undo every correction on the next inbound message.
+ *
+ * Conversation ownership is authoritative only while its Case is still live. A
+ * closed or merged Case cannot absorb new traffic, so those fall back to the
+ * ordinary identity/customer attach rule — and the caller uses the returned
+ * `successorOf` to chain the new Case to the one that ended.
+ *
+ * Note this deliberately ignores the attach window. The window exists to stop a
+ * stale Case absorbing an unrelated new matter, which is a guess about identity;
+ * a Conversation's ownership is not a guess.
+ */
+export function evaluateConversationOwnership(
+  owner: ConversationOwner | null,
+):
+  | { decision: 'attach'; caseId: string; nextStatus: ConnectCaseStatus }
+  | { decision: 'fall_through'; successorOf: string | null } {
+  if (!owner) return { decision: 'fall_through', successorOf: null }
+  if (owner.mergedIntoCaseId) {
+    // A merged source is historical. Its canonical target is where the
+    // conversation should already be, so falling through re-derives ownership
+    // rather than attaching to a Case every read surface treats as read-only.
+    return { decision: 'fall_through', successorOf: null }
+  }
+  if (owner.status === 'closed') return { decision: 'fall_through', successorOf: owner.caseId }
+  return { decision: 'attach', caseId: owner.caseId, nextStatus: statusAfterInbound(owner.status) }
+}
+
 export type AttachWindows = {
   attachWindowHours: number
   reopenWindowDays: number

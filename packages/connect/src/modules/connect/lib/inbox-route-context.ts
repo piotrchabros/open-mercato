@@ -81,3 +81,23 @@ export async function resolveInboxContext(req: Request): Promise<InboxContextRes
 export function inboxNotFound(): Response {
   return NextResponse.json({ error: 'Case not found' }, { status: 404 })
 }
+
+/**
+ * The single response shape for "this Case was merged away".
+ *
+ * Unlike a 404 this deliberately DOES disclose something — the canonical
+ * target's id — because the caller has already passed the visibility check for
+ * the source, and the two Cases are in the same organization by construction.
+ * Withholding the target would leave an agent staring at a Case they cannot act
+ * on with no way to find the conversation.
+ */
+export function caseMergedConflict(canonicalCaseId: string): Response {
+  return NextResponse.json(
+    {
+      error: 'record_conflict',
+      code: 'case_merged',
+      canonicalCaseId,
+    },
+    { status: 409 },
+  )
+}
