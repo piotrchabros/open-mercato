@@ -309,6 +309,10 @@ Fully compliant after independent pre-implementation remediation; ready to imple
 
 ## Changelog
 
+### 2026-08-23
+
+- Implemented the `connect_analytics` scaffold and cost-input slice. The ORM classes are named `CostInput` and `CostInputRevisionSecret` so auto-discovery generates the pinned entity IDs `connect_analytics:cost_input` and `connect_analytics:cost_input_revision_secret`; table and API contracts remain as specified.
+
 ### 2026-08-22
 
 - Narrowed to implementation-ready cost accounting CRUD and sanitized reader; cost-per-contact is a separate spec.

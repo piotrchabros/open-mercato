@@ -272,8 +272,8 @@ function buildConflictBody(currentIso: string, expectedIso: string): OptimisticL
  * import { createOptimisticLockGuardService } from '@open-mercato/shared/lib/crud/optimistic-lock'
  *
  * container.register({
- *   crudMutationGuardService: asFunction((cradle) => createOptimisticLockGuardService({
- *     getEm: () => cradle.em,
+ *   crudMutationGuardService: asFunction((em: EntityManager) => createOptimisticLockGuardService({
+ *     getEm: () => em,
  *     readers: {
  *       'customers.company': async (em, { resourceId, tenantId }) => {
  *         const row = await em.findOne(Company, { id: resourceId, tenantId }, { fields: ['updatedAt'] })
@@ -282,6 +282,15 @@ function buildConflictBody(currentIso: string, expectedIso: string): OptimisticL
  *     },
  *   })).singleton(),
  * })
+ * ```
+ *
+ * The request container uses `InjectionMode.CLASSIC`, so dependencies arrive as
+ * individually named parameters — a single `cradle` parameter would make awilix
+ * look for a registration called `cradle` and throw. Chain `.proxy()` on the
+ * registration when a cradle object or a destructured parameter is preferred:
+ *
+ * ```ts
+ * asFunction((cradle) => createOptimisticLockGuardService({ getEm: () => cradle.em, readers })).singleton().proxy()
  * ```
  */
 export function createOptimisticLockGuardService(
