@@ -149,6 +149,29 @@ self-QA as complete.
 `do-not-merge` and `blocked` are likewise hard merge blocks. The QA-approval gate (reviewers +
 PR-automation tooling) treats any of these as not-mergeable.
 
+## Stacked PR ordering gate
+
+**Hard rule: a PR whose head branch is the base of another open PR MUST NOT be merged first.**
+Merging it strands the dependent work on a base branch that no open PR points at any more, so
+the code silently never reaches the target branch even though every PR in the stack shows as
+merged. Stacks MUST merge top-down — deepest branch first, then its parent, and so on.
+
+Unlike the QA-approval gate, this one is enforced by CI. `.github/workflows/stacked-pr-order.yml`
+publishes a `stacked-pr-order` commit status on every open PR: `failure` while another open PR
+targets its head branch, `success` otherwise. The check names the PRs to merge first in its
+description. Every run re-evaluates all open PRs rather than only the one that triggered it,
+because opening a stacked PR has to block its parent and closing it has to clear the parent
+again; an hourly schedule backstops any missed event. Add `stacked-pr-order` to branch protection
+on long-lived integration branches to make it blocking rather than advisory.
+
+The ordering logic is `scripts/lib/stacked-pr-order.mjs`, covered by
+`scripts/__tests__/stacked-pr-order.test.mjs` (`yarn test:scripts`). Fork PRs are skipped — their
+token cannot write statuses.
+
+This has cost the repository a full implementation twice: PR #24 ("land the full Phase 1 stack
+stranded by the bottom-up collapse") and PR #30, where #26 merged seven seconds before #27 and
+carried the integration branch forward with the specifications but none of the code.
+
 ## Auto-skill protocol
 
 - Auto-skills that mutate PRs or issues MUST claim them first with all three signals: assignee,
