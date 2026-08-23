@@ -265,26 +265,32 @@ function buildConflictBody(currentIso: string, expectedIso: string): OptimisticL
 /**
  * Factory for the optimistic-lock guard service.
  *
- * Usage from a module's `di.ts`. The request container runs in Awilix CLASSIC
- * injection mode, so a factory that names its parameter `cradle` (or destructures
- * it) MUST chain `.proxy()` — otherwise CLASSIC looks for a registration literally
- * called `cradle` and resolution throws:
+ * Usage from a module's `di.ts`:
  *
  * ```ts
  * import { asFunction } from 'awilix'
  * import { createOptimisticLockGuardService } from '@open-mercato/shared/lib/crud/optimistic-lock'
  *
  * container.register({
- *   crudMutationGuardService: asFunction((cradle) => createOptimisticLockGuardService({
- *     getEm: () => cradle.em,
+ *   crudMutationGuardService: asFunction((em: EntityManager) => createOptimisticLockGuardService({
+ *     getEm: () => em,
  *     readers: {
  *       'customers.company': async (em, { resourceId, tenantId }) => {
  *         const row = await em.findOne(Company, { id: resourceId, tenantId }, { fields: ['updatedAt'] })
  *         return row?.updatedAt ? row.updatedAt.toISOString() : null
  *       },
  *     },
- *   })).singleton().proxy(),
+ *   })).singleton(),
  * })
+ * ```
+ *
+ * The request container uses `InjectionMode.CLASSIC`, so dependencies arrive as
+ * individually named parameters — a single `cradle` parameter would make awilix
+ * look for a registration called `cradle` and throw. Chain `.proxy()` on the
+ * registration when a cradle object or a destructured parameter is preferred:
+ *
+ * ```ts
+ * asFunction((cradle) => createOptimisticLockGuardService({ getEm: () => cradle.em, readers })).singleton().proxy()
  * ```
  */
 export function createOptimisticLockGuardService(

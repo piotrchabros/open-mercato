@@ -23,42 +23,31 @@ export function register(container: AppContainer) {
 }
 ```
 
-## Injection mode: CLASSIC
+## Declaring factory dependencies
 
-`createRequestContainer()` builds the container with `InjectionMode.CLASSIC`. CLASSIC resolves a factory's dependencies by parsing its **parameter names** and passing them as separate positional arguments — it does not hand the factory a cradle object. Two common shapes therefore break:
-
-{/* di-classic-proxy:allow-start — the rows below document the broken shapes on purpose */}
-
-| Registration | What CLASSIC does |
-|---|---|
-| `asFunction((em) => ...)` | Resolves `em` and passes it. **Correct.** |
-| `asFunction(({ em }) => ...)` | Resolves `em`, passes it positionally; the factory then destructures the `EntityManager` itself, so `em` is `undefined`. **Silently degrades.** |
-| `asFunction(({ em: entityManager }) => ...)` | Parses the *renamed* binding as the dependency name. **Throws `Could not resolve 'entityManager'`.** |
-| `asFunction((cradle) => ...)` | Looks for a registration named `cradle`. **Throws `Could not resolve 'cradle'`.** |
-
-{/* di-classic-proxy:allow-end */}
-
-The silent case is the dangerous one: a service that receives `undefined` dependencies usually swallows the failure and returns empty results, which reads as "no data" rather than "misconfigured".
-
-Pick one of the two safe forms:
+The request container is built with `InjectionMode.CLASSIC`. Awilix reads the factory's **parameter names** and passes one resolved dependency per parameter, positionally — it never hands the factory a cradle object. So an `asFunction` factory must either list its dependencies as individually named parameters, or opt into proxy injection per registration:
 
 ```ts
-// Named parameters — resolved positionally by CLASSIC.
-container.register({
-  todoService: asFunction((em, eventBus) => createTodoService({ em, eventBus })).scoped(),
-})
+// Correct — one parameter per DI key.
+salesOrderService: asFunction((em: EntityManager, eventBus: EventBus) =>
+  createSalesOrderService(em, eventBus),
+).scoped(),
 
-// Or opt this registration into PROXY resolution, which supports destructuring.
-container.register({
-  todoService: asFunction(({ em, eventBus }) => createTodoService({ em, eventBus }))
-    .scoped()
-    .proxy(),
-})
+// Also correct — `.proxy()` switches this registration to cradle injection.
+salesOrderService: asFunction(({ em, eventBus }: Cradle) =>
+  createSalesOrderService(em, eventBus),
+).scoped().proxy(),
 ```
 
-`asClass` follows the same rule: constructor parameters are resolved by name, so a constructor that destructures its first argument needs `.proxy()` too.
+Three shapes break under classic injection, and unit tests that inject fakes directly never see it:
 
-In-repo modules are covered by a guard test (`packages/core/src/__tests__/di-classic-proxy.test.ts`) that fails when a destructured or `cradle`-named factory omits `.proxy()`.
+| Shape | What happens |
+| --- | --- |
+| `asFunction(({ em }) => …)` without `.proxy()` | `em` is resolved positionally and handed in as the object being destructured, so every binding is `undefined`. Fails **silently** — the service degrades to "no data" instead of erroring. |
+| `asFunction((cradle) => …)` without `.proxy()` | Awilix looks for a registration literally named `cradle` and throws `Could not resolve 'cradle'`. |
+| `asFunction((em, cache?: Cache \| null) => …)` | TypeScript erases the `?` at transpile, so Awilix sees a required parameter and throws when `cache` is not registered. Write `cache: Cache \| null = null` — a runtime default is what marks a parameter optional. |
+
+`packages/core/src/__tests__/di-classic-proxy.test.ts` enforces all three rules across every `asFunction` registration in `packages/` and `apps/`.
 
 ## Resolving services
 
