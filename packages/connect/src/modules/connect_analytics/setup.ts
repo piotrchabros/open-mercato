@@ -1,17 +1,22 @@
 import type { ModuleSetupConfig } from '@open-mercato/shared/modules/setup'
 
 /**
- * Analytics owns no storage, so setup is grants only.
+ * Connect analytics setup.
  *
- * A manager gets the report; a front-line agent does not. Organization-wide
- * volume, response percentiles and the suppression safety criterion are an
- * operations audience, not something an agent needs to handle their own Cases.
+ * Grants only. There is no tenant state to create: the operational report is a
+ * pure projection of Phase 1 aggregates, and cost rows are entered by a human,
+ * never seeded — a seeded cost would be indistinguishable from a recorded one
+ * in every downstream total.
+ *
+ * A manager reads operational analytics and recorded spend but cannot record
+ * it; an employee gets neither, because organization-wide volume and invoice
+ * amounts are both outside a front-line agent's remit.
  */
 export const setup: ModuleSetupConfig = {
   defaultRoleFeatures: {
     superadmin: ['connect_analytics.*'],
     admin: ['connect_analytics.*'],
-    manager: ['connect_analytics.view'],
+    manager: ['connect_analytics.view', 'connect_analytics.cost_inputs.view'],
   },
 }
 

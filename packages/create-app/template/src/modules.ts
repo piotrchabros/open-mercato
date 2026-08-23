@@ -92,10 +92,9 @@ export const enabledModules: ModuleEntry[] = [
   // always registered but stays inert until a Connect-managed shared channel
   // exists and the upstream contracts report compatible versions.
   { id: 'connect', from: '@open-mercato/connect' },
-  // Read-only, formula-versioned operational reporting over the Connect metrics
-  // read facade. Independently gated (`connect_analytics.view`) and additive:
-  // removing this line leaves `/backend/connect/metrics` and every Phase 1
-  // route untouched.
+  // Connect analytics — formula-versioned reporting over Connect's operational
+  // aggregates plus cost accounting inputs. Independently gated: removing this
+  // line drops its routes and pages while leaving Connect's own metrics intact.
   { id: 'connect_analytics', from: '@open-mercato/connect' },
   // Routing capacity foundation. Ships one phase ahead of routing itself so the
   // agent-capacity projection is backfilled from existing Case ownership before

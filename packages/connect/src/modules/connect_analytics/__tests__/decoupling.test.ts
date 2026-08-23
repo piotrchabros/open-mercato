@@ -9,10 +9,17 @@ import path from 'node:path'
 
 const MODULE_ROOT = path.resolve(__dirname, '..')
 
-const FORBIDDEN_SOURCE_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
+const FORBIDDEN_PEER_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /from\s+['"][^'"]*connect\/data\/entities['"]/, reason: 'imports a Connect ORM entity' },
-  { pattern: /@mikro-orm\//, reason: 'reaches for the ORM directly' },
   { pattern: /connect_metric_daily|connect_operational_facts|connect_cases/, reason: 'names a Connect table' },
+]
+
+const OPERATIONAL_REPORT_PATHS = [
+  `${path.sep}api${path.sep}reports${path.sep}operational${path.sep}`,
+  `${path.sep}backend${path.sep}connect${path.sep}analytics${path.sep}page.tsx`,
+  `${path.sep}components${path.sep}OperationalReport.client.tsx`,
+  `${path.sep}lib${path.sep}load-operational-report.ts`,
+  `${path.sep}lib${path.sep}report-composer.ts`,
 ]
 
 /**
@@ -44,29 +51,44 @@ function collectSourceFiles(dir: string): string[] {
 
 describe('connect_analytics module boundaries', () => {
   const files = collectSourceFiles(MODULE_ROOT)
+  const operationalReportFiles = files.filter((file) =>
+    OPERATIONAL_REPORT_PATHS.some((suffix) => file.includes(suffix)),
+  )
 
   it('ships source files to check', () => {
     expect(files.length).toBeGreaterThan(0)
   })
 
-  it.each(FORBIDDEN_SOURCE_PATTERNS)('never $reason', ({ pattern }) => {
+  it.each(FORBIDDEN_PEER_PATTERNS)('never $reason', ({ pattern }) => {
     const offenders = files.filter((file) => pattern.test(fs.readFileSync(file, 'utf8')))
     expect(offenders).toEqual([])
   })
 
-  it('names no per-person identifier anywhere in the module', () => {
-    const offenders = files.filter((file) => {
+  it('keeps the operational report independent from the ORM', () => {
+    const offenders = operationalReportFiles.filter((file) => /@mikro-orm\//.test(fs.readFileSync(file, 'utf8')))
+    expect(offenders).toEqual([])
+  })
+
+  it('names no per-person identifier in the operational report', () => {
+    const offenders = operationalReportFiles.filter((file) => {
       const source = fs.readFileSync(file, 'utf8')
       return FORBIDDEN_IDENTIFIER_FIELDS.some((field) => new RegExp(`\\b${field}\\b`).test(source))
     })
     expect(offenders).toEqual([])
   })
 
-  it('declares exactly one ACL feature and grants it to managers, never to employees', async () => {
+  it('keeps operational and cost-input grants distinct and grants read access to managers', async () => {
     const { features } = await import('../acl')
     const { setup } = await import('../setup')
-    expect(features.map((feature) => feature.id)).toEqual(['connect_analytics.view'])
-    expect(setup.defaultRoleFeatures?.manager).toEqual(['connect_analytics.view'])
+    expect(features.map((feature) => feature.id)).toEqual([
+      'connect_analytics.view',
+      'connect_analytics.cost_inputs.view',
+      'connect_analytics.cost_inputs.manage',
+    ])
+    expect(setup.defaultRoleFeatures?.manager).toEqual([
+      'connect_analytics.view',
+      'connect_analytics.cost_inputs.view',
+    ])
     expect(setup.defaultRoleFeatures?.employee).toBeUndefined()
   })
 })
