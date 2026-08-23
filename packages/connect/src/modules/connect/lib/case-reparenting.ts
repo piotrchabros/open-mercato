@@ -169,7 +169,7 @@ export function computeReparentFingerprint(input: ReparentFingerprintInput): str
     input.operation === 'split'
       ? [
           ['allowCustomerMismatch', false],
-          ['conversationIds', [...input.conversationIds].sort()],
+          ['conversationIds', [...input.conversationIds].sort(compareIdentifiers)],
           ['expectedSourceUpdatedAt', normalizeInstant(input.expectedSourceUpdatedAt)],
           ['operation', 'split'],
           ['organizationId', input.organizationId],
@@ -195,6 +195,19 @@ export function computeReparentFingerprint(input: ReparentFingerprintInput): str
 
 export function normalizeReason(reason: string): string {
   return reason.trim()
+}
+
+/**
+ * Locale-independent codepoint ordering for identifiers.
+ *
+ * Deliberately NOT `localeCompare`: this ordering feeds the canonical
+ * fingerprint and the deterministic lock sequence, so it must produce the same
+ * answer on every machine. A locale-aware collation would make a request hash
+ * differently — and two nodes acquire locks in different orders — depending on
+ * the server's `LANG`.
+ */
+export function compareIdentifiers(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0
 }
 
 /**
@@ -512,5 +525,5 @@ export function reparentEventType(operation: ConnectReparentOperation): string {
  * fails its optimistic check honestly.
  */
 export function deterministicLockOrder(ids: readonly string[]): string[] {
-  return [...new Set(ids)].sort()
+  return [...new Set(ids)].sort(compareIdentifiers)
 }

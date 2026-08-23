@@ -29,6 +29,7 @@ import {
   REPARENT_LINEAGE_VERSION,
   REPARENT_SNAPSHOT_VERSION,
   buildCaseSnapshot,
+  compareIdentifiers,
   computeReparentFingerprint,
   deterministicLockOrder,
   evaluateUndoSafety,
@@ -453,7 +454,7 @@ async function finalizeReparenting(args: {
     reparentingId: reparenting.id,
     sourceCaseId: source.id,
     destinationCaseId: destination.id,
-    movedConversationIds: args.moves.map((move) => move.conversation.id).sort(),
+    movedConversationIds: args.moves.map((move) => move.conversation.id).sort(compareIdentifiers),
     sourceUpdatedAt: source.updatedAt.toISOString(),
     destinationUpdatedAt: destination.updatedAt.toISOString(),
     undoPayload: {
@@ -495,7 +496,7 @@ async function replayResult(
     reparentingId: existing.id,
     sourceCaseId: existing.sourceCaseId,
     destinationCaseId: existing.destinationCaseId,
-    movedConversationIds: items.map((item) => item.conversationId).sort(),
+    movedConversationIds: items.map((item) => item.conversationId).sort(compareIdentifiers),
     sourceUpdatedAt: existing.sourcePostUpdatedAt.toISOString(),
     destinationUpdatedAt: existing.destinationPostUpdatedAt.toISOString(),
     undoPayload: {
