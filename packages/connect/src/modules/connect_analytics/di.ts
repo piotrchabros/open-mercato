@@ -1,8 +1,13 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { asFunction } from 'awilix'
 import type { AppContainer } from '@open-mercato/shared/lib/di/container'
+import type { ConnectOperationalMetricsReader } from '@open-mercato/connect/modules/connect/lib/operational-metrics-reader'
 import { createConnectCostInputReader } from './lib/cost-input-reader'
 import { createCostInputCurrencyResolver } from './lib/cost-input-currency'
+
+export type ConnectAnalyticsMetricsSource = ConnectOperationalMetricsReader | null
+
+const OPERATIONAL_READER_KEY = 'connectOperationalMetricsReader'
 
 export function register(container: AppContainer) {
   container.register({
@@ -20,5 +25,15 @@ export function register(container: AppContainer) {
     costInputCurrencyResolver: asFunction(() =>
       createCostInputCurrencyResolver(container),
     ).scoped(),
+
+    connectAnalyticsMetricsSource: asFunction((): ConnectAnalyticsMetricsSource => {
+      const cradle = container as { hasRegistration?: (name: string) => boolean }
+      if (typeof cradle.hasRegistration !== 'function' || !cradle.hasRegistration(OPERATIONAL_READER_KEY)) return null
+      try {
+        return container.resolve(OPERATIONAL_READER_KEY) as ConnectOperationalMetricsReader
+      } catch {
+        return null
+      }
+    }).scoped(),
   })
 }
