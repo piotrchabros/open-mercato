@@ -63,21 +63,22 @@ export function register(container: AppContainer) {
     ConnectPrincipalClassification: asValue(ConnectPrincipalClassification),
     ConnectPrincipalClassificationChange: asValue(ConnectPrincipalClassificationChange),
     ConnectPrincipalClassificationManifestEntry: asValue(ConnectPrincipalClassificationManifestEntry),
-    connectPrincipalKindReader: asFunction(({ em }: { em: EntityManager }) =>
+    // The container runs in Awilix CLASSIC injection mode, which resolves each
+    // dependency by parameter name. A destructured `({ em })` parameter has no
+    // resolvable name and silently arrives as undefined: the reader then returns
+    // no classifications and the manifest service throws on `em.find`.
+    connectPrincipalKindReader: asFunction((em: EntityManager) =>
       createDefaultConnectPrincipalKindReader(em, container),
     ).scoped(),
     connectPrincipalClassificationProvisioningService: asFunction(() =>
       createConnectPrincipalClassificationProvisioningService(container),
     ).scoped(),
-    connectPrincipalClassificationManifestService: asFunction(({
-      em,
-      connectPrincipalClassificationProvisioningService,
-    }: {
-      em: EntityManager
+    connectPrincipalClassificationManifestService: asFunction((
+      em: EntityManager,
       connectPrincipalClassificationProvisioningService: ReturnType<
         typeof createConnectPrincipalClassificationProvisioningService
-      >
-    }) => createConnectPrincipalClassificationManifestService({
+      >,
+    ) => createConnectPrincipalClassificationManifestService({
       em,
       provisioningService: connectPrincipalClassificationProvisioningService,
     })).scoped(),

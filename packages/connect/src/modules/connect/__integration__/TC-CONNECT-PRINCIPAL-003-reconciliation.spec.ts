@@ -7,12 +7,14 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthToken } from '@open-mercato/core/helpers/integration/api'
 import { createUserFixture, deleteUserIfExists } from '@open-mercato/core/helpers/integration/authFixtures'
 import { getTokenContext } from '@open-mercato/core/helpers/integration/generalFixtures'
-import {
-  ConnectPrincipalClassification,
-  ConnectPrincipalClassificationChange,
-  ConnectPrincipalClassificationManifestEntry,
-} from '../data/entities'
 import type { createConnectPrincipalClassificationManifestService } from '../lib/principal-classification-manifest'
+import {
+  clearPrincipalScope,
+  countPrincipalChanges,
+  countPrincipalClassifications,
+  deletePrincipalRows,
+  readPrincipalManifestEntry,
+} from './principal-classification-sql'
 
 const APP_ROOT = process.env.OM_TEST_APP_ROOT?.trim()
   ? path.resolve(process.env.OM_TEST_APP_ROOT)
@@ -33,6 +35,7 @@ test.describe('TC-CONNECT-PRINCIPAL-003: durable reconciliation', () => {
     )
 
     try {
+      await clearPrincipalScope(em, scope)
       userId = await createUserFixture(request, token, {
         email: `connect-reconcile-${Date.now()}@example.test`,
         password: 'Valid1!Pass',
@@ -61,8 +64,8 @@ test.describe('TC-CONNECT-PRINCIPAL-003: durable reconciliation', () => {
         reconciled: 1,
         unavailable: 0,
       })
-      await expect(em.count(ConnectPrincipalClassification, { ...scope, userId })).resolves.toBe(1)
-      await expect(em.count(ConnectPrincipalClassificationChange, { ...scope, userId })).resolves.toBe(1)
+      await expect(countPrincipalClassifications(em, { ...scope, userId })).resolves.toBe(1)
+      await expect(countPrincipalChanges(em, { ...scope, userId })).resolves.toBe(1)
 
       await expect(service.reconcile({ ...scope, manifest: { entries: [] }, apply: true })).resolves.toMatchObject({
         desired: 0,
@@ -70,18 +73,10 @@ test.describe('TC-CONNECT-PRINCIPAL-003: durable reconciliation', () => {
         reconciled: 0,
         unavailable: 0,
       })
-      em.clear()
-      await expect(em.count(ConnectPrincipalClassification, { ...scope, userId })).resolves.toBe(0)
-      await expect(em.count(ConnectPrincipalClassificationChange, {
-        ...scope,
-        userId,
-        tombstonedClassification: true,
-      })).resolves.toBe(1)
-      await expect(em.count(ConnectPrincipalClassificationManifestEntry, {
-        ...scope,
-        userId,
-        active: false,
-      })).resolves.toBe(1)
+      await expect(countPrincipalClassifications(em, { ...scope, userId })).resolves.toBe(0)
+      await expect(countPrincipalChanges(em, { ...scope, userId, tombstonedOnly: true })).resolves.toBe(1)
+      await expect(readPrincipalManifestEntry(em, { ...scope, userId }))
+        .resolves.toMatchObject({ active: false, lastResultCode: 'retired' })
 
       await expect(service.reconcile({ ...scope, manifest, apply: true })).resolves.toMatchObject({
         desired: 1,
@@ -89,17 +84,11 @@ test.describe('TC-CONNECT-PRINCIPAL-003: durable reconciliation', () => {
         reconciled: 1,
         unavailable: 0,
       })
-      em.clear()
-      await expect(em.count(ConnectPrincipalClassification, { ...scope, userId })).resolves.toBe(1)
-      const reregistered = await em.findOneOrFail(ConnectPrincipalClassificationManifestEntry, { ...scope, userId })
-      expect(reregistered.active).toBe(true)
-      expect(reregistered.revision).toBe(2)
+      await expect(countPrincipalClassifications(em, { ...scope, userId })).resolves.toBe(1)
+      await expect(readPrincipalManifestEntry(em, { ...scope, userId }))
+        .resolves.toMatchObject({ active: true, revision: 2 })
     } finally {
-      if (userId) {
-        await em.nativeDelete(ConnectPrincipalClassificationChange, { ...scope, userId })
-        await em.nativeDelete(ConnectPrincipalClassificationManifestEntry, { ...scope, userId })
-        await em.nativeDelete(ConnectPrincipalClassification, { ...scope, userId })
-      }
+      await deletePrincipalRows(em, { ...scope, userIds: userId ? [userId] : [] })
       await deleteUserIfExists(request, token, userId)
       await container.dispose()
     }
