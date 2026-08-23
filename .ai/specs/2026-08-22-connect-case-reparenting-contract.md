@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Date** | 2026-08-22 |
-| **Status** | Proposed — implementation-ready |
+| **Status** | Implemented — 2026-08-23 (pending deployment evidence) |
 | **Scope** | OSS |
 | **Owner** | `connect` |
 | **Depends on** | Phase 1 Connect Case aggregate |
@@ -882,6 +882,65 @@ None identified.
 **Fully compliant: Approved — ready for implementation after maintainer approval of the new frozen contract identifiers.**
 
 ## Changelog
+
+### 2026-08-23 — Implemented
+
+Implemented across five commits on `cez/598f0587`. The file manifest shipped as written, with the
+deviations and discoveries below.
+
+**Executed evidence.** 402 Connect unit tests and 41 Connect integration tests pass, the latter against a
+live app (Next dev on a disposable PostgreSQL, admin session, `OM_INTEGRATION_MODULES=connect`). The
+migration was applied to that database rather than only generated, and `yarn db:generate` then reported
+`connect: no changes`, proving the refreshed snapshot matches entity metadata.
+
+**Deviations from the written spec:**
+
+- **Interval write ordering.** The spec did not anticipate that `connect_conversation_case_bindings_active_uq`
+  is checked *per statement*. MikroORM's unit of work ordered the replacement INSERT ahead of the UPDATE
+  closing the old interval, so every split failed on the constraint. `moveConversation` was therefore split
+  into `closeConversationInterval` + `openReplacementIntervals` with an explicit flush between them. Both
+  halves still commit in one transaction. **Found by the first executed integration spec, not by review.**
+- **Deadlock ordering is a residual risk, not eliminated.** The spec claims the lock orders "avoid a
+  Case→Conversation / Conversation→Case deadlock". They do not fully: reparent takes Cases then
+  Conversations, while ingest takes its Conversation first and then writes its Case, which is an AB/BA
+  pair. The Conversation-first ingest rule is required for correctness (a moved Conversation must stay
+  with its destination), so it was kept; PostgreSQL's deadlock detector aborts one side and both callers
+  treat that as retryable. Worst case is a retryable abort, never a partial write.
+- **Codepoint sorting.** The canonical fingerprint and the deterministic lock order sort identifiers, and
+  the repo's explicit-comparator guard (#3620) surfaced that a bare `.sort()` uses locale collation — which
+  would make the same request hash differently, and two nodes lock in different orders, depending on the
+  server's `LANG`. `compareIdentifiers` was added and applied; the pre-existing identical bug in the
+  principal-classification fingerprint was fixed in passing.
+- **Replay undo token.** A replayed request returns `undoToken: null` rather than re-issuing the original
+  token: the replay performs nothing and mints no action-log entry, and the caller already holds the token
+  from its first response. Minting a second token for one operation would let it be reversed twice.
+- **Spec typo carried forward, not shipped.** The spec's split request example has a trailing comma and
+  omits nothing else; the implemented schema is `{ conversationIds, expectedUpdatedAt, clientCommandKey,
+  reason }` as described in prose.
+
+**Known-unimplemented / deferred:**
+
+- Cache invalidation is not wired. Connect Case and Inbox reads are not cached today, so as the spec's Cache
+  Strategy section allows, correctness does not depend on it and no invalidation call was invented.
+- The operational-metrics, customer-projection and search rows of the impact table required no code: Connect
+  declares no `search.ts` Case index, reparenting emits no synthetic metric facts, and projections retain
+  their original keys. Their *absence* is asserted by `TC-CONNECT-REP-012`.
+- UI remains deferred by design.
+
+**Pre-existing failures in the repository gate, unrelated to this change** (both scan files this branch does
+not meaningfully alter):
+
+- `packages/cli` module-facts anti-drift fixture expects 25 `customers` entities and finds 26. `packages/cli`
+  and `packages/core/src/modules/customers` are byte-identical to the base commit.
+- `optimistic-lock-command-coverage` wants an allowlist entry with a `record_locks` decision for
+  `connect/commands/principal-classifications.ts`. That file has the same two
+  `enforceCommandOptimisticLock(` call sites at base as at HEAD — this branch only changed a sort
+  comparator in it — so the guard's verdict is unaffected by this work. Recording a `record_locks`
+  decision for another change's command is left to its owners.
+
+Note for reviewers reproducing locally: `yarn test` must run with `NODE_ENV` unset. A leaked
+`NODE_ENV=production` makes React resolve its production build (`React.act is not a function`) and trips
+test-only guards, producing failures unrelated to any change.
 
 ### 2026-08-22
 
