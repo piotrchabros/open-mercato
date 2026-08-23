@@ -118,7 +118,9 @@ test.describe('TC-CONNECT-ANALYTICS-UI: read-only analytics screen', () => {
     await expect(table).toBeVisible()
     const measuredRow = table.getByRole('row', { name: new RegExp(DAY_MEASURED) })
     await expect(measuredRow.getByRole('rowheader')).toBeVisible()
-    await expect(measuredRow.getByRole('cell', { name: String(MEASURED_INBOUND), exact: true })).toBeVisible()
+    await expect(
+      measuredRow.getByRole('cell', { name: String(MEASURED_INBOUND), exact: true }).first(),
+    ).toBeVisible()
 
     // The day nothing was measured on says so, and says it is mid-rebuild.
     const unmeasuredRow = table.getByRole('row', { name: new RegExp(DAY_UNMEASURED) })
