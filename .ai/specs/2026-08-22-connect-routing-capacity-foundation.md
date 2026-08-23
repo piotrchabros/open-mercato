@@ -227,7 +227,7 @@ Not applicable. This phase adds no navigation, page, form, dialog, toast, or use
 - Reader query cardinality is one row per assignee, not one row per Case; no N+1 lookup occurs.
 - Each worker handles one organization. The grouped reader returns at most one row per assignee in deterministic `assignee_user_id` order. SQL `count(*)` values are parsed from driver bigint/string form and rejected unless they are safe integers in `0..2147483647`; invalid/overflow results throw `case_count_out_of_range` before projection writes.
 - Presence upserts are batched at at most 500 rows per statement while retaining one transaction. The foreground threshold is exactly **500 authoritative assignee rows** (the grouped result length), not raw Case cardinality or inferred mutation count. The implementation benchmark records wall time and peak RSS for 500 rows; changing the threshold is a later reviewed spec change.
-- `seedDefaults` attempts reconciliation synchronously for at most 500 assignee rows. Above 500 it first persists the checkpoint as pending and enqueues the scoped worker. If the queue is unavailable, it runs the same reconciler synchronously with 500-row statements rather than abandoning the safety backfill. A failure remains durably pending/failed and is retryable by rerunning idempotent setup or the operator CLI command `mercato connect-routing reconcile-capacity --tenant-id <uuid> --organization-id <uuid>`; the CLI derives no scope from stored rows and uses the same Zod schema/service.
+- `seedDefaults` attempts reconciliation synchronously for at most 500 assignee rows. Above 500 it first persists the checkpoint as pending and enqueues the scoped worker. If the queue is unavailable, it runs the same reconciler synchronously with 500-row statements rather than abandoning the safety backfill. A failure remains durably pending/failed and is retryable by rerunning idempotent setup or the operator CLI command `mercato connect_routing reconcile-capacity --tenant-id <uuid> --organization-id <uuid>`; the CLI derives no scope from stored rows and uses the same Zod schema/service.
 - Reader absence is different from queue absence: it records `dependency_unavailable`, performs no zeroing, and returns without failing all tenant initialization. Setup logs scope and machine error code without user IDs.
 - Phase 2 does not register an endless periodic schedule. The worker and CLI are explicit retry primitives; Phase 3 owns the reconciliation cadence because only Phase 3 can define routing freshness SLOs.
 - No cache is used. The count is safety-sensitive derived state, reads are infrequent in Phase 2, and cache invalidation would add a second stale projection.
@@ -319,13 +319,14 @@ There is no browser coverage because this specification adds no UI path. Integra
 | `packages/connect/src/modules/connect_routing/cli.ts` | Create | Explicit trusted retry command for pending scopes |
 | `packages/connect/src/modules/connect_routing/data/entities.ts` | Create | Minimal routing-owned presence projection |
 | `packages/connect/src/modules/connect_routing/data/validators.ts` | Create | Worker and internal input schemas |
-| `packages/connect/src/modules/connect_routing/lib/reconcile-capacity.ts` | Create | Transactional absolute reconciliation |
+| `packages/connect/src/modules/connect_routing/lib/reconcile-capacity.ts` | Create | Transactional absolute reconciliation plus the Phase 3 checkpoint reader |
 | `packages/connect/src/modules/connect_routing/lib/queue.ts` | Create | Stable queue constant |
 | `packages/connect/src/modules/connect_routing/workers/reconcile-capacity.ts` | Create | Scoped retryable worker |
 | `packages/connect/src/modules/connect_routing/migrations/Migration*_connect_routing.ts` | Create | Additive table/index/check migration |
 | `packages/connect/src/modules/connect_routing/migrations/.snapshot-open-mercato.json` | Create | Post-change module schema snapshot |
 | `packages/connect/src/modules/connect_routing/**/__tests__/*` | Create | Unit tests |
 | `packages/connect/src/modules/connect_routing/__integration__/TC-CONNECT-ROUTING-CAPACITY.spec.ts` | Create | Self-contained package-local integration coverage |
+| `packages/connect/src/modules/connect_routing/__integration__/routing-capacity-sql.ts` | Create | SQL fixtures/readers that keep ORM entity classes out of Playwright collection |
 | `apps/mercato/src/modules.ts` | Modify | Host-app installation entry `{ id: 'connect_routing', from: '@open-mercato/connect' }` |
 | `packages/create-app/template/src/modules.ts` | Modify via template sync | Keep scaffolded host installation parity |
 
@@ -439,6 +440,17 @@ None.
 - **Fully compliant**: Approved — ready for implementation after the completed pre-implementation re-audit.
 
 ## Changelog
+
+### 2026-08-23
+
+Implemented. Behaviour matches the specification; three details of the file
+manifest and one command name diverged, and the text above has been corrected to
+match what shipped:
+
+- **CLI command**: the operator retry is `mercato connect_routing reconcile-capacity --tenant-id <uuid> --organization-id <uuid>`, not `mercato connect-routing …`. The CLI dispatcher matches `module.id` exactly (`lookupModuleCommand` in `packages/cli/src/mercato.ts`) and performs no `_`/`-` normalization, so the hyphenated form the specification wrote would never resolve. Scope arguments, schema and service are unchanged.
+- **Checkpoint reader placement**: the Phase 3 activation-gate contract (`readCheckpoint`, `isCapacityReconciled`) is exported from `lib/reconcile-capacity.ts` rather than a separate file, keeping the manifest exact. It reads the same table the reconciler owns and is registered as part of `connectRoutingCapacityService`.
+- **Integration SQL helper**: `__integration__/routing-capacity-sql.ts` ships beside the spec file. It is the established repository pattern (`connect/__integration__/principal-classification-sql.ts`) for keeping MikroORM's legacy decorators out of Playwright's TC39 decorator transform — one offending spec aborts collection for the entire suite.
+- **Peer contract declared structurally**: `connect_routing` declares the shape of `ConnectCurrentCaseCountReader` locally instead of type-importing it from Connect, matching how `connect/setup.ts` treats `SchedulerServiceLike`. This leaves the module with no compile-time edge into Connect at all, which is what CAP-INT-009 asserts.
 
 ### 2026-08-22
 
