@@ -229,11 +229,15 @@ Add exact page metadata, server-first shared-component page, client date island,
 | `packages/connect/src/modules/connect/di.ts` | Modify |
 | `packages/connect/src/modules/connect_analytics/{index,acl,setup,di}.ts` | Create |
 | `packages/connect/src/modules/connect_analytics/lib/report-composer.ts` | Create |
+| `packages/connect/src/modules/connect_analytics/lib/load-operational-report.ts` | Create — shared report production for the route and the server page |
 | `packages/connect/src/modules/connect_analytics/api/reports/operational/route.ts` | Create |
 | `packages/connect/src/modules/connect_analytics/backend/connect/analytics/{page.tsx,page.meta.ts}` | Create |
 | `packages/connect/src/modules/connect_analytics/components/OperationalReport.client.tsx` | Create |
 | `packages/connect/src/modules/connect_analytics/i18n/{en,de,es,ko,pl}.json` | Create |
-| `packages/connect/src/modules/connect_analytics/__integration__/TC-CONNECT-ANALYTICS-OPERATIONAL.spec.ts` | Create |
+| `packages/connect/src/modules/connect_analytics/__integration__/TC-CONNECT-ANALYTICS-OPERATIONAL.spec.ts` | Create — AN-INT-001..009, AN-UI-002 |
+| `packages/connect/src/modules/connect_analytics/__integration__/TC-CONNECT-ANALYTICS-UI.spec.ts` | Create — AN-UI-001, AN-INT-010 (browser-driven, kept out of the API spec) |
+| `packages/connect/src/modules/connect_analytics/__integration__/connect-metrics-sql.ts` | Create — SQL seed/teardown helper so no spec imports an ORM entity |
+| `packages/connect/jest.config.cjs` | Modify — `@open-mercato/connect/*` self-reference mapping for cross-module imports inside the package |
 | `apps/mercato/src/modules.ts` | Modify with host-app `connect_analytics` installation entry |
 | `packages/create-app/template/src/modules.ts` | Modify through `yarn template:sync:fix` for scaffold parity |
 
@@ -293,6 +297,16 @@ Data/API/UI, risks, no-write command status, no-cache strategy, phasing, test pl
 Fully compliant; pre-implementation audit remediated and ready to implement.
 
 ## Changelog
+
+### 2026-08-23 — Implemented
+
+- Shipped `connect_analytics` against this spec: `connectOperationalMetricsReader` in `connect`, the analytics module (metadata/ACL/setup/DI), the pure composer, the guarded OpenAPI route, the server-first page plus one client island, five complete locales, unit suites, and AN-INT/AN-UI coverage.
+- **Added `lib/load-operational-report.ts`.** The spec has the server page load the initial range AND the route serve the same report; composing that in both places would have let one drift from the other, so both call one loader that returns `ok | unavailable | invalid_range | range_too_large` and leaves the HTTP mapping to the route.
+- **401/403 bodies are best-effort, not guaranteed.** The route declares `requireAuth`/`requireFeatures`, so the platform API dispatcher answers first with its own `{ error }` / `{ error, requiredFeatures }` envelope; changing that shape is a FROZEN-surface break. The route still performs its own auth/organization/feature checks and emits the `apiErrorSchema` `unauthorized`/`forbidden` codes when it is reached directly. The 400, 422 and 503 bodies are exactly `apiErrorSchema`, and every documented status code is correct.
+- **Empty-clamp envelope returns the clamped `to`**, per this spec's API contract. Phase 1's `/api/connect/metrics/summary` returns the *requested* `to` in that one case; the parity fixture asserts the clamped value both surfaces agree on for non-empty ranges and does not treat the empty-clamp `to` as shared.
+- `percentileSchema` (`p50`/`p90`) is unit-agnostic by design and carries the same seconds values as Phase 1's `p50Seconds`/`p90Seconds`; AN-INT-009 asserts the equality field by field.
+- Browser coverage lives in a second spec file (`TC-CONNECT-ANALYTICS-UI.spec.ts`) so a Playwright browser fixture is not pulled into the API suite.
+- `packages/connect/jest.config.cjs` gained a `@open-mercato/connect/*` self-reference mapping; without it a sibling module inside the package cannot address the reader by package path under Jest.
 
 ### 2026-08-22
 

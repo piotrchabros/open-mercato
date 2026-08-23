@@ -30,6 +30,7 @@ import {
   ConnectPrincipalClassificationManifestEntry,
 } from './data/entities'
 import { createCapabilityReporter } from './lib/activation'
+import { createConnectOperationalMetricsReader } from './lib/operational-metrics-reader'
 import { createConnectCurrentCaseCountReader } from './lib/current-case-count-reader'
 import { createDefaultConnectPrincipalKindReader } from './lib/principal-classification'
 import { createConnectPrincipalClassificationProvisioningService } from './lib/principal-classification-provisioning'
@@ -89,6 +90,19 @@ export function register(container: AppContainer) {
       em,
       provisioningService: connectPrincipalClassificationProvisioningService,
     })).scoped(),
+
+    /**
+     * The sanctioned aggregate read facade. `connect_analytics` composes its
+     * reports from this and never touches Connect entities, so the storage and
+     * the meaning of every counter stay owned here.
+     *
+     * Named parameter, not a destructured one: CLASSIC injection resolves by
+     * parameter name and `({ em })` would silently deliver undefined, which a
+     * reader reports as "no data" rather than as a failure.
+     */
+    connectOperationalMetricsReader: asFunction((em: EntityManager) =>
+      createConnectOperationalMetricsReader(em),
+    ).scoped(),
 
     // Read by `communication_channels` Contract E before it lets an
     // administrator cut a shared channel over to Connect projection. Connect
