@@ -92,6 +92,14 @@ export const enabledModules: ModuleEntry[] = [
   // always registered but stays inert until a Connect-managed shared channel
   // exists and the upstream contracts report compatible versions.
   { id: 'connect', from: '@open-mercato/connect' },
+  // Connect analytics — formula-versioned reporting over Connect's operational
+  // aggregates plus cost accounting inputs. Independently gated: removing this
+  // line drops its routes and pages while leaving Connect's own metrics intact.
+  { id: 'connect_analytics', from: '@open-mercato/connect' },
+  // Routing capacity foundation. Ships one phase ahead of routing itself so the
+  // agent-capacity projection is backfilled from existing Case ownership before
+  // any offer can be made against it. Adds no route, page or ACL feature.
+  { id: 'connect_routing', from: '@open-mercato/connect' },
   { id: 'onboarding', from: '@open-mercato/onboarding' },
   { id: 'api_docs', from: '@open-mercato/core' },
   // Live DS component gallery at /backend/design-system (feature-gated by

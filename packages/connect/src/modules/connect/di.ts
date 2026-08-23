@@ -35,6 +35,8 @@ import {
 import { createCapabilityReporter } from './lib/activation'
 import { createConnectCaseReparentingReader } from './lib/case-reparenting-reader'
 import { createConnectContactDenominatorReader } from './lib/contact-denominator-reader'
+import { createConnectCurrentCaseCountReader } from './lib/current-case-count-reader'
+import { createConnectOperationalMetricsReader } from './lib/operational-metrics-reader'
 import { createDefaultConnectPrincipalKindReader } from './lib/principal-classification'
 import { createConnectPrincipalClassificationProvisioningService } from './lib/principal-classification-provisioning'
 import { createConnectPrincipalClassificationManifestService } from './lib/principal-classification-manifest'
@@ -78,6 +80,12 @@ export function register(container: AppContainer) {
     connectPrincipalKindReader: asFunction((em: EntityManager) =>
       createDefaultConnectPrincipalKindReader(em, container),
     ).scoped(),
+    // Additive, STABLE contract read by `connect_routing` to build its capacity
+    // projection. Connect answers "which Cases are current work" so no consumer
+    // has to re-derive that rule against `connect_cases` directly.
+    connectCurrentCaseCountReader: asFunction((em: EntityManager) =>
+      createConnectCurrentCaseCountReader(em),
+    ).scoped(),
     connectPrincipalClassificationProvisioningService: asFunction(() =>
       createConnectPrincipalClassificationProvisioningService(container),
     ).scoped(),
@@ -91,18 +99,18 @@ export function register(container: AppContainer) {
       provisioningService: connectPrincipalClassificationProvisioningService,
     })).scoped(),
 
-    /**
-     * The two outward-facing read contracts optional consumers resolve through
-     * `tryResolve`. Named `em` parameters, not a destructured object: CLASSIC
-     * injection resolves by parameter NAME, so `({ em })` would silently hand
-     * the factory `undefined` and the reader would answer "no rows" for every
-     * scope — a failure that reads exactly like an empty database.
-     */
+    // Outward-facing read contracts optional consumers resolve through
+    // `tryResolve`. Named `em` parameters preserve CLASSIC injection.
     connectCaseReparentingReader: asFunction((em: EntityManager) =>
       createConnectCaseReparentingReader(em),
     ).scoped(),
     connectContactDenominatorReader: asFunction((em: EntityManager) =>
       createConnectContactDenominatorReader(em),
+    ).scoped(),
+    // `connect_analytics` composes reports through this facade without touching
+    // Connect entities, keeping the storage and counter semantics owned here.
+    connectOperationalMetricsReader: asFunction((em: EntityManager) =>
+      createConnectOperationalMetricsReader(em),
     ).scoped(),
 
     // Read by `communication_channels` Contract E before it lets an

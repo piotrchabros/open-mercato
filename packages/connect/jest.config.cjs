@@ -8,6 +8,9 @@ module.exports = {
   rootDir: '.',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   moduleNameMapper: {
+    // Self-reference: modules inside this package address their siblings by
+    // package path rather than by a relative climb out of one module folder.
+    '^@open-mercato/connect/(.*)$': '<rootDir>/src/$1',
     '^@open-mercato/shared/(.*)$': '<rootDir>/../shared/src/$1',
     '^@open-mercato/ui/(.*)$': '<rootDir>/../ui/src/$1',
   },
