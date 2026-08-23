@@ -10,8 +10,8 @@ import {
   deleteUserIfExists,
 } from '@open-mercato/core/helpers/integration/authFixtures'
 import { getTokenContext } from '@open-mercato/core/helpers/integration/generalFixtures'
-import { ConnectPrincipalClassification } from '../data/entities'
 import type { ConnectPrincipalKindReader } from '../lib/principal-classification'
+import { deletePrincipalRows, insertPrincipalClassification } from './principal-classification-sql'
 
 const APP_ROOT = process.env.OM_TEST_APP_ROOT?.trim()
   ? path.resolve(process.env.OM_TEST_APP_ROOT)
@@ -52,21 +52,13 @@ test.describe('TC-CONNECT-PRINCIPAL-001: scoped classification evidence', () => 
         organizationId,
         roles: ['employee'],
       })
-      em.persist([
-        em.create(ConnectPrincipalClassification, {
-          tenantId,
-          organizationId,
-          userId: humanUserId,
-          kind: 'human',
-        }),
-        em.create(ConnectPrincipalClassification, {
-          tenantId,
-          organizationId,
-          userId: integrationUserId,
-          kind: 'integration',
-        }),
-      ])
-      await em.flush()
+      await insertPrincipalClassification(em, { tenantId, organizationId, userId: humanUserId, kind: 'human' })
+      await insertPrincipalClassification(em, {
+        tenantId,
+        organizationId,
+        userId: integrationUserId,
+        kind: 'integration',
+      })
 
       const records = await reader.resolve({
         tenantId,
@@ -81,15 +73,12 @@ test.describe('TC-CONNECT-PRINCIPAL-001: scoped classification evidence', () => 
       expect(records.filter((record) => record.kind === 'human').map((record) => record.userId))
         .toEqual([humanUserId])
     } finally {
-      if (humanUserId || integrationUserId || absentUserId) {
-        const userIds = [humanUserId, integrationUserId, absentUserId]
-          .filter((userId): userId is string => typeof userId === 'string')
-        await em.nativeDelete(ConnectPrincipalClassification, {
-          tenantId,
-          organizationId,
-          userId: { $in: userIds },
-        })
-      }
+      await deletePrincipalRows(em, {
+        tenantId,
+        organizationId,
+        userIds: [humanUserId, integrationUserId, absentUserId]
+          .filter((userId): userId is string => typeof userId === 'string'),
+      })
       await deleteUserIfExists(request, token, absentUserId)
       await deleteUserIfExists(request, token, integrationUserId)
       await deleteUserIfExists(request, token, humanUserId)

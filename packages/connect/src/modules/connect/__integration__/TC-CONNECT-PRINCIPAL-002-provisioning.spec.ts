@@ -8,11 +8,8 @@ import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { getAuthToken } from '@open-mercato/core/helpers/integration/api'
 import { createUserFixture, deleteUserIfExists } from '@open-mercato/core/helpers/integration/authFixtures'
 import { getTokenContext } from '@open-mercato/core/helpers/integration/generalFixtures'
-import {
-  ConnectPrincipalClassification,
-  ConnectPrincipalClassificationChange,
-} from '../data/entities'
 import type { ConnectPrincipalClassificationProvisioningService } from '../lib/principal-classification-provisioning'
+import { deletePrincipalRows, findPrincipalChangeIdByAfterKind } from './principal-classification-sql'
 
 const APP_ROOT = process.env.OM_TEST_APP_ROOT?.trim()
   ? path.resolve(process.env.OM_TEST_APP_ROOT)
@@ -68,7 +65,7 @@ test.describe('TC-CONNECT-PRINCIPAL-002: provisioning lifecycle', () => {
         expectedUpdatedAt: created.updatedAt,
       })
       expect(changed).toMatchObject({ created: false, changed: true, kind: 'integration' })
-      const change = await em.findOneOrFail(ConnectPrincipalClassificationChange, {
+      const changeId = await findPrincipalChangeIdByAfterKind(em, {
         classificationId: created.classificationId,
         afterKind: 'integration',
       })
@@ -76,15 +73,12 @@ test.describe('TC-CONNECT-PRINCIPAL-002: provisioning lifecycle', () => {
         ...scope,
         operationId: randomUUID(),
         source: 'connect.integration',
-        originalChangeId: change.id,
+        originalChangeId: changeId,
         expectedUpdatedAt: changed.updatedAt,
         reasonCode: 'test.undo',
       })).resolves.toMatchObject({ kind: 'human', tombstoned: false, replayed: false })
     } finally {
-      if (userId) {
-        await em.nativeDelete(ConnectPrincipalClassificationChange, { ...scope, userId })
-        await em.nativeDelete(ConnectPrincipalClassification, { ...scope, userId })
-      }
+      await deletePrincipalRows(em, { ...scope, userIds: userId ? [userId] : [] })
       await deleteUserIfExists(request, token, userId)
       await container.dispose()
     }
