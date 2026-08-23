@@ -219,54 +219,79 @@ async function lockConversationsInOrder(
 
 // ── Interval movement ─────────────────────────────────────────
 
-type PendingMove = {
+type ClosedInterval = {
   conversation: ConnectConversation
   beforeBinding: ConnectConversationCaseBinding
-  afterBinding: ConnectConversationCaseBinding
   fromCaseId: string
   toCaseId: string
   beforeConversationUpdatedAt: Date
   lastMessageAtAtExecution: Date | null
 }
 
+type PendingMove = ClosedInterval & {
+  afterBinding: ConnectConversationCaseBinding
+}
+
 /**
- * Close the open interval and open its replacement.
+ * Close a Conversation's open interval and repoint it at its new Case.
  *
- * Both halves, always, in the same transaction. The append-only interval history
- * is what lets a reader answer "which Case did this message belong to when it
- * arrived" after any number of corrections. Closing without opening strands the
- * Conversation; opening without closing makes it belong to two Cases at once,
- * which the partial unique index would reject anyway.
+ * Only the closing half. The replacement is opened separately, by
+ * {@link openReplacementIntervals}, because the two halves must reach the
+ * database in that order — see the note there.
  */
-function moveConversation(
-  em: EntityManager,
-  scope: Scope,
+function closeConversationInterval(
   locked: LockedConversation,
   toCaseId: string,
-  reason: string,
   now: Date,
-): PendingMove {
+): ClosedInterval {
   const { conversation, binding } = locked
-  const move: PendingMove = {
+  const closed: ClosedInterval = {
     conversation,
     beforeBinding: binding,
     fromCaseId: binding.caseId,
     toCaseId,
     beforeConversationUpdatedAt: conversation.updatedAt,
     lastMessageAtAtExecution: conversation.lastMessageAt ?? null,
-    afterBinding: em.create(ConnectConversationCaseBinding, {
-      tenantId: scope.tenantId,
-      organizationId: scope.organizationId,
-      conversationId: conversation.id,
-      caseId: toCaseId,
-      boundAt: now,
-      reason,
-    }),
   }
   binding.unboundAt = now
-  em.persist(move.afterBinding)
   conversation.currentCaseId = toCaseId
-  return move
+  return closed
+}
+
+/**
+ * Open the replacement intervals, after the old ones are closed IN THE DATABASE.
+ *
+ * The flush is load-bearing, not tidiness. `connect_conversation_case_bindings`
+ * carries a partial unique index over `(tenant, organization, conversation)
+ * WHERE unbound_at IS NULL`, and Postgres checks a unique index per statement
+ * rather than at commit. The unit of work is free to order its INSERTs before
+ * its UPDATEs, and when it does, the new interval lands while the old one is
+ * still open and the whole reparenting dies on a constraint violation.
+ *
+ * Flushing the closes first makes the ordering explicit instead of leaving it to
+ * the ORM. Both halves still commit together — this is one transaction — so a
+ * failure between them strands nothing.
+ */
+async function openReplacementIntervals(
+  em: EntityManager,
+  scope: Scope,
+  closed: readonly ClosedInterval[],
+  reason: string,
+  now: Date,
+): Promise<PendingMove[]> {
+  await em.flush()
+  return closed.map((entry) => {
+    const afterBinding = em.create(ConnectConversationCaseBinding, {
+      tenantId: scope.tenantId,
+      organizationId: scope.organizationId,
+      conversationId: entry.conversation.id,
+      caseId: entry.toCaseId,
+      boundAt: now,
+      reason,
+    })
+    em.persist(afterBinding)
+    return { ...entry, afterBinding }
+  })
 }
 
 /**
@@ -573,8 +598,8 @@ async function executeSplit(args: {
   // flush assigns it.
   await em.flush()
 
-  const moves = plan.movedConversationIds.map((conversationId) =>
-    moveConversation(em, scope, locked.get(conversationId)!, child.id, 'split', now),
+  const closed = plan.movedConversationIds.map((conversationId) =>
+    closeConversationInterval(locked.get(conversationId)!, child.id, now),
   )
 
   em.persist(
@@ -597,6 +622,8 @@ async function executeSplit(args: {
   // The source's status, assignee and timings are deliberately untouched: a
   // split corrects grouping, it does not restart the source's work.
   source.lineageVersion += 1
+
+  const moves = await openReplacementIntervals(em, scope, closed, 'split', now)
 
   const success = await finalizeReparenting({
     em,
@@ -663,8 +690,8 @@ async function executeMerge(args: {
     }
   }
 
-  const moves = conversationIds.map((conversationId) =>
-    moveConversation(em, scope, locked.get(conversationId)!, target.id, 'merge', now),
+  const closed = conversationIds.map((conversationId) =>
+    closeConversationInterval(locked.get(conversationId)!, target.id, now),
   )
 
   // The target keeps its status, deadlines, ownership and first-response facts.
@@ -698,6 +725,8 @@ async function executeMerge(args: {
   )
 
   await repointIdentityBindings(em, scope, source.id, target.id)
+
+  const moves = await openReplacementIntervals(em, scope, closed, 'merge', now)
 
   const success = await finalizeReparenting({
     em,
@@ -971,8 +1000,23 @@ async function undoReparent(params: {
     const inverseSourceBefore = buildCaseSnapshot(toCaseView(destination))
     const inverseDestinationBefore = buildCaseSnapshot(toCaseView(source))
 
-    const moves = items.map((item) =>
-      moveConversation(em, scope, locked.get(item.conversationId)!, item.fromCaseId, `undo_${operation}`, now),
+    // Read before mutating. A split child may be retired only when nothing else
+    // ever attached to it — soft-deleting a Case that acquired its own
+    // conversation would hide real work behind an "undo" — and asking that
+    // question after staging the moves would answer it against a half-written
+    // unit of work.
+    const childHasOtherBindings =
+      operation === 'split'
+        ? (await em.count(ConnectConversationCaseBinding, {
+            tenantId,
+            organizationId,
+            caseId: destination.id,
+            conversationId: { $nin: items.map((item) => item.conversationId) },
+          })) > 0
+        : false
+
+    const closed = items.map((item) =>
+      closeConversationInterval(locked.get(item.conversationId)!, item.fromCaseId, now),
     )
 
     const sourceBefore = reparenting.sourceBefore as unknown as ReparentCaseSnapshotV1
@@ -1004,17 +1048,8 @@ async function undoReparent(params: {
         }),
       )
     } else {
-      // A split child may be retired only when nothing else ever attached to it.
-      // Soft-deleting a Case that acquired its own conversation, reply or
-      // successor would hide real work behind an "undo".
-      const otherBindings = await em.count(ConnectConversationCaseBinding, {
-        tenantId,
-        organizationId,
-        caseId: destination.id,
-        conversationId: { $nin: items.map((item) => item.conversationId) },
-      })
       destination.lineageVersion += 1
-      if (otherBindings === 0) {
+      if (!childHasOtherBindings) {
         destination.deletedAt = now
         destination.status = 'closed'
         destination.closedAt = now
@@ -1024,6 +1059,7 @@ async function undoReparent(params: {
     reparenting.status = 'reversed'
 
     const inverse = inverseOperation(operation)
+    const moves = await openReplacementIntervals(em, scope, closed, `undo_${operation}`, now)
     await em.flush()
 
     const inverseRow = em.create(ConnectCaseReparenting, {
