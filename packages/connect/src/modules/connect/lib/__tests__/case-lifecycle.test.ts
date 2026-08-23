@@ -1,5 +1,6 @@
 import {
   evaluateAttach,
+  evaluateConversationOwnership,
   statusAfterInbound,
   validateAttachWindows,
   validateTransition,
@@ -234,5 +235,58 @@ describe('evaluateAttach', () => {
         now: NOW,
       }),
     ).toMatchObject({ decision: 'attach', nextStatus: 'new' })
+  })
+})
+
+/**
+ * Conversation ownership after a reparenting.
+ *
+ * The failure this prevents: a supervisor splits a Conversation onto a new
+ * Case, and the next inbound message puts it straight back, because the
+ * identity binding still names the Case that person was last working in. That
+ * would make every correction survive exactly until the customer replied.
+ */
+describe('evaluateConversationOwnership', () => {
+  it('falls through when the conversation is new and owns no case', () => {
+    expect(evaluateConversationOwnership(null)).toEqual({
+      decision: 'fall_through',
+      successorOf: null,
+    })
+  })
+
+  it.each([
+    ['new', 'new'],
+    ['in_progress', 'in_progress'],
+    // The customer answered, so the case is live again.
+    ['waiting_customer', 'in_progress'],
+    // Reopened by the reply — deliberately without consulting the attach
+    // window, because ownership is a recorded decision rather than a guess.
+    ['resolved', 'in_progress'],
+  ] as const)('attaches to a live owning case in %s', (status, nextStatus) => {
+    expect(
+      evaluateConversationOwnership({ caseId: 'case-1', status, mergedIntoCaseId: null }),
+    ).toEqual({ decision: 'attach', caseId: 'case-1', nextStatus })
+  })
+
+  // A closed case cannot absorb new traffic, so the identity rule decides — but
+  // the successor chains to the case this conversation actually belonged to,
+  // not to whatever the identity binding happens to name.
+  it('falls through with a successor when the owning case closed', () => {
+    expect(
+      evaluateConversationOwnership({ caseId: 'case-1', status: 'closed', mergedIntoCaseId: null }),
+    ).toEqual({ decision: 'fall_through', successorOf: 'case-1' })
+  })
+
+  // A merged source is historical. Its conversations should already have moved
+  // to the canonical target, so ownership is re-derived rather than attached to
+  // a case every read surface treats as read-only.
+  it('falls through without a successor when the owning case was merged away', () => {
+    expect(
+      evaluateConversationOwnership({
+        caseId: 'case-1',
+        status: 'in_progress',
+        mergedIntoCaseId: 'target-1',
+      }),
+    ).toEqual({ decision: 'fall_through', successorOf: null })
   })
 })
