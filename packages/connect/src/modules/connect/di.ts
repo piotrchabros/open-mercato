@@ -26,9 +26,13 @@ import {
   ConnectOperationalFact,
   ConnectMetricDaily,
   ConnectPrincipalClassification,
+  ConnectPrincipalClassificationChange,
+  ConnectPrincipalClassificationManifestEntry,
 } from './data/entities'
 import { createCapabilityReporter } from './lib/activation'
 import { createDefaultConnectPrincipalKindReader } from './lib/principal-classification'
+import { createConnectPrincipalClassificationProvisioningService } from './lib/principal-classification-provisioning'
+import { createConnectPrincipalClassificationManifestService } from './lib/principal-classification-manifest'
 
 export function register(container: AppContainer) {
   container.register({
@@ -57,9 +61,26 @@ export function register(container: AppContainer) {
     ConnectOperationalFact: asValue(ConnectOperationalFact),
     ConnectMetricDaily: asValue(ConnectMetricDaily),
     ConnectPrincipalClassification: asValue(ConnectPrincipalClassification),
+    ConnectPrincipalClassificationChange: asValue(ConnectPrincipalClassificationChange),
+    ConnectPrincipalClassificationManifestEntry: asValue(ConnectPrincipalClassificationManifestEntry),
     connectPrincipalKindReader: asFunction(({ em }: { em: EntityManager }) =>
       createDefaultConnectPrincipalKindReader(em, container),
     ).scoped(),
+    connectPrincipalClassificationProvisioningService: asFunction(() =>
+      createConnectPrincipalClassificationProvisioningService(container),
+    ).scoped(),
+    connectPrincipalClassificationManifestService: asFunction(({
+      em,
+      connectPrincipalClassificationProvisioningService,
+    }: {
+      em: EntityManager
+      connectPrincipalClassificationProvisioningService: ReturnType<
+        typeof createConnectPrincipalClassificationProvisioningService
+      >
+    }) => createConnectPrincipalClassificationManifestService({
+      em,
+      provisioningService: connectPrincipalClassificationProvisioningService,
+    })).scoped(),
 
     // Read by `communication_channels` Contract E before it lets an
     // administrator cut a shared channel over to Connect projection. Connect
