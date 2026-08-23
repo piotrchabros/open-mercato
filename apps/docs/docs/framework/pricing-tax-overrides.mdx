@@ -182,12 +182,13 @@ export function register(container: AppContainer) {
   container.register({
     taxCalculationService: asFunction(
       ({ eventBus }) => new ExternalTaxService(eventBus)
-    ).scoped(),
+    ).scoped().proxy(),
   })
 }
 ```
 
 - Mirror the existing interface so callers stay type-safe.
+- Keep the `.proxy()` — the request container runs in Awilix CLASSIC injection mode, where a destructured factory parameter silently receives `undefined` dependencies. See [Container & DI](/framework/ioc/container#injection-mode-classic).
 - You can replace other tokens the same way (e.g., `catalogPricingService`, `salesCalculationService`) if you need full control instead of event-driven tweaks.
 - Keep modules isolated: avoid hard dependencies on other modules' entities; fetch extra data through APIs or events instead.
 
