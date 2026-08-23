@@ -265,7 +265,10 @@ function buildConflictBody(currentIso: string, expectedIso: string): OptimisticL
 /**
  * Factory for the optimistic-lock guard service.
  *
- * Usage from a module's `di.ts`:
+ * Usage from a module's `di.ts`. The request container runs in Awilix CLASSIC
+ * injection mode, so a factory that names its parameter `cradle` (or destructures
+ * it) MUST chain `.proxy()` — otherwise CLASSIC looks for a registration literally
+ * called `cradle` and resolution throws:
  *
  * ```ts
  * import { asFunction } from 'awilix'
@@ -280,7 +283,7 @@ function buildConflictBody(currentIso: string, expectedIso: string): OptimisticL
  *         return row?.updatedAt ? row.updatedAt.toISOString() : null
  *       },
  *     },
- *   })).singleton(),
+ *   })).singleton().proxy(),
  * })
  * ```
  */
