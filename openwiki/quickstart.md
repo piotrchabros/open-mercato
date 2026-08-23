@@ -34,7 +34,7 @@ This wiki is a practical map for engineers and AI agents working in this reposit
 | **Telemetry** | `packages/telemetry/` | Vendor-neutral OTel/OTLP traces, metrics, error reporting; off by default (`TELEMETRY_BACKEND`); extends (not replaces) the shared logger. |
 | **CLI** | `packages/cli/` | Generators (`yarn generate`), migrations, module scaffolding, build tooling. |
 | **DS Lint** | `packages/eslint-plugin-ds/` | Structural ESLint rules enforcing the design system (empty states, page wrappers, raw tables, loading states, status badges, hardcoded status colors). |
-| **Integrations** | `packages/gateway-stripe/`, `channel-gmail/`, `channel-imap/`, `storage-s3/`, `sync-akeneo/`, `checkout/`, `webhooks/` | Provider packages for payments, email, storage, PIM sync, and webhooks. |
+| **Integrations** | `packages/gateway-stripe/`, `channel-gmail/`, `channel-imap/`, `channel-apns/`, `channel-expo/`, `channel-fcm/`, `storage-s3/`, `sync-akeneo/`, `checkout/`, `documents/`, `webhooks/` | Provider packages for payments, email, mobile push, storage, PIM sync, checkout, collaborative documents, and webhooks. |
 | **Enterprise** | `packages/enterprise/` | Commercial proprietary modules — **no external PRs accepted**. |
 | **Onboarding** | `packages/onboarding/` | Setup wizards, tenant provisioning hooks. |
 | **Content** | `packages/content/` | Static content pages (privacy, terms, legal). |

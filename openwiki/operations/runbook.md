@@ -183,6 +183,8 @@ Key env vars (see `apps/mercato/.env.example` for the full list):
 | `OM_ALLOW_FORCED_HOST` | Test-only `x-force-host` override; mutually exclusive with `BACKEND_CUSTOM_DOMAINS_ENABLED` | `false` |
 | `COOKIE_SECURE` | `Secure` attribute on session cookies; decoupled from `NODE_ENV` because the fullapp stack runs `development` | `true` |
 | `APP_ALLOWED_ORIGINS` | Comma-separated extra allowed origins; a backend domain must be listed here before request-scoped email links follow it | — |
+| `NEXT_PUBLIC_DOCUMENTS_COLLAB_URL` | Browser-reachable `ws://`/`wss://` endpoint for the documents collaboration sidecar. When unset, users with edit capability get an optimistic-locked single-user autosave fallback; PostgreSQL remains authoritative | — |
+| `DOCUMENTS_COLLAB_PORT` | Documents Hocuspocus sidecar WebSocket listen port | `4101` |
 
 ### AI Model Overrides
 
@@ -201,6 +203,26 @@ yarn i18n:check-usage   # detect unused/hardcoded translation keys
 - Never hard-code user-facing strings or design-system status colors
 - Translatable fields declared in module's `translations.ts`
 - Run `yarn generate` after adding `translations.ts`
+
+## Documents Collaboration Sidecar
+
+The `documents` module ships real-time co-editing via a **Hocuspocus WebSocket sidecar** — a separate long-lived Node process, not a Next.js route handler (App Router routes can't hold long-lived sockets).
+
+```bash
+# Dev (from the repo root, alongside `yarn dev`)
+yarn workspace @open-mercato/documents collab          # tsx server/documents-collab-server.ts
+
+# Production
+yarn workspace @open-mercato/documents build
+yarn workspace @open-mercato/documents collab:prod
+
+# Scaffolded standalone app (second workload from the same image)
+yarn documents:collab
+```
+
+The sidecar bootstraps the app's module registry + ORM via `bootstrapFromAppRoot()` (the same path the `mercato queue worker` fleet uses), then opens a fresh request-scoped container per document load/store so every query is tenant/org-scoped. The create-app Docker Compose templates include a `documents-collab` service on port 4101.
+
+Set `NEXT_PUBLIC_DOCUMENTS_COLLAB_URL` **before building the app** to the browser-reachable endpoint. If the sidecar is unreachable or the var is unset, a user with edit capability gets an editable single-user autosave fallback (optimistic-lock `PUT` path); viewers/commenters stay read-only. See [domain/modules.md → Documents Module](../domain/modules.md#documents-module).
 
 ## Official Modules
 

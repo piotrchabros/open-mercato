@@ -148,6 +148,28 @@ Akeneo PIM (Product Information Management) data synchronization. Integrates wit
 
 Checkout flow module. Spec: `.ai/specs/2026-03-19-checkout-simple-checkout.md`.
 
+### Documents Collaboration
+
+**Package:** `packages/documents/` — `@open-mercato/documents`
+
+Collaborative internal documents (TipTap + Yjs) served by a Hocuspocus WebSocket sidecar (`server/documents-collab-server.ts`, port 4101). The sidecar bootstraps the app's module registry + ORM via `bootstrapFromAppRoot()` and opens a request-scoped container per document load/store so every query is tenant/org-scoped. `NEXT_PUBLIC_DOCUMENTS_COLLAB_URL` points the browser at the reachable `ws://`/`wss://` endpoint; when unset, an optimistic-locked single-user autosave fallback applies. See [domain/modules.md → Documents Module](../domain/modules.md#documents-module) and [operations/runbook.md → Documents Collaboration Sidecar](../operations/runbook.md#documents-collaboration-sidecar).
+
+## Mobile Push Channels
+
+**Packages:** `packages/channel-apns/`, `packages/channel-expo/`, `packages/channel-fcm/`
+
+Three push provider packages, each registering a `push` `ChannelAdapter` at import time (in its package `setup.ts`) into the `communication_channels` hub:
+
+- **APNs** (`@open-mercato/channel-apns`) — Apple Push Notification service (HTTP/2, token-based `.p8` auth), `providerKey: apns`
+- **Expo** (`@open-mercato/channel-expo`) — Expo push service, `providerKey: expo`
+- **FCM** (`@open-mercato/channel-fcm`) — Firebase Cloud Messaging, `providerKey: fcm`
+
+The `push_notifications` delivery strategy (`packages/core/src/modules/push_notifications/`) fans out to `devices` tokens and routes each device to the channel whose `providerKey` matches its `push_provider`. See [domain/modules.md → Push Notifications Module](../domain/modules.md#push-notifications-module) for the delivery flow, retry/reaper invariants, and the `willRetry` event contract.
+
+### Communication Channels Hub
+
+The `communication_channels` core module bridges external chat/email **and** push channels to the internal Messages inbox and notification rails. Provider packages register adapters here; the hub picks them up by `providerKey`. See [domain/modules.md → Communication Channels Module](../domain/modules.md#communication-channels-module) for the entity model, adapter contract, and event catalog.
+
 ## Official Modules Ecosystem
 
 Official modules live in a **git submodule** at `external/official-modules/` pointing at `open-mercato/official-modules` (public repo).
