@@ -80,6 +80,12 @@ export const setup: ModuleSetupConfig = {
       'connect.customer_match.unlink',
       'connect.customer_match.recover',
       'connect.metrics.view',
+      // Corrections, and reading their audit trail. Deliberately without
+      // `.reparent.override`: waiving the same-customer safeguard is an admin
+      // act, and a manager who needs it should have to ask.
+      'connect.cases.reparent',
+      'connect.cases.reparent.undo',
+      'connect.cases.reparent.audit',
     ],
     // A front-line agent handles their own work and claims from the unassigned
     // queue, and may match an identity to a customer. Deliberately no

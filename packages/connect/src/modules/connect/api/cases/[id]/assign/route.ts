@@ -4,7 +4,7 @@ import type { CommandBus } from '@open-mercato/shared/lib/commands'
 import { readJsonSafe } from '@open-mercato/shared/lib/http/readJsonSafe'
 import { runRouteMutationGuards } from '@open-mercato/shared/lib/crud/route-mutation-guard'
 import { assignCase, type AssignCaseResult } from '../../../../commands/assign-case'
-import { inboxNotFound, resolveInboxContext } from '../../../../lib/inbox-route-context'
+import { caseMergedConflict, inboxNotFound, resolveInboxContext } from '../../../../lib/inbox-route-context'
 
 /**
  * Self-claim, assign, transfer and unassign — one route, one command.
@@ -89,6 +89,7 @@ export async function POST(req: Request, context: RouteContext): Promise<Respons
       { status: 422 },
     )
   }
+  if (result.status === 'case_merged') return caseMergedConflict(result.canonicalCaseId)
   if (result.status === 'conflict') {
     return NextResponse.json(
       {

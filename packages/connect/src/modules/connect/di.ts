@@ -28,10 +28,15 @@ import {
   ConnectPrincipalClassification,
   ConnectPrincipalClassificationChange,
   ConnectPrincipalClassificationManifestEntry,
+  ConnectCaseNumberSequence,
+  ConnectCaseReparenting,
+  ConnectCaseReparentingItem,
 } from './data/entities'
 import { createCapabilityReporter } from './lib/activation'
-import { createConnectOperationalMetricsReader } from './lib/operational-metrics-reader'
+import { createConnectCaseReparentingReader } from './lib/case-reparenting-reader'
+import { createConnectContactDenominatorReader } from './lib/contact-denominator-reader'
 import { createConnectCurrentCaseCountReader } from './lib/current-case-count-reader'
+import { createConnectOperationalMetricsReader } from './lib/operational-metrics-reader'
 import { createDefaultConnectPrincipalKindReader } from './lib/principal-classification'
 import { createConnectPrincipalClassificationProvisioningService } from './lib/principal-classification-provisioning'
 import { createConnectPrincipalClassificationManifestService } from './lib/principal-classification-manifest'
@@ -65,6 +70,9 @@ export function register(container: AppContainer) {
     ConnectPrincipalClassification: asValue(ConnectPrincipalClassification),
     ConnectPrincipalClassificationChange: asValue(ConnectPrincipalClassificationChange),
     ConnectPrincipalClassificationManifestEntry: asValue(ConnectPrincipalClassificationManifestEntry),
+    ConnectCaseNumberSequence: asValue(ConnectCaseNumberSequence),
+    ConnectCaseReparenting: asValue(ConnectCaseReparenting),
+    ConnectCaseReparentingItem: asValue(ConnectCaseReparentingItem),
     // The container runs in Awilix CLASSIC injection mode, which resolves each
     // dependency by parameter name. A destructured `({ em })` parameter has no
     // resolvable name and silently arrives as undefined: the reader then returns
@@ -91,15 +99,16 @@ export function register(container: AppContainer) {
       provisioningService: connectPrincipalClassificationProvisioningService,
     })).scoped(),
 
-    /**
-     * The sanctioned aggregate read facade. `connect_analytics` composes its
-     * reports from this and never touches Connect entities, so the storage and
-     * the meaning of every counter stay owned here.
-     *
-     * Named parameter, not a destructured one: CLASSIC injection resolves by
-     * parameter name and `({ em })` would silently deliver undefined, which a
-     * reader reports as "no data" rather than as a failure.
-     */
+    // Outward-facing read contracts optional consumers resolve through
+    // `tryResolve`. Named `em` parameters preserve CLASSIC injection.
+    connectCaseReparentingReader: asFunction((em: EntityManager) =>
+      createConnectCaseReparentingReader(em),
+    ).scoped(),
+    connectContactDenominatorReader: asFunction((em: EntityManager) =>
+      createConnectContactDenominatorReader(em),
+    ).scoped(),
+    // `connect_analytics` composes reports through this facade without touching
+    // Connect entities, keeping the storage and counter semantics owned here.
     connectOperationalMetricsReader: asFunction((em: EntityManager) =>
       createConnectOperationalMetricsReader(em),
     ).scoped(),

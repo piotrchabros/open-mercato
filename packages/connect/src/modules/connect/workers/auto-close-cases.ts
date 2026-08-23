@@ -58,6 +58,10 @@ export default async function handle(
         // boundary is still inside its window.
         resolvedAt: { $lt: boundary },
         deletedAt: null,
+        // A merged source is already closed by the merge, so it can never match
+        // `resolved` — but the predicate is explicit anyway, so a future status
+        // change cannot quietly hand the sweep a Case the command will refuse.
+        mergedIntoCaseId: null,
       },
       { orderBy: { resolvedAt: 'asc' }, limit: CONNECT_AUTO_CLOSE_BATCH_SIZE },
     )

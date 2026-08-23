@@ -47,6 +47,7 @@ export type TransitionCaseResult =
   | { status: 'forbidden'; reason: 'not_owner' | 'requires_manage' }
   | { status: 'invalid_transition'; from: ConnectCaseStatus; to: ConnectCaseStatus; reason: string }
   | { status: 'wrap_up_required' }
+  | { status: 'case_merged'; canonicalCaseId: string }
   | { status: 'conflict'; currentUpdatedAt: string }
 
 export const CONNECT_TRANSITION_CASE_COMMAND_ID = 'connect.cases.transition'
@@ -99,6 +100,14 @@ export async function transitionCase(
       if (input.action !== 'close' && !access.canAct) {
         return { status: 'forbidden', reason: 'not_owner' }
       }
+    }
+
+    // A merged source is read-only history. Resolving, reopening or closing it
+    // would record a lifecycle decision about a Case whose work now lives on the
+    // canonical target — including for the auto-close sweep, which is why this
+    // check sits outside the `isSystem` branch.
+    if (target.mergedIntoCaseId) {
+      return { status: 'case_merged', canonicalCaseId: target.mergedIntoCaseId }
     }
 
     if (input.expectedUpdatedAt) {

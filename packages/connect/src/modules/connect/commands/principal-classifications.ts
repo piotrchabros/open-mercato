@@ -46,7 +46,9 @@ const FINGERPRINT_EXCLUDED_KEYS = new Set(['expectedUpdatedAt'])
 function operationFingerprint(value: Record<string, unknown>): string {
   const canonical = Object.keys(value)
     .filter((key) => !FINGERPRINT_EXCLUDED_KEYS.has(key) && value[key] !== undefined)
-    .sort()
+    // Codepoint order, not locale collation: this feeds a fingerprint compared
+    // across processes, so it must not depend on the server's `LANG`.
+    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
     .map((key) => [key, value[key]])
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex')
 }

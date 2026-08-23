@@ -45,6 +45,7 @@ export type AssignCaseResult =
   | { status: 'not_found' }
   | { status: 'forbidden'; reason: 'not_assignable' | 'already_owned' }
   | { status: 'invalid_target' }
+  | { status: 'case_merged'; canonicalCaseId: string }
   | { status: 'conflict'; currentUpdatedAt: string }
 
 export const CONNECT_ASSIGN_CASE_COMMAND_ID = 'connect.cases.assign'
@@ -115,6 +116,13 @@ export async function assignCase(
 
     const access = evaluateCaseAccess(target, actor)
     if (!access.canRead) return { status: 'not_found' }
+
+    // A merged source is historical. Assigning it would put an agent's name on
+    // work that now lives on the canonical target, and give them a Case they
+    // cannot reply in.
+    if (target.mergedIntoCaseId) {
+      return { status: 'case_merged', canonicalCaseId: target.mergedIntoCaseId }
+    }
 
     // Optimistic locking: two agents racing to claim the same Case must not
     // both believe they won.

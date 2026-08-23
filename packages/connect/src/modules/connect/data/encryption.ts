@@ -39,6 +39,18 @@ export const defaultEncryptionMaps: ModuleEncryptionMap[] = [
     entityId: 'connect:connect_identity_link_audit',
     fields: [{ field: 'reason' }],
   },
+  {
+    // A supervisor's note about why two Cases were merged, or why conversations
+    // were split out. It names the customer and the mistake, so it is encrypted
+    // like the link audit's reason.
+    //
+    // Only `reason`. The before/after snapshots on the same row stay plaintext
+    // deliberately: undo compares them field-by-field to decide whether a
+    // reversal is safe, they hold identifiers, enums and timestamps only, and
+    // encrypting them would make that comparison require decrypting the row.
+    entityId: 'connect:connect_case_reparenting',
+    fields: [{ field: 'reason' }],
+  },
 ]
 
 export default defaultEncryptionMaps
