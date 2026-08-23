@@ -129,9 +129,13 @@ Each provider is a dedicated npm workspace package. Provider modules MUST NOT be
 | `packages/gateway-stripe/` | `@open-mercato/gateway-stripe` | Stripe payment gateway integration |
 | `packages/channel-gmail/` | `@open-mercato/channel-gmail` | Gmail email channel integration |
 | `packages/channel-imap/` | `@open-mercato/channel-imap` | IMAP email channel integration |
+| `packages/channel-apns/` | `@open-mercato/channel-apns` | Apple Push Notification channel — registers a `push` ChannelAdapter (`providerKey: apns`) into the Communications Hub |
+| `packages/channel-expo/` | `@open-mercato/channel-expo` | Expo push channel — registers a `push` ChannelAdapter (`providerKey: expo`) |
+| `packages/channel-fcm/` | `@open-mercato/channel-fcm` | Firebase Cloud Messaging channel — registers a `push` ChannelAdapter (`providerKey: fcm`) |
 | `packages/storage-s3/` | `@open-mercato/storage-s3` | S3-compatible object storage provider |
 | `packages/sync-akeneo/` | `@open-mercato/sync-akeneo` | Akeneo PIM data synchronization |
 | `packages/checkout/` | `@open-mercato/checkout` | Checkout flow module |
+| `packages/documents/` | `@open-mercato/documents` | Collaborative internal documents (TipTap + Yjs) with a Hocuspocus WebSocket sidecar (`server/documents-collab-server.ts`). Requires `auth`, `directory`, `attachments`. See [domain/modules.md → Documents Module](../domain/modules.md#documents-module). |
 | `packages/webhooks/` | `@open-mercato/webhooks` | Outbound/inbound webhooks, Standard Webhooks signing, delivery queues |
 
 ## Enterprise Package
@@ -140,8 +144,9 @@ Each provider is a dedicated npm workspace package. Provider modules MUST NOT be
 - Commercial proprietary software with its own license
 - **No external PRs accepted** — see `CONTRIBUTING.md`
 - Activated via `OM_ENABLE_ENTERPRISE_MODULES=true` env var
-- Includes `record_locks` module (collaborative editing with live presence)
-- SSO and security (MFA, passkeys, sudo) via separate env flags
+- Modules enabled by the base flag: `record_locks` (collaborative editing with live presence), `system_status_overlays` (enterprise overlays/widgets for system status pages)
+- `OM_ENABLE_ENTERPRISE_MODULES_SSO=true` adds the `sso` module
+- `OM_ENABLE_ENTERPRISE_MODULES_SECURITY=true` adds the `security` module (MFA, passkeys, sudo)
 
 ## Configuration & Build Files
 

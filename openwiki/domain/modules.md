@@ -537,6 +537,11 @@ The remaining enabled modules in `packages/core/src/modules/` (and a few standal
 | `sales` | `packages/core/src/modules/sales/` | Quote-to-cash lifecycle. (See above.) |
 | `customers` | `packages/core/src/modules/customers/` | CRM (people, companies, deals, interactions, calendar). (See above.) |
 | `customer_accounts` | `packages/core/src/modules/customer_accounts/` | Customer portal identity, auth, custom domains. (See above.) |
+| `devices` | `packages/core/src/modules/devices/` | Per-tenant user device registry (`UserDevice`): platform/app/OS metadata, push-token storage scoped per (tenant, org, user, device). Requires `auth`. |
+| `push_notifications` | `packages/core/src/modules/push_notifications/` | Push delivery rails — the `push` notification delivery strategy, delivery log, `send-push` worker, and stuck-row reaper. Fans out to `devices` tokens and sends through the [Communication Channels](#communication-channels-module) hub. (See below.) |
+| `warranty_claims` | `packages/core/src/modules/warranty_claims/` | B2B warranty, RMA, core-return, and vendor-recovery claims desk. Claim aggregate with line-level partials/dispositions, SLA pause/escalation, risk signals & auto-adjudication (default OFF), portal intake, and sales-order tab injection. (See below.) |
+| `eudr` | `packages/core/src/modules/eudr/` | EU Deforestation Regulation compliance: product commodity mappings, supplier origin evidence, due diligence statements, plots, risk assessments, mitigation actions. (See below.) |
+| `documents` | `packages/documents/src/modules/documents/` | Collaborative internal documents (TipTap + Yjs) with a Hocuspocus WebSocket sidecar. Requires `auth`, `directory`, `attachments`. (See below.) |
 | `portal` | `packages/core/src/modules/portal/` | Customer portal frontend extension. Documented in UI `AGENTS.md`; not yet synthesized (see backlog). |
 | `wms` | `packages/core/src/modules/wms/` | Warehouse & inventory execution. (See above.) |
 | `api_keys` | `packages/core/src/modules/api_keys/` | Scoped API keys for programmatic access. |
@@ -568,6 +573,93 @@ The remaining enabled modules in `packages/core/src/modules/` (and a few standal
 | `telemetry` | `packages/telemetry/` | Vendor-neutral OTel/OTLP observability (off by default). See [Telemetry Package](#telemetry-package) above. |
 | `onboarding` | `packages/onboarding/` | Setup wizards, tenant provisioning hooks. |
 | `content` | `packages/content/` | Static content pages (privacy, terms, legal). |
+
+## Push Notifications Module
+
+**Path:** `packages/core/src/modules/push_notifications/`
+**AGENTS.md:** Present
+**Spec:** `.ai/specs/2026-04-28-push-notifications-and-devices.md`
+**Requires:** `auth`, `devices`, `notifications`, `communication_channels`, `integrations`
+
+Push delivery **rails** — the `push` notification delivery strategy, delivery log, `send-push` worker, and a stuck-row reaper. It deliberately owns **only** delivery: device tokens live in `devices`, per-user opt-out in `notifications`, and provider credentials/transport in the [communication_channels](#communication-channels-module) hub plus the channel packages (`channel_apns`, `channel_expo`, `channel_fcm`).
+
+### Delivery Flow
+
+```mermaid
+flowchart TD
+    NOTIFY[notifications:deliver subscriber] -->|enqueue| QUEUE[push delivery queue]
+    QUEUE --> WORKER[send-push worker]
+    WORKER --> CLAIM[atomic claim: pending to sending]
+    CLAIM --> HUB[resolve tenant push CommunicationChannel + adapter + creds]
+    HUB --> SEND[convertOutbound then sendMessage via channelAdapterRegistry]
+    SEND -->|success| DONE[sent]
+    SEND -->|transient| RETRY[exponential backoff + jitter, 3 attempts]
+    SEND -->|unregistered sentinel| SOFTDEL[soft-delete device]
+    SEND -->|terminal| FAILED[failed]
+    RETRY -->|exhausted| EXPIRED[expired]
+    REAPER[scheduler reaper tick] -->|stuck sending| RECLAIM[re-open + re-enqueue, else expired]
+```
+
+### Key Invariants
+- **Strategy only enqueues** — runs inside the persistent `notifications:deliver` subscriber; the actual send happens in the worker so a slow provider never blocks notification creation. Opt-out is enforced upstream, once, by the notifications create-time `shouldDeliver` gate; the `push` strategy no longer re-checks.
+- **At-least-once with atomic claim** — `pending → sending` means a redelivered job is processed once; retries use exponential backoff + jitter (3 attempts, shared `@open-mercato/shared/lib/delivery/retry`).
+- **Terminal vs retryable failure** — `failed` for terminal errors (e.g. `channel_unavailable`, `no_adapter`); `expired` once retries are exhausted. `push_notifications.delivery.failed` fires on **every** failed attempt and carries `willRetry: true` when another attempt is scheduled — subscribers counting ultimately-failed deliveries MUST filter to `willRetry !== true`.
+- **Stuck-row reaper** — a per-tenant `@open-mercato/scheduler` interval (registered best-effort in `setup.ts`) recovers rows stranded in `sending` by a crashed worker, since the claim only matches `pending`. Reclaims past `OM_PUSH_STUCK_RECLAIM_MINUTES` (default 5); each transition is an atomic `nativeUpdate` guarded on `status='sending'` + still-stale `updated_at` so overlapping ticks or a re-claimed worker never re-open an active delivery. Batch-bounded by `OM_PUSH_STUCK_RECLAIM_BATCH_LIMIT` (default 500, oldest-stuck first).
+- **Fan-out (`lib/push-fanout.ts`)** — shared device-resolution + provider routing + delivery-row insert + enqueue; preference-agnostic. Its channel/device short-circuits (no push channel / no devices / no provider match → `{ enqueued: 0 }`) are push's authoritative "is push set up" check.
+
+### Source References
+- `lib/push-delivery-strategy.ts` — `push` strategy registration (notifications `delivery-strategies` generator plugin)
+- `workers/send-push.worker.ts` → `lib/push-delivery.ts` — send path, claim, retry
+- `lib/push-fanout.ts` — `fanOutPushDeliveries` device resolution + routing
+- `lib/push-reaper.ts` → `workers/reclaim-stuck.worker.ts` — stuck-row recovery
+- `lib/queue.ts` — `createModuleQueue`, `enqueuePushDelivery`, local-worker bootstrap
+- `events.ts` — `push_notifications.delivery.sent` / `.failed`
+
+## Warranty Claims Module
+
+**Path:** `packages/core/src/modules/warranty_claims/`
+**AGENTS.md:** Present
+**Spec:** `.ai/specs/2026-07-03-warranty-rma-claims-desk.md`
+
+B2B warranty, RMA, core-return, and vendor-recovery claims desk. Owns the claim aggregate, line-level partials with dispositions, receiving & grading, SLA pause/escalation, risk signals & adjudication, registrations & vendor recovery, portal + API-key intake, and resolution-execution bridges into `sales`.
+
+### Key Invariants
+- **Frozen status enum + state machine** — lifecycle transitions live in `lib/stateMachine.ts` + `data/constants.ts`; moves MUST go through `warranty_claims.claim.transition`, never generic `PUT`. `closed → in_review` is the reopen path; `cancelled` is terminal.
+- **Lines are first-class partials** — line create/update/delete MUST recompute header money rollups inside the same atomic flush.
+- **SLA is settings-driven** (`lib/settings.ts`) — `info_requested` pauses when configured and resume shifts the due date instead of shortening the window.
+- **Auto-adjudication default OFF**, risk-gated by `lib/risk.ts`, executed only inside the submit command path, limited to auto-approval — never auto-deny. Risk signals are deterministic, tenant/org scoped, code-constant based.
+- **Event split** — `warranty_claims.claim.status_changed` is the staff/client broadcast and MUST NOT pin `recipientUserIds`; `warranty_claims.claim.portal_status_changed` is the portal broadcast and MUST pin customer-user recipient ids (skips emit when none).
+- **Coupling via FK-id + snapshot** to `sales`, `customers`, `catalog`, `auth` — never direct ORM relations; optional peer lookups use QueryEngine or scoped decrypted lookups wrapped in `try/catch`.
+- **Optimistic locking on by default** for CRUD and settings; action endpoints use `enforceCommandOptimisticLock`; UI line mutations send each line's own `updatedAt`.
+- Free-text/correspondence fields are encrypted (`encryption.ts`) and excluded from search sources.
+
+### Events (selection)
+`warranty_claims.claim.created/.updated/.submitted/.status_changed/.portal_status_changed/.assigned/.comment_added/.sla_at_risk/.sla_breached/.escalated`, `warranty_claims.registration.created`, `warranty_claims.claim_line.quarantined`, `warranty_claims.claim.return_label_created`.
+
+## EUDR Compliance Module
+
+**Path:** `packages/core/src/modules/eudr/`
+**Spec:** `.ai/specs/2026-07-06-eudr-compliance-module.md`
+
+EU Deforestation Regulation compliance. Entities: product commodity mappings, supplier origin evidence submissions, due diligence statements, plots, risk assessments, mitigation actions. Lifecycle events: `eudr.due_diligence_statement.submitted/.reference_issued/.withdrawn`, `eudr.risk_assessment.concluded`. ACL features split into `eudr.mappings`, `eudr.submissions`, `eudr.statements` view/manage pairs. Couples to `catalog` (product mappings) and `customers` (supplier evidence) via FK-ids and QueryEngine lookups.
+
+## Documents Module
+
+**Path:** `packages/documents/` — `@open-mercato/documents`
+**Module:** `packages/documents/src/modules/documents/`
+**Spec:** `.ai/specs/2026-07-08-documents-collaborative-editor.md`
+**Requires:** `auth`, `directory`, `attachments` (not ejectable until the collaboration sidecar can load an app-ejected implementation)
+
+Tenant/organization-scoped backoffice module where staff co-author rich-text documents in real time (TipTap + Yjs), organized in folders, shared per-document (owner / editor / commenter / viewer), annotated with inline comments + @mentions, versioned, and exported to `.docx`/PDF.
+
+### Collaboration Sidecar
+Real-time editing is served by a **Hocuspocus WebSocket sidecar** — a separate long-lived Node process, **not** a Next.js route (App Router route handlers can't hold long-lived sockets). Entry: `packages/documents/server/documents-collab-server.ts`.
+
+- The sidecar bootstraps the app's module registry + ORM via `bootstrapFromAppRoot()` (the same path the `mercato queue worker` fleet uses), then opens a fresh request-scoped container per document load/store so every query is tenant/org-scoped.
+- `NEXT_PUBLIC_DOCUMENTS_COLLAB_URL` points the browser at the reachable `ws://`/`wss://` endpoint. When unset, users with edit capability get an optimistic-locked single-user autosave fallback; read-only/commenter users stay fail-closed. PostgreSQL remains authoritative in both modes.
+- `DOCUMENTS_COLLAB_PORT` (default `4101`) is the sidecar listen port. The create-app Docker Compose templates include a `documents-collab` service.
+
+Run: `yarn documents:collab` (dev: `yarn workspace @open-mercato/documents collab`). See [operations/runbook.md → Documents Collaboration Sidecar](../operations/runbook.md#documents-collaboration-sidecar) for deployment.
 
 ## Cross-Module Coupling Patterns
 
