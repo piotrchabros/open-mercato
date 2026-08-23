@@ -13,17 +13,22 @@ import { createRecordLockCrudMutationGuardService } from './lib/crudMutationGuar
 
 export function register(container: AppContainer) {
   container.register({
+    // The optional dependencies carry runtime defaults rather than a TypeScript
+    // `?` marker: `?` is erased at transpile, so awilix would see three REQUIRED
+    // parameters and throw `Could not resolve 'moduleConfigService'` in any
+    // container that does not register them. A default value survives
+    // transpilation and is what awilix reads as "optional". Issue #33.
     recordLockService: asFunction((
       em: EntityManager,
-      moduleConfigService?: ModuleConfigService | null,
-      actionLogService?: ActionLogService | null,
-      rbacService?: RbacService | null,
+      moduleConfigService: ModuleConfigService | null = null,
+      actionLogService: ActionLogService | null = null,
+      rbacService: RbacService | null = null,
     ) =>
       createRecordLockService({
         em,
-        moduleConfigService: moduleConfigService ?? null,
-        actionLogService: actionLogService ?? null,
-        rbacService: rbacService ?? null,
+        moduleConfigService,
+        actionLogService,
+        rbacService,
       }),
     ).scoped(),
     // CRUD guard decorator: chains the OSS `updated_at` floor first (built here
