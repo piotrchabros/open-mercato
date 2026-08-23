@@ -58,8 +58,34 @@ function projectCase(row: ConnectCase) {
     resolvedAt: row.resolvedAt?.toISOString() ?? null,
     closedAt: row.closedAt?.toISOString() ?? null,
     previousCaseId: row.previousCaseId ?? null,
+    // Lineage is additive: existing keys are untouched, and a merged source
+    // stays readable so an old link still resolves — it just names where the
+    // conversation actually lives now.
+    mergedIntoCaseId: row.mergedIntoCaseId ?? null,
+    splitFromCaseId: row.splitFromCaseId ?? null,
+    lineageVersion: row.lineageVersion,
     updatedAt: row.updatedAt.toISOString(),
   }
+}
+
+/**
+ * A merged source is historical and read-only.
+ *
+ * Its conversations belong to the canonical target now, so accepting a mutation
+ * here would change a Case nobody is working while the operator believes they
+ * changed the live one. The response names the target so the UI can redirect
+ * rather than just refuse.
+ */
+function mergedSourceConflict(row: ConnectCase): Response {
+  return NextResponse.json(
+    {
+      error: 'record_conflict',
+      code: 'case_merged',
+      canonicalCaseId: row.mergedIntoCaseId,
+      currentUpdatedAt: row.updatedAt.toISOString(),
+    },
+    { status: 409 },
+  )
 }
 
 export async function GET(req: Request): Promise<Response> {
@@ -154,6 +180,9 @@ export async function PUT(req: Request): Promise<Response> {
   if (!row) return inboxNotFound()
   const access = evaluateCaseAccess(row, actor)
   if (!access.canRead) return inboxNotFound()
+  // After visibility, never before: a caller who cannot see the Case must not
+  // learn from a 409 that it exists and was merged.
+  if (row.mergedIntoCaseId) return mergedSourceConflict(row)
   if (!access.canAct) {
     return NextResponse.json(
       { error: 'You can only change a case assigned to you.', code: 'not_owner' },
@@ -205,7 +234,7 @@ export const openApi = {
         { status: 401, description: 'Unauthorized' },
         { status: 403, description: 'Case is not assigned to you' },
         { status: 404, description: 'Case not found' },
-        { status: 409, description: 'Case changed since it was loaded' },
+        { status: 409, description: 'Case changed since it was loaded, or is a merged historical source' },
         { status: 422, description: 'Invalid body' },
       ],
     },

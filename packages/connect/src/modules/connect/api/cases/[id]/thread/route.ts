@@ -79,6 +79,23 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
   const access = evaluateCaseAccess(target, actor)
   if (!access.canRead) return inboxNotFound()
 
+  // A merged source owns no conversations any more, so this read would otherwise
+  // return an empty thread indistinguishable from a Case awaiting its first
+  // message. Naming the canonical target lets the UI send the agent to where the
+  // conversation actually is instead of showing them nothing. After the access
+  // check, so a caller who cannot see the Case learns nothing from the 409.
+  if (target.mergedIntoCaseId) {
+    return NextResponse.json(
+      {
+        error: 'record_conflict',
+        code: 'case_merged',
+        canonicalCaseId: target.mergedIntoCaseId,
+        currentUpdatedAt: target.updatedAt.toISOString(),
+      },
+      { status: 409 },
+    )
+  }
+
   const conversations = await em.find(ConnectConversation, {
     tenantId: actor.tenantId,
     organizationId: actor.organizationId,
@@ -148,7 +165,7 @@ export const openApi = {
         { status: 400, description: 'Invalid case id or no organization selected' },
         { status: 401, description: 'Unauthorized' },
         { status: 404, description: 'Case not found or not readable' },
-        { status: 409, description: 'Cursor no longer valid' },
+        { status: 409, description: 'Cursor no longer valid, or the case is a merged historical source' },
         { status: 503, description: 'Message reader unavailable' },
       ],
     },

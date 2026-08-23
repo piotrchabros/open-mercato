@@ -65,6 +65,7 @@ export type EnqueueOutboundResult =
   | { status: 'not_found' }
   | { status: 'forbidden'; reason: 'not_owner' }
   | { status: 'case_closed' }
+  | { status: 'case_merged'; canonicalCaseId: string }
   | { status: 'conversation_mismatch' }
   | { status: 'fingerprint_mismatch' }
   | { status: 'reply_target_unavailable'; reason: string }
@@ -122,6 +123,13 @@ export async function enqueueOutbound(
     const access = evaluateCaseAccess(target, actor)
     if (!access.canRead) return { status: 'not_found' }
     if (!access.canAct) return { status: 'forbidden', reason: 'not_owner' }
+    // A merged source is historical: its conversations moved to the canonical
+    // target, so a reply composed here would be sent into a thread this Case no
+    // longer owns. Checked before `case_closed` because the merge is the more
+    // specific and more actionable answer — the agent needs the target's id.
+    if (target.mergedIntoCaseId) {
+      return { status: 'case_merged', canonicalCaseId: target.mergedIntoCaseId }
+    }
     // `closed` is terminal. Replying to a closed Case would produce a message
     // with nowhere to belong, since a later inbound opens a successor.
     if (target.status === 'closed') return { status: 'case_closed' }

@@ -67,6 +67,13 @@ export async function GET(req: Request): Promise<Response> {
     deletedAt: null,
   }
   if (query.includeClosed === 'false') where.status = { $ne: 'closed' }
+  // A merged source is historical: its conversations belong to the canonical
+  // target, so leaving it in triage would show an agent a Case they cannot reply
+  // in. Excluded by the LINEAGE column rather than by status, so a stale status
+  // left by a concurrent write cannot smuggle it back into the active list.
+  // Closed-history views may still include it — that is what makes an old link
+  // resolve — so the predicate follows `includeClosed`.
+  if (query.includeClosed === 'false') where.mergedIntoCaseId = null
 
   // `all` is only honoured for a caller who may actually see all. Without that
   // check the filter would be a client-side privilege escalation.
@@ -112,6 +119,8 @@ export async function GET(req: Request): Promise<Response> {
       priority: row.priority,
       assigneeUserId: row.assigneeUserId ?? null,
       customerId: row.customerId ?? null,
+      mergedIntoCaseId: row.mergedIntoCaseId ?? null,
+      splitFromCaseId: row.splitFromCaseId ?? null,
       lastInboundAt: row.lastInboundAt?.toISOString() ?? null,
       unread: isUnread(row.lastInboundAt ?? null, readByCase.get(row.id) ?? null),
       updatedAt: row.updatedAt.toISOString(),
