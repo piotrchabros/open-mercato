@@ -76,6 +76,10 @@ export async function POST(req: Request, context: RouteContext): Promise<Respons
     conversationId: body.conversationId,
     clientCommandKey: body.clientCommandKey,
     body: body.body,
+    // Set HERE, server-side, and absent from `bodySchema` on purpose: this is
+    // the authenticated human reply route, and a client that could name the
+    // origin could manufacture proof that a person wrote an automated message.
+    contentOrigin: 'human_authored',
     actor: { ...actor, features: [...actor.features] },
   })
 

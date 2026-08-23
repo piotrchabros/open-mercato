@@ -18,6 +18,7 @@ import { recordInboundHit } from '../lib/inbound-rate-limiter'
 import { hashHandle, resolveIdentity } from '../lib/identity-resolver'
 import { claimInboundReceipt, completeReceipt } from '../lib/receipt-claim'
 import { stageDomainEvent } from '../lib/domain-outbox'
+import { recordGenerationStarted, recordWaitEnded } from '../lib/sla-source-facts'
 import { evaluateActivation } from '../lib/activation'
 import { CONNECT_QUEUES } from '../lib/queue'
 
@@ -364,7 +365,7 @@ export async function ingestInboundMessage(
     })
 
     if (decision.decision === 'attach' && boundCase && decision.caseId === boundCase.id) {
-      return applyAttach(tem as EntityManager, scope, boundCase, decision.nextStatus, now)
+      return applyAttach(tem as EntityManager, scope, boundCase, decision.nextStatus, receipt.id, now)
     }
     if (decision.decision === 'attach') {
       const target = await (tem as EntityManager).findOne(ConnectCase, {
@@ -373,7 +374,9 @@ export async function ingestInboundMessage(
         organizationId: scope.organizationId,
         deletedAt: null,
       })
-      if (target) return applyAttach(tem as EntityManager, scope, target, decision.nextStatus, now)
+      if (target) {
+        return applyAttach(tem as EntityManager, scope, target, decision.nextStatus, receipt.id, now)
+      }
     }
 
     return openCase(tem as EntityManager, {
@@ -383,6 +386,7 @@ export async function ingestInboundMessage(
       binding,
       envelope,
       previousCaseId: boundCase?.status === 'closed' ? boundCase.id : null,
+      receiptId: receipt.id,
       now,
     })
   })
@@ -500,6 +504,7 @@ async function applyAttach(
   scope: { tenantId: string; organizationId: string },
   target: ConnectCase,
   nextStatus: ConnectCaseStatus,
+  receiptId: string,
   now: Date,
 ): Promise<{ caseId: string; opened: false }> {
   const previousStatus = target.status
@@ -520,6 +525,37 @@ async function applyAttach(
       }),
     )
   }
+
+  // The customer answered, so any wait on the round they were answering is
+  // over. Recorded against the round in force BEFORE a reopen, otherwise the
+  // interval would be attributed to a round that had not started when it began.
+  if (previousStatus === 'waiting_customer' && nextStatus !== previousStatus) {
+    await recordWaitEnded(em, {
+      ...scope,
+      sourceEventId: `connect.case.customer_wait_ended:${receiptId}`,
+      caseId: target.id,
+      generation: target.slaGeneration,
+      occurredAt: now,
+    })
+  }
+
+  // An inbound that revives a resolved Case is a reopen in every sense that
+  // matters downstream, so it starts a new round exactly as the explicit
+  // command does. Treating only the button as a reopen would let a customer's
+  // reply accrue silently against the round that was already reported resolved.
+  if (previousStatus === 'resolved' && nextStatus === 'in_progress') {
+    target.slaGeneration += 1
+    await recordGenerationStarted(em, {
+      ...scope,
+      sourceEventId: `connect.case.generation_started:${receiptId}`,
+      caseId: target.id,
+      generation: target.slaGeneration,
+      channelId: target.channelId,
+      cause: 'reopened',
+      occurredAt: now,
+    })
+  }
+
   await em.flush()
   return { caseId: target.id, opened: false }
 }
@@ -533,6 +569,7 @@ async function openCase(
     binding: ConnectIdentityCaseBinding
     envelope: { subject: string; replyTargetMaskedLabel: string }
     previousCaseId: string | null
+    receiptId: string
     now: Date
   },
 ): Promise<{ caseId: string; opened: true }> {
@@ -569,6 +606,20 @@ async function openCase(
       payload: { trigger: 'inbound', successor: args.previousCaseId != null },
     }),
   )
+  await em.flush()
+
+  // Round 0 opens with the Case. Emitting it here, rather than lazily on the
+  // first reply, is what lets a consumer see a Case that was never answered at
+  // all — the case that matters most and the one a lazy write would hide.
+  await recordGenerationStarted(em, {
+    ...scope,
+    sourceEventId: `connect.case.generation_started:${args.receiptId}`,
+    caseId: created.id,
+    generation: created.slaGeneration,
+    channelId: args.channelId,
+    cause: 'opened',
+    occurredAt: now,
+  })
   await em.flush()
 
   args.binding.currentCaseId = created.id

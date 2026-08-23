@@ -13,6 +13,12 @@ import {
 import { evaluateCaseAccess, type CaseActor } from '../lib/case-access'
 import { stageDomainEvent } from '../lib/domain-outbox'
 import { INBOUND_REPLY_REF_SOURCE_VERSION } from '../lib/reply-target'
+import {
+  CONNECT_CONTENT_ORIGINS,
+  CONNECT_RESPONSE_EVIDENCE_VERSION,
+  computeResponseEvidence,
+  resolvePrincipalKindsSoftly,
+} from '../lib/response-evidence'
 
 const logger = createLogger('connect').child({ component: 'enqueue-outbound' })
 
@@ -43,6 +49,14 @@ const enqueueSchema = z.object({
   conversationId: z.string().uuid(),
   clientCommandKey: z.string().min(1).max(200),
   body: z.string().min(1).max(50_000),
+  /**
+   * SERVER-OWNED. Trusted human reply routes pass `human_authored`; a future AI
+   * endpoint passes `ai_draft` with an authenticated acceptor. No client may
+   * submit it, because it is one half of the proof that a person answered.
+   */
+  contentOrigin: z.enum(CONNECT_CONTENT_ORIGINS).default('human_authored'),
+  /** The authenticated user who accepted an AI draft. Server-resolved. */
+  acceptedByUserId: z.string().uuid().nullish(),
   actor: z.object({
     userId: z.string().uuid(),
     tenantId: z.string().uuid(),
@@ -51,7 +65,12 @@ const enqueueSchema = z.object({
   }),
 })
 
-export type EnqueueOutboundInput = z.infer<typeof enqueueSchema>
+/**
+ * `z.input`, not `z.infer`: `contentOrigin` carries a server-side default, and
+ * inferring the OUTPUT type would make it required on every existing caller —
+ * a signature break for a field no caller is allowed to choose anyway.
+ */
+export type EnqueueOutboundInput = z.input<typeof enqueueSchema>
 
 export type EnqueueOutboundResult =
   | {
@@ -193,6 +212,24 @@ export async function enqueueOutbound(
       return { status: 'reply_target_unavailable', reason: resolved.status }
     }
 
+    // Classification is a SOFT dependency: an unprovisioned sidecar or an Auth
+    // facade that is down must degrade the evidence to `unknown`, never refuse
+    // to deliver an agent's reply to a customer.
+    const acceptedByUserId = input.acceptedByUserId ?? null
+    const kinds = await resolvePrincipalKindsSoftly(container, {
+      tenantId: actor.tenantId,
+      organizationId: actor.organizationId,
+      userIds: acceptedByUserId ? [actor.userId, acceptedByUserId] : [actor.userId],
+    })
+    const authorPrincipalKind = kinds.get(actor.userId) ?? null
+    const acceptedByPrincipalKind = acceptedByUserId ? kinds.get(acceptedByUserId) ?? null : null
+    const responseEvidence = computeResponseEvidence({
+      contentOrigin: input.contentOrigin,
+      authorPrincipalKind,
+      acceptedByUserId,
+      acceptedByPrincipalKind,
+    })
+
     const message = em.create(ConnectOutboundMessage, {
       tenantId: actor.tenantId,
       organizationId: actor.organizationId,
@@ -207,6 +244,15 @@ export async function enqueueOutbound(
       maskedRecipientLabel: resolved.maskedLabel ?? conversation.replyTargetMaskedLabel ?? null,
       actorUserId: actor.userId,
       channelId: conversation.channelId,
+      // Read while the Case is LOCKED. A reopen racing this enqueue would
+      // otherwise let a reply be credited to a round it was never part of.
+      caseGeneration: target.slaGeneration,
+      contentOrigin: input.contentOrigin,
+      authorPrincipalKind,
+      acceptedByUserId,
+      acceptedByPrincipalKind,
+      responseEvidence,
+      responseEvidenceVersion: CONNECT_RESPONSE_EVIDENCE_VERSION,
     })
     em.persist(message)
     await em.flush()

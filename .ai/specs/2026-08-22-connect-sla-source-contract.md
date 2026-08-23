@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Date | 2026-08-22 |
-| Status | Proposed; ready after Connect principal-classification prerequisite and maintainer approval |
+| Status | Implemented 2026-08-23; awaiting deployment evidence before moving to `implemented/` |
 | Scope | Connect-owned immutable response evidence, generation lifecycle, wait facts and scoped SLA reader |
 | Depends on | Connect principal-classification extension contract; Phase 1 Connect; Case re-parenting contract for lineage integration |
 
@@ -124,3 +124,11 @@ Owner selected SPLIT. Fresh boundary review result: keep this Connect-owned sour
 ## Changelog
 
 - 2026-08-22: Split from the combined SLA spec by owner decision; exact neutral Connect evidence/generation/lifecycle/reader contract created.
+- 2026-08-23: Implemented. Files: `data/entities.ts` (`ConnectCase.slaGeneration`, six `ConnectOutboundMessage` evidence columns plus `caseGeneration`, and the `ConnectCaseGenerationFact` / `ConnectCaseWaitFact` / `ConnectOutboundDeliveryFact` tables), `lib/response-evidence.ts`, `lib/sla-source-facts.ts`, `lib/sla-source-reader.ts`, `events.ts` (five additive ids), `di.ts` (`connectCaseSlaReader`), `commands/enqueue-outbound.ts`, `commands/transition-case.ts`, `commands/ingest-inbound-message.ts`, `lib/delivery-outcome-apply.ts`, `api/cases/[id]/messages/route.ts`, `migrations/Migration20260823120000_connect.ts` and the Connect snapshot. Decisions taken while implementing, none of which change the contract surface:
+  - **One row per boundary.** A generation start and its resolution, and a wait start and its end, are separate append-only rows; the DTO carries `startedAt` on both and populates `resolvedAt`/`endedAt` only on the closing row. Storing an interval would require updating a fact, which the append-only rule forbids and which would break the `(occurred_at, id)` keyset.
+  - **Inbound-driven reopen increments too.** An inbound that revives a `resolved` Case advances the generation exactly as the explicit reopen command does. Crediting only the button would let a customer's reply accrue silently against a round already reported resolved.
+  - **`mergedIntoCaseId` / `lineageVersion` are present but inert** (always `null` / `0`) until the Case re-parenting and merge contract lands; the columns exist now so that contract is additive.
+  - **`EnqueueOutboundInput` derives with `z.input`, not `z.infer`.** `contentOrigin` carries a server-side default, and inferring the output type would make it a required argument for every existing caller — a signature break for a field no caller is permitted to choose.
+  - **`canReadCase` resolves granted features through the optional `rbacService`** and fails closed (empty grants deny every branch of the Case access matrix) when it is unavailable, so a reporting consumer can never widen visibility beyond the Inbox.
+  - **`captureHighWatermark` returns the greatest `(occurred_at, id)` across all three fact tables**, so one watermark bounds every list call in a sync run and the three streams stay mutually consistent.
+  - **Fact writes guard on `sourceEventId` before inserting** instead of relying on the unique index to reject a duplicate: a constraint violation would abort the caller's transaction, rolling back an agent's reply because an announcement was replayed.

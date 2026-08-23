@@ -28,9 +28,13 @@ import {
   ConnectPrincipalClassification,
   ConnectPrincipalClassificationChange,
   ConnectPrincipalClassificationManifestEntry,
+  ConnectCaseGenerationFact,
+  ConnectCaseWaitFact,
+  ConnectOutboundDeliveryFact,
 } from './data/entities'
 import { createCapabilityReporter } from './lib/activation'
 import { createDefaultConnectPrincipalKindReader } from './lib/principal-classification'
+import { createConnectCaseSlaReader } from './lib/sla-source-reader'
 import { createConnectPrincipalClassificationProvisioningService } from './lib/principal-classification-provisioning'
 import { createConnectPrincipalClassificationManifestService } from './lib/principal-classification-manifest'
 
@@ -63,6 +67,9 @@ export function register(container: AppContainer) {
     ConnectPrincipalClassification: asValue(ConnectPrincipalClassification),
     ConnectPrincipalClassificationChange: asValue(ConnectPrincipalClassificationChange),
     ConnectPrincipalClassificationManifestEntry: asValue(ConnectPrincipalClassificationManifestEntry),
+    ConnectCaseGenerationFact: asValue(ConnectCaseGenerationFact),
+    ConnectCaseWaitFact: asValue(ConnectCaseWaitFact),
+    ConnectOutboundDeliveryFact: asValue(ConnectOutboundDeliveryFact),
     // The container runs in Awilix CLASSIC injection mode, which resolves each
     // dependency by parameter name. A destructured `({ em })` parameter has no
     // resolvable name and silently arrives as undefined: the reader then returns
@@ -82,6 +89,14 @@ export function register(container: AppContainer) {
       em,
       provisioningService: connectPrincipalClassificationProvisioningService,
     })).scoped(),
+
+    // The ONLY supported read path into Connect's SLA source facts. Same named
+    // parameter rule as above: CLASSIC injection resolves `em` by name, and a
+    // destructured parameter would leave the reader querying through undefined
+    // and returning empty pages that look exactly like "no data".
+    connectCaseSlaReader: asFunction((em: EntityManager) =>
+      createConnectCaseSlaReader(em, container),
+    ).scoped(),
 
     // Read by `communication_channels` Contract E before it lets an
     // administrator cut a shared channel over to Connect projection. Connect

@@ -97,6 +97,44 @@ const events = [
     entity: 'contact_identity',
     category: 'lifecycle',
   },
+  /**
+   * SLA-agnostic source facts. Additive and identifier-only, like everything
+   * above: an optional clock consumer subscribes to these instead of inferring
+   * a lifecycle from mutable Case rows, which a reopen would silently rewrite.
+   *
+   * Not client-broadcast — they exist for durable downstream consumers, and a
+   * browser has nothing to render from them.
+   */
+  {
+    id: 'connect.case.generation_started',
+    label: 'Case Generation Started',
+    entity: 'case',
+    category: 'lifecycle',
+  },
+  {
+    id: 'connect.case.generation_resolved',
+    label: 'Case Generation Resolved',
+    entity: 'case',
+    category: 'lifecycle',
+  },
+  {
+    id: 'connect.case.customer_wait_started',
+    label: 'Customer Wait Started',
+    entity: 'case',
+    category: 'lifecycle',
+  },
+  {
+    id: 'connect.case.customer_wait_ended',
+    label: 'Customer Wait Ended',
+    entity: 'case',
+    category: 'lifecycle',
+  },
+  {
+    id: 'connect.outbound.delivery_confirmed',
+    label: 'Outbound Delivery Confirmed',
+    entity: 'outbound_attempt',
+    category: 'lifecycle',
+  },
 ] as const
 
 export const eventsConfig = createModuleEvents({ moduleId: 'connect', events })
