@@ -97,6 +97,10 @@ export const enabledModules: ModuleEntry[] = [
   // removing this line leaves `/backend/connect/metrics` and every Phase 1
   // route untouched.
   { id: 'connect_analytics', from: '@open-mercato/connect' },
+  // Routing capacity foundation. Ships one phase ahead of routing itself so the
+  // agent-capacity projection is backfilled from existing Case ownership before
+  // any offer can be made against it. Adds no route, page or ACL feature.
+  { id: 'connect_routing', from: '@open-mercato/connect' },
   { id: 'onboarding', from: '@open-mercato/onboarding' },
   { id: 'api_docs', from: '@open-mercato/core' },
   { id: 'business_rules', from: '@open-mercato/core' },

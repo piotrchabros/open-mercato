@@ -31,6 +31,7 @@ import {
 } from './data/entities'
 import { createCapabilityReporter } from './lib/activation'
 import { createConnectOperationalMetricsReader } from './lib/operational-metrics-reader'
+import { createConnectCurrentCaseCountReader } from './lib/current-case-count-reader'
 import { createDefaultConnectPrincipalKindReader } from './lib/principal-classification'
 import { createConnectPrincipalClassificationProvisioningService } from './lib/principal-classification-provisioning'
 import { createConnectPrincipalClassificationManifestService } from './lib/principal-classification-manifest'
@@ -70,6 +71,12 @@ export function register(container: AppContainer) {
     // no classifications and the manifest service throws on `em.find`.
     connectPrincipalKindReader: asFunction((em: EntityManager) =>
       createDefaultConnectPrincipalKindReader(em, container),
+    ).scoped(),
+    // Additive, STABLE contract read by `connect_routing` to build its capacity
+    // projection. Connect answers "which Cases are current work" so no consumer
+    // has to re-derive that rule against `connect_cases` directly.
+    connectCurrentCaseCountReader: asFunction((em: EntityManager) =>
+      createConnectCurrentCaseCountReader(em),
     ).scoped(),
     connectPrincipalClassificationProvisioningService: asFunction(() =>
       createConnectPrincipalClassificationProvisioningService(container),
