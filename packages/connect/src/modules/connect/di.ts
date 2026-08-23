@@ -28,6 +28,9 @@ import {
   ConnectPrincipalClassification,
   ConnectPrincipalClassificationChange,
   ConnectPrincipalClassificationManifestEntry,
+  ConnectCaseGenerationFact,
+  ConnectCaseWaitFact,
+  ConnectOutboundDeliveryFact,
   ConnectCaseNumberSequence,
   ConnectCaseReparenting,
   ConnectCaseReparentingItem,
@@ -38,6 +41,7 @@ import { createConnectContactDenominatorReader } from './lib/contact-denominator
 import { createConnectCurrentCaseCountReader } from './lib/current-case-count-reader'
 import { createConnectOperationalMetricsReader } from './lib/operational-metrics-reader'
 import { createDefaultConnectPrincipalKindReader } from './lib/principal-classification'
+import { createConnectCaseSlaReader } from './lib/sla-source-reader'
 import { createConnectPrincipalClassificationProvisioningService } from './lib/principal-classification-provisioning'
 import { createConnectPrincipalClassificationManifestService } from './lib/principal-classification-manifest'
 
@@ -70,6 +74,9 @@ export function register(container: AppContainer) {
     ConnectPrincipalClassification: asValue(ConnectPrincipalClassification),
     ConnectPrincipalClassificationChange: asValue(ConnectPrincipalClassificationChange),
     ConnectPrincipalClassificationManifestEntry: asValue(ConnectPrincipalClassificationManifestEntry),
+    ConnectCaseGenerationFact: asValue(ConnectCaseGenerationFact),
+    ConnectCaseWaitFact: asValue(ConnectCaseWaitFact),
+    ConnectOutboundDeliveryFact: asValue(ConnectOutboundDeliveryFact),
     ConnectCaseNumberSequence: asValue(ConnectCaseNumberSequence),
     ConnectCaseReparenting: asValue(ConnectCaseReparenting),
     ConnectCaseReparentingItem: asValue(ConnectCaseReparentingItem),
@@ -98,6 +105,14 @@ export function register(container: AppContainer) {
       em,
       provisioningService: connectPrincipalClassificationProvisioningService,
     })).scoped(),
+
+    // The ONLY supported read path into Connect's SLA source facts. Same named
+    // parameter rule as above: CLASSIC injection resolves `em` by name, and a
+    // destructured parameter would leave the reader querying through undefined
+    // and returning empty pages that look exactly like "no data".
+    connectCaseSlaReader: asFunction((em: EntityManager) =>
+      createConnectCaseSlaReader(em, container),
+    ).scoped(),
 
     // Outward-facing read contracts optional consumers resolve through
     // `tryResolve`. Named `em` parameters preserve CLASSIC injection.
