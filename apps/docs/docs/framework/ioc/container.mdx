@@ -23,6 +23,43 @@ export function register(container: AppContainer) {
 }
 ```
 
+## Injection mode: CLASSIC
+
+`createRequestContainer()` builds the container with `InjectionMode.CLASSIC`. CLASSIC resolves a factory's dependencies by parsing its **parameter names** and passing them as separate positional arguments — it does not hand the factory a cradle object. Two common shapes therefore break:
+
+{/* di-classic-proxy:allow-start — the rows below document the broken shapes on purpose */}
+
+| Registration | What CLASSIC does |
+|---|---|
+| `asFunction((em) => ...)` | Resolves `em` and passes it. **Correct.** |
+| `asFunction(({ em }) => ...)` | Resolves `em`, passes it positionally; the factory then destructures the `EntityManager` itself, so `em` is `undefined`. **Silently degrades.** |
+| `asFunction(({ em: entityManager }) => ...)` | Parses the *renamed* binding as the dependency name. **Throws `Could not resolve 'entityManager'`.** |
+| `asFunction((cradle) => ...)` | Looks for a registration named `cradle`. **Throws `Could not resolve 'cradle'`.** |
+
+{/* di-classic-proxy:allow-end */}
+
+The silent case is the dangerous one: a service that receives `undefined` dependencies usually swallows the failure and returns empty results, which reads as "no data" rather than "misconfigured".
+
+Pick one of the two safe forms:
+
+```ts
+// Named parameters — resolved positionally by CLASSIC.
+container.register({
+  todoService: asFunction((em, eventBus) => createTodoService({ em, eventBus })).scoped(),
+})
+
+// Or opt this registration into PROXY resolution, which supports destructuring.
+container.register({
+  todoService: asFunction(({ em, eventBus }) => createTodoService({ em, eventBus }))
+    .scoped()
+    .proxy(),
+})
+```
+
+`asClass` follows the same rule: constructor parameters are resolved by name, so a constructor that destructures its first argument needs `.proxy()` too.
+
+In-repo modules are covered by a guard test (`packages/core/src/__tests__/di-classic-proxy.test.ts`) that fails when a destructured or `cradle`-named factory omits `.proxy()`.
+
 ## Resolving services
 
 - In API handlers: `const authService = container.resolve('authService');`
