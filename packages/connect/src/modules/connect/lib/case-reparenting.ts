@@ -46,6 +46,7 @@ export type ReparentCaseSnapshotV1 = {
   previousCaseId: string | null
   mergedIntoCaseId: string | null
   splitFromCaseId: string | null
+  slaGeneration: number
   lineageVersion: number
   updatedAt: string
 }
@@ -93,6 +94,7 @@ export type ReparentCaseView = {
   previousCaseId: string | null
   mergedIntoCaseId: string | null
   splitFromCaseId: string | null
+  slaGeneration: number
   lineageVersion: number
   updatedAt: Date
 }
@@ -121,6 +123,7 @@ export function buildCaseSnapshot(view: ReparentCaseView): ReparentCaseSnapshotV
     previousCaseId: view.previousCaseId ?? null,
     mergedIntoCaseId: view.mergedIntoCaseId ?? null,
     splitFromCaseId: view.splitFromCaseId ?? null,
+    slaGeneration: view.slaGeneration,
     lineageVersion: view.lineageVersion,
     updatedAt: view.updatedAt.toISOString(),
   }

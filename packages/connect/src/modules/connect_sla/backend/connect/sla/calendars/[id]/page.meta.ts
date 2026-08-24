@@ -1,0 +1,1 @@
+export const metadata = { requireAuth: true, requireFeatures: ['connect_sla.calendar.manage'], pageTitle: 'Edit SLA calendar', pageTitleKey: 'connect_sla.form.calendar.edit', pageContext: 'main' as const } as const

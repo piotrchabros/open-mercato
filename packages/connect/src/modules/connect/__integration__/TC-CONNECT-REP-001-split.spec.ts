@@ -28,6 +28,7 @@ test.describe('TC-CONNECT-REP-001: split a case', () => {
         channelId: ctx.channelId,
         customerKind: 'person',
         customerId: ctx.customerId,
+        slaGeneration: 3,
       })
       ctx.ledger.trackCase(source.id)
       const staying = await seedConversation(ctx.em, ctx.scope, {
@@ -71,6 +72,7 @@ test.describe('TC-CONNECT-REP-001: split a case', () => {
         status: 'in_progress',
         customer_id: ctx.customerId,
         channel_id: ctx.channelId,
+        sla_generation: 3,
       })
       expect(child!.lineage_version).toBe(1)
       expect(child!.number).not.toBe(source.number)
@@ -122,6 +124,8 @@ test.describe('TC-CONNECT-REP-001: split a case', () => {
         sourceCaseId: source.id,
         destinationCaseId: body.destinationCaseId,
         movedConversationCount: 1,
+        sourceSlaGeneration: 3,
+        destinationSlaGeneration: 3,
       })
       // Identifier-only: nothing the customer wrote may reach the event store.
       const serialized = JSON.stringify(events[0].payload)

@@ -1,0 +1,1 @@
+export const metadata = { requireAuth: true, requireFeatures: ['connect_sla.policy.view'], pageTitle: 'SLA policies', pageTitleKey: 'connect_sla.admin.policies', pageGroup: 'Connect', pageGroupKey: 'connect_sla.admin.group', pageOrder: 41, icon: 'shield-check', pageContext: 'main' as const, breadcrumb: [{ label: 'SLA policies', labelKey: 'connect_sla.admin.policies' }] } as const

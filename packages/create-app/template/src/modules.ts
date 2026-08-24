@@ -92,6 +92,7 @@ export const enabledModules: ModuleEntry[] = [
   // always registered but stays inert until a Connect-managed shared channel
   // exists and the upstream contracts report compatible versions.
   { id: 'connect', from: '@open-mercato/connect' },
+  { id: 'connect_sla', from: '@open-mercato/connect' },
   // Connect analytics — formula-versioned reporting over Connect's operational
   // aggregates plus cost accounting inputs. Independently gated: removing this
   // line drops its routes and pages while leaving Connect's own metrics intact.

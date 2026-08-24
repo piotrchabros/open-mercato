@@ -67,7 +67,7 @@ Canonical collection/item routes for policies and calendars, plus `[id]/publish`
 
 ACL IDs: `connect_sla.policy.view|manage`, `connect_sla.calendar.view|manage`, `connect_sla.clock.view|rebuild`; setup syncs administrator grants for new/existing tenants and wildcard tests. Workers use scoped system authority.
 
-UI uses DataTable, CrudForm, apiCall, guarded mutations, shared conflict/loading/error/empty primitives, StatusBadge, semantic tokens, keyboard controls and accessible icon labels. Additive host `connect:inbox:case-detail:sla` carries `{caseId,clockId,responseState,resolutionState,responseDueAt,resolutionDueAt,retryLastMutation?}`; Connect never imports SLA. Keys ship en/de/es/ko/pl.
+UI uses DataTable, CrudForm, apiCall, guarded mutations, shared conflict/loading/error/empty primitives, StatusBadge, semantic tokens, keyboard controls and accessible icon labels. Additive host `connect:inbox:case-detail:sla` carries the Connect-owned context `{caseId,retryLastMutation?}`. The injected SLA widget resolves its own clock through the SLA API; Connect never imports or resolves SLA. Keys ship en/de/es/ko/pl.
 
 ## Migration, Phasing and Tests
 
@@ -98,3 +98,4 @@ Owner selected SPLIT. Source facts moved to the Connect-owned prerequisite; this
 - 2026-08-22: Initial successor spec; calendar owned by optional SLA and Auth/reparenting split.
 - 2026-08-22: Remediated all readiness blockers with exact Connect source facts and SLA contracts.
 - 2026-08-22: Owner selected SPLIT; moved all Connect source-fact ownership to `2026-08-22-connect-sla-source-contract.md` and narrowed this spec to the optional consumer.
+- 2026-08-24: Implementation decision approved: bundle the missing Connect reparent `slaGeneration` propagation prerequisite; keep the Inbox host context Connect-owned (`caseId` and optional guarded-mutation retry callback), with the SLA widget fetching its own clock.

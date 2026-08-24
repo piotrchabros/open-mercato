@@ -1,0 +1,1 @@
+export const metadata = { requireAuth: true, requireFeatures: ['connect_sla.policy.manage'], pageTitle: 'Create SLA policy', pageTitleKey: 'connect_sla.form.policy.create', pageContext: 'main' as const } as const

@@ -96,6 +96,55 @@ describe('the outward read contracts stand alone', () => {
     ).resolves.toMatchObject({ contractVersion: 'connect.contact_root_created.v1', count: 0 })
   })
 
+  it('projects the generation lineage a consumer needs for reconciliation', async () => {
+    const snapshot = {
+      schemaVersion: 1,
+      id: 'case-source',
+      status: 'in_progress',
+      priority: 'normal',
+      assigneeUserId: null,
+      channelId: 'channel-1',
+      firstInboundAt: null,
+      lastInboundAt: null,
+      firstAssignedAt: null,
+      firstOutboundSentAt: null,
+      resolvedAt: null,
+      closedAt: null,
+      previousCaseId: null,
+      mergedIntoCaseId: null,
+      splitFromCaseId: null,
+      slaGeneration: 4,
+      lineageVersion: 0,
+      updatedAt: '2026-08-24T00:00:00.000Z',
+    }
+    const row = {
+      id: 'reparenting-1',
+      operation: 'split',
+      sourceCaseId: 'case-source',
+      destinationCaseId: 'case-child',
+      reversesReparentingId: null,
+      sourceBefore: snapshot,
+      destinationBefore: null,
+      sourcePostUpdatedAt: new Date('2026-08-24T00:01:00.000Z'),
+      destinationPostUpdatedAt: new Date('2026-08-24T00:01:00.000Z'),
+      occurredAt: new Date('2026-08-24T00:01:00.000Z'),
+    }
+    const em = {
+      fork: () => em,
+      findOne: async () => row,
+      execute: async () => [{ reparenting_id: row.id, moved: 1 }],
+    }
+
+    const projection = await createConnectCaseReparentingReader(em as never).getById(scope, row.id)
+
+    expect(projection).toMatchObject({
+      sourceSlaGeneration: 4,
+      destinationSlaGeneration: 4,
+      sourceBefore: { slaGeneration: 4 },
+      destinationBefore: null,
+    })
+  })
+
   // Both predicates, on every method. A facade that accepted a bare id would be
   // a cross-organization read primitive handed to third-party code.
   it('requires tenant and organization on every lineage read', async () => {
@@ -169,6 +218,8 @@ describe('the lineage events stay identifier-only', () => {
     // A count, not an inventory: a large merge must not put an unbounded id
     // array into persistent event storage.
     expect(payloadBuilder).toContain('movedConversationCount')
+    expect(payloadBuilder).toContain('sourceSlaGeneration')
+    expect(payloadBuilder).toContain('destinationSlaGeneration')
     expect(payloadBuilder).not.toContain('movedConversationIds')
   })
 })
