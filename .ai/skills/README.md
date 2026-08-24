@@ -68,13 +68,13 @@ The default `yarn install-skills` ships the **core** tier plus the entire extern
 
 | Tier | Default? | Skills | What's inside |
 |------|----------|--------|---------------|
-| `core` | yes | 15 | Daily-driver skills installed by default. |
+| `core` | yes | 16 | Daily-driver skills installed by default. |
 | `design` | opt-in | 1 | Figma-side design workflow skills. Opt-in â€” presumes Figma tooling. |
 | `automation` | opt-in | 2 | PR/issue automation skills. Opt-in; agent-driven workflows. |
 | `security` | opt-in | 2 | Security audit skills. Opt-in. |
 | `analysis` | opt-in | 2 | Business/engagement analysis skills (app specs, platform gap analysis). Opt-in. |
 | `migration` | opt-in | 3 | One-shot, version-pinned migrations. Install only when needed. |
-| `infra` | opt-in | 2 | Rare, special-case skills. |
+| `infra` | opt-in | 3 | Rare, special-case skills. |
 | external | always | 26 | Shared pipeline skills from [open-mercato/skills](https://github.com/open-mercato/skills), installed via `npx skills add` and refreshed via `npx skills update` (skip with `--no-external`). |
 
 Run `yarn install-skills --list` at any time to see tier definitions, current memberships, and which tiers are installed locally.
@@ -255,6 +255,7 @@ Moved here from [open-mercato/skills](https://github.com/open-mercato/skills) â€
 |-------|-------------|
 | `om-dev-container-maintenance` | Maintain the VS Code Dev Container setup for Open Mercato. MUST use for ANY change to `.devcontainer/` files. Also use when the container fails to build/start, services inside misbehave, or "works locally but not in dev container". Triggers on "dev container", "devcontainer", ".devcontainer". |
 | `om-integration-builder` | Build integration provider packages for the Open Mercato Integration Marketplace (payment, shipping, data-sync, webhook). Scaffolds the npm package, adapter, credentials, widget injection, webhook processing, health checks, i18n, tests. Triggers on "build integration", "add provider", "integrate with stripe/paypal/dhl". |
+| `om-deploy-mercato-connect` | Deploy an explicitly requested Open Mercato Git branch to the mercato-connect manual-testing server behind Caddy, with validated PostgreSQL and attachment backups, Docker Compose cutover, health checks, and rollback notes. Use for "deploy mercato-connect", "mercato-connect.bespokesoft.pl", or deployments under /srv/open-mercato-connect. |
 
 ---
 
