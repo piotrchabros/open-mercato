@@ -60,6 +60,7 @@ const UNDO_PAYLOAD: ReparentUndoPayload = {
     previousCaseId: null,
     mergedIntoCaseId: null,
     splitFromCaseId: null,
+    slaGeneration: 3,
     lineageVersion: 0,
     updatedAt: '2026-08-22T12:00:00.000Z',
   },

@@ -121,6 +121,7 @@ function toCaseView(row: ConnectCase): ReparentCaseView {
     previousCaseId: row.previousCaseId ?? null,
     mergedIntoCaseId: row.mergedIntoCaseId ?? null,
     splitFromCaseId: row.splitFromCaseId ?? null,
+    slaGeneration: row.slaGeneration,
     lineageVersion: row.lineageVersion,
     updatedAt: row.updatedAt,
   }
@@ -333,6 +334,8 @@ function buildEventPayload(args: {
   occurredAt: Date
   sourceUpdatedAt: Date
   destinationUpdatedAt: Date
+  sourceSlaGeneration: number
+  destinationSlaGeneration: number
 }): Record<string, unknown> {
   return {
     tenantId: args.scope.tenantId,
@@ -352,6 +355,8 @@ function buildEventPayload(args: {
     occurredAt: args.occurredAt.toISOString(),
     sourceUpdatedAt: args.sourceUpdatedAt.toISOString(),
     destinationUpdatedAt: args.destinationUpdatedAt.toISOString(),
+    sourceSlaGeneration: args.sourceSlaGeneration,
+    destinationSlaGeneration: args.destinationSlaGeneration,
     lineageInstruction: lineageInstructionFor(args.operation),
     lineageVersion: REPARENT_LINEAGE_VERSION,
   }
@@ -445,6 +450,8 @@ async function finalizeReparenting(args: {
       occurredAt: now,
       sourceUpdatedAt: source.updatedAt,
       destinationUpdatedAt: destination.updatedAt,
+      sourceSlaGeneration: source.slaGeneration,
+      destinationSlaGeneration: destination.slaGeneration,
     }),
   })
   await em.flush()
@@ -592,6 +599,7 @@ async function executeSplit(args: {
     firstInboundAt: source.firstInboundAt ?? null,
     lastInboundAt: source.lastInboundAt ?? null,
     splitFromCaseId: source.id,
+    slaGeneration: source.slaGeneration,
     lineageVersion: 1,
   })
   em.persist(child)
@@ -887,6 +895,7 @@ function restoreCaseFromSnapshot(target: ConnectCase, snapshot: ReparentCaseSnap
   target.resolvedAt = snapshot.resolvedAt ? new Date(snapshot.resolvedAt) : null
   target.closedAt = snapshot.closedAt ? new Date(snapshot.closedAt) : null
   target.mergedIntoCaseId = snapshot.mergedIntoCaseId
+  target.slaGeneration = snapshot.slaGeneration
   target.lineageVersion += 1
 }
 
@@ -1034,6 +1043,7 @@ async function undoReparent(params: {
       destination.lastInboundAt = destinationBefore.lastInboundAt
         ? new Date(destinationBefore.lastInboundAt)
         : null
+      destination.slaGeneration = destinationBefore.slaGeneration
       destination.lineageVersion += 1
       await repointIdentityBindings(em, scope, destination.id, source.id)
       em.persist(
@@ -1128,6 +1138,8 @@ async function undoReparent(params: {
         occurredAt: now,
         sourceUpdatedAt: destination.updatedAt,
         destinationUpdatedAt: source.updatedAt,
+        sourceSlaGeneration: destination.slaGeneration,
+        destinationSlaGeneration: source.slaGeneration,
       }),
     })
     await em.flush()

@@ -40,6 +40,8 @@ export type ConnectReparentingProjection = Readonly<{
   lineageInstruction: ConnectLineageInstruction
   lineageVersion: typeof REPARENT_LINEAGE_VERSION
   movedConversationCount: number
+  sourceSlaGeneration: number
+  destinationSlaGeneration: number
   sourceBefore: ReparentCaseSnapshotV1
   destinationBefore: ReparentCaseSnapshotV1 | null
   sourcePostUpdatedAt: string
@@ -111,6 +113,8 @@ async function countItems(
 }
 
 function projectRow(row: ConnectCaseReparenting, movedConversationCount: number): ConnectReparentingProjection {
+  const sourceBefore = row.sourceBefore as unknown as ReparentCaseSnapshotV1
+  const destinationBefore = (row.destinationBefore ?? null) as unknown as ReparentCaseSnapshotV1 | null
   return Object.freeze({
     id: row.id,
     operation: row.operation,
@@ -120,8 +124,10 @@ function projectRow(row: ConnectCaseReparenting, movedConversationCount: number)
     lineageInstruction: lineageInstructionFor(row.operation),
     lineageVersion: REPARENT_LINEAGE_VERSION,
     movedConversationCount,
-    sourceBefore: row.sourceBefore as unknown as ReparentCaseSnapshotV1,
-    destinationBefore: (row.destinationBefore ?? null) as unknown as ReparentCaseSnapshotV1 | null,
+    sourceSlaGeneration: sourceBefore.slaGeneration,
+    destinationSlaGeneration: destinationBefore?.slaGeneration ?? sourceBefore.slaGeneration,
+    sourceBefore,
+    destinationBefore,
     sourcePostUpdatedAt: row.sourcePostUpdatedAt.toISOString(),
     destinationPostUpdatedAt: row.destinationPostUpdatedAt.toISOString(),
     // The reparenting id IS the source event id. One identifier means a consumer

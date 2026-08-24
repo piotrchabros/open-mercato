@@ -54,6 +54,7 @@ function caseView(overrides: Partial<ReparentCaseView> = {}): ReparentCaseView {
     previousCaseId: null,
     mergedIntoCaseId: null,
     splitFromCaseId: null,
+    slaGeneration: 3,
     lineageVersion: 0,
     updatedAt: at(-5),
     ...overrides,
@@ -673,6 +674,7 @@ describe('buildCaseSnapshot', () => {
       previousCaseId: null,
       mergedIntoCaseId: null,
       splitFromCaseId: null,
+      slaGeneration: 3,
       lineageVersion: 4,
       updatedAt: at(-5).toISOString(),
     })

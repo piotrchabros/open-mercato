@@ -1,0 +1,1 @@
+export const metadata = { requireAuth: true, requireFeatures: ['connect_sla.clock.view'], pageTitle: 'SLA clocks', pageTitleKey: 'connect_sla.admin.clocks', pageGroup: 'Connect', pageGroupKey: 'connect_sla.admin.group', pageOrder: 42, icon: 'timer', pageContext: 'main' as const, breadcrumb: [{ label: 'SLA clocks', labelKey: 'connect_sla.admin.clocks' }] } as const

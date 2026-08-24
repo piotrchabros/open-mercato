@@ -57,6 +57,7 @@ export async function seedCase(
     firstInboundAt?: Date | null
     lastInboundAt?: Date | null
     resolvedAt?: Date | null
+    slaGeneration?: number
   },
 ): Promise<SeededCase> {
   // The number comes from the same locked sequence production uses, so a spec
@@ -76,8 +77,8 @@ export async function seedCase(
     `insert into connect_cases
        (tenant_id, organization_id, number, display_label, status, priority,
         assignee_user_id, customer_kind, customer_id, channel_id,
-        first_inbound_at, last_inbound_at, resolved_at, lineage_version, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, now(), now())
+        first_inbound_at, last_inbound_at, resolved_at, sla_generation, lineage_version, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, now(), now())
      returning id, updated_at`,
     [
       scope.tenantId,
@@ -93,6 +94,7 @@ export async function seedCase(
       values.firstInboundAt ?? new Date(Date.now() - 3_600_000),
       values.lastInboundAt ?? new Date(Date.now() - 600_000),
       values.resolvedAt ?? null,
+      values.slaGeneration ?? 0,
     ],
   )
   const row = rows[0]
@@ -142,6 +144,7 @@ export type CaseRow = {
   merged_into_case_id: string | null
   split_from_case_id: string | null
   lineage_version: number
+  sla_generation: number
   closed_at: string | null
   first_inbound_at: string | null
   last_inbound_at: string | null
@@ -154,7 +157,7 @@ export type CaseRow = {
 
 export async function readCase(em: EntityManager, caseId: string): Promise<CaseRow | null> {
   const rows = await em.getConnection().execute<CaseRow[]>(
-    `select id, status, merged_into_case_id, split_from_case_id, lineage_version, closed_at,
+    `select id, status, merged_into_case_id, split_from_case_id, sla_generation, lineage_version, closed_at,
             first_inbound_at, last_inbound_at, updated_at, deleted_at, channel_id, customer_id, number
        from connect_cases where id = ?`,
     [caseId],

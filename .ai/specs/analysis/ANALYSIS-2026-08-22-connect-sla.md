@@ -2,66 +2,47 @@
 
 ## Executive Summary
 
-**Ready after named maintainer approval and implementation of the Connect source-facts and reparenting prerequisites.** After the owner-selected split, this spec is cohesive: `connect_sla` alone owns calendars, policies, clocks, due/rebuild workers, APIs and optional UI. It consumes exact external facts without importing or modifying Connect/Auth persistence.
-
-Verified against actual Connect facades/events absence, the new source-contract spec, reparenting contract, repository guides, matching lessons and all thirteen BC categories. The canonical code-review checklist path is absent; no substitute was invented. No code was changed.
+The optional `connect_sla` module is architecturally ready and its SLA source-facts prerequisite has landed through PR #47. Implementation is blocked by one residual prerequisite defect: Connect reparenting neither snapshots nor propagates `slaGeneration`, so split/merge/undo clocks cannot be reconciled according to the approved contracts. A second contract clarification is required for the new Inbox injection host because the proposed host context contains SLA-owned values that Connect cannot resolve without reversing the declared dependency.
 
 ## Backward Compatibility
 
 ### Violations Found
 
-None. All consumer surfaces are additive and require approval before release.
+| # | Surface | Issue | Severity | Proposed Fix |
+|---|---|---|---|---|
+| 2/5 | Types and events | Reparent snapshots/events omit the additive generation required by the merged source-facts contract. | Critical | Add `slaGeneration` to the Connect-owned snapshot/view/event lineage contract and copy it to split children before implementing the consumer. |
+| 6 | Widget injection spot | The proposed host context asks Connect to supply SLA-owned clock state despite the strict one-way dependency. | Critical | Freeze a Connect-owned host context (`caseId`, optional `retryLastMutation`) and let the SLA widget load its own clock, or explicitly approve a different dependency architecture. |
 
-| # | Surface | Result |
-|---:|---|
-| 1 | Discovery | Additive `connect_sla` module/files; generate/disable/decoupling tests. |
-| 2 | Types | Additive exact states, calendar/policy and event contracts. |
-| 3 | Signatures | New commands/readers only; no existing narrowing. |
-| 4 | Imports | No moves; DI/scalar peer boundary. |
-| 5 | Events | Seven additive SLA IDs; source IDs belong to prerequisite. |
-| 6 | Widget | Additive named Inbox host/DTO. |
-| 7 | API | Additive policy/calendar/clock/rebuild URLs. |
-| 8 | DB | Additive SLA-owned schema only. |
-| 9 | DI | Additive SLA services; Connect reader is prerequisite. |
-| 10 | ACL | Six additive IDs plus setup synchronization. |
-| 11 | Notification | None; warnings presentation-only. |
-| 12 | CLI | None. |
-| 13 | Generated | Additive registries; narrow diff/harness refresh. |
+No existing contract is removed, renamed, or narrowed. The remaining discovery, API, schema, DI, ACL, command, event, and generated-registry changes are additive.
 
 ### Missing BC Section
 
-Not missing. The spec separates prerequisite surfaces, inventories all thirteen consumer categories and defines rollout/rollback/approval.
+The spec discusses migration and backward compatibility, but does not use the contract-required exact heading `Migration & Backward Compatibility`. Rename the section before release and enumerate the current 14-category contract (including AI identifiers), rather than the historical 13-category count.
 
 ## Spec Completeness
 
 ### Missing Sections
 
-None. Required architecture, data/state, normative calendar, commands/events/workers, reconciliation, APIs/UI, migration/phasing/tests, risks, compliance/review/changelog are present.
+| Section | Impact | Recommendation |
+|---|---|---|
+| Exact file/API/DI manifest | Public names cannot be audited or frozen from the current summary. | Record exact routes, command IDs, DI keys, entity IDs, and files during implementation. |
 
 ### Incomplete Sections
 
-None blocking or important. Concrete migration timestamps and runtime measurements remain implementation evidence.
+| Section | Gap | Recommendation |
+|---|---|---|
+| Integration coverage | Scenarios are comprehensive but not assigned stable test IDs/files. | Add SQL-only Playwright suites for APIs, clocks, rebuild races, tenancy/RBAC, reparenting, OpenAPI, and UI/locales. |
+| Widget host | Context ownership contradicts module independence. | Resolve as described above before binding the host. |
 
 ## AGENTS.md Compliance
 
 ### Violations
 
-None.
-
-| Rule | Result |
-|---|---|
-| Isolation/scoping | DI/scalar IDs, both scope predicates, source absence 503/no-op, hidden Case 404. |
-| Zod/types | Strict inferred commands and exact V1 state/event contracts. |
-| Data/encryption | Plural scoped tables; holiday free text encryption map/decrypted reads. |
-| Commands/undo | Canonical logs/extraction; immutable versions supersede; source facts idempotent. |
-| Locking | Editable identities updatedAt; conditional due state; rebuild lease/version. |
-| APIs/UI | CRUD factory where fitting, guarded custom writes, apiCall/shared conflict/DS/i18n/a11y. |
-| Events/workers | createModuleEvents, receipts/outbox, named queues, bounded SKIP LOCKED. |
-| Setup/tests | Exact ACL sync and self-contained API/UI/concurrency coverage. |
-
-## Actual-Code and Prerequisite Reconciliation
-
-The consumer does not claim missing Phase 1 facts exist. It explicitly gates on `2026-08-22-connect-sla-source-contract.md`, whose reader supplies immutable evidence, generation and wait intervals, and on reparenting lineage. Historical unknown remains unknown. Subscriber-first watermark, stable three-stream pages and deterministic receipts make live/backfill races converge. Missing/old facades do not trigger direct-table fallback.
+| Rule | Location | Fix |
+|---|---|---|
+| Optional consumers may use DI and scalar IDs only. | `connect:inbox:case-detail:sla` context | Keep SLA-owned state out of the Connect host context. |
+| New public identifiers must be explicit and additive. | API/command/DI summary | Pin exact identifiers in the spec changelog/implementation status. |
+| Prerequisites must be implemented before dependent work. | Reparent generation lineage | Complete and test generation propagation first. |
 
 ## Risk Assessment
 
@@ -69,61 +50,57 @@ The consumer does not claim missing Phase 1 facts exist. It explicitly gates on 
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Incorrect DST deadline | Compliance error | Normative gap/fold/boundary/horizon algorithm and property tests. |
-| Live/backfill race | Missing/duplicate clock | Subscriber-first watermark, stable cursors and receipts. |
-| Mixed response/resolution result | Rewritten attainment | Independent terminal state machines and immutable late-breach behavior. |
-| Missing prerequisite | Unsafe inference/outage | Hard health gate, 503/no-op; never direct-read/infer. |
+| Missing generation on split/undo | Clocks attach to the wrong lifecycle generation. | Add generation to immutable lineage snapshots/events and integration tests. |
+| DST/business-time arithmetic | Incorrect contractual deadlines. | Pure deterministic library with gap/fold/non-hour/property tests. |
+| Watermark/live-event races | Missing or double-applied facts. | Transactional receipts, bounded watermark, deterministic keys, lease/concurrency PostgreSQL tests. |
 
 ### Medium Risks
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| Due-worker contention | Delayed transitions | Indexed ≤100 SKIP LOCKED claims and conditional update. |
-| Policy/calendar deletion | Broken history | Immutable referenced versions and guarded deletion. |
-| Reparent undo after later facts | Incorrect restoration | Lineage-version check, audited revision/manual review. |
+| Deadline contention | Duplicate breach transitions or DB pressure. | Bounded `SKIP LOCKED` claims and conditional updates. |
+| Optional dependency absence | Broken Inbox or retry storms. | Soft DI resolution, explicit unhealthy state/503, idempotent no-op workers. |
+| Host/template activation drift | Feature is generated but unavailable or stale. | Mirror module activation, run generate/template checks and structural-cache refresh. |
 
 ### Low Risks
 
-No v1 notifications; warnings remain available through API/UI. Tzdata affects only new clocks because due instants are persisted.
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Locale drift | Missing labels in one locale. | Ship en/de/es/ko/pl and run sync/usage checks. |
 
 ## Gap Analysis
 
 ### Critical Gaps (Block Implementation)
 
-None remain in this consumer contract.
+- Reparent generation lineage: `ReparentCaseSnapshotV1`, `ReparentCaseView`, `buildCaseSnapshot`, split child creation, and lineage events do not carry `slaGeneration`.
+- Injection ownership: Connect cannot populate SLA-owned clock fields without importing or resolving the optional consumer.
 
 ### Important Gaps (Should Address)
 
-None. Prerequisite implementation and contract approval are explicit gates, not design gaps.
+- Normalize the BC heading/count and record exact frozen identifiers.
+- Add real PostgreSQL coverage for partial uniqueness, leases, receipts/outbox atomicity, and `SKIP LOCKED` behavior.
 
 ### Nice-to-Have Gaps
 
-- Measure due-scan/rebuild throughput and expose non-PII unknown/lag/contention metrics.
+- None; reporting, notifications, routing, remote calendars, bots, and costing remain intentionally out of scope.
 
 ## Remediation Plan
 
-### Before Implementation
+### Before Implementation (Must Do)
 
-1. Approve new SLA event/API/DI/ACL/widget/schema contracts.
-2. Implement and verify source-facts and reparenting prerequisites.
+1. Complete the Connect-owned generation lineage prerequisite in its source/reparenting contract.
+2. Approve a Connect-owned injection context and SLA-side clock fetch.
 
-### During Implementation
+### During Implementation (Add to Spec)
 
-1. Preserve exact calendar/state/watermark semantics; generate intended-only migration/snapshot.
-2. Run true database concurrency, API/UI, decoupling, generate, build/typecheck and harness tests.
+1. Record the exact file manifest and frozen identifiers.
+2. Add phase status and stable integration test IDs as each slice lands.
+3. Normalize the migration/backward-compatibility section and category count.
 
-### Post-Implementation
+### Post-Implementation (Follow Up)
 
-1. Install subscribers before watermark reconciliation and monitor progress/unknowns without PII.
+1. Run the ordered validation gate locally or in Docker, the executable Playwright suites, template parity, module decoupling, i18n advisory checks, and structural-cache refresh.
 
 ## Recommendation
 
-**Ready to implement after named maintainer approval and prerequisite implementation.**
-
-## Re-Audit Changelog
-
-- 2026-08-22: Initial combined audit blocked, then advanced after contract remediation.
-- 2026-08-22: Owner selected SPLIT; re-audited narrowed consumer across all thirteen categories and retained Ready verdict.
-## External-Extension Re-Audit — 2026-08-22
-
-Ready after prerequisites. The entire SLA runtime remains a sibling module inside `@open-mercato/connect`; host/template module registration is the only installation wiring outside the package.
+Ready to implement. On 2026-08-24 the owner approved bundling the generation-lineage prerequisite and selected the Connect-owned host context with SLA-side clock loading.

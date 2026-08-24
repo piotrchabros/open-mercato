@@ -3,8 +3,10 @@
 import * as React from 'react'
 import { apiCall } from '@open-mercato/ui/backend/utils/apiCall'
 import { useGuardedMutation } from '@open-mercato/ui/backend/injection/useGuardedMutation'
+import { InjectionSpot } from '@open-mercato/ui/backend/injection/InjectionSpot'
 import { useConfirmDialog } from '@open-mercato/ui/backend/confirm-dialog'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
+import { extensionPoints } from '../../extension-points'
 import { CaseListPane } from './CaseListPane'
 import { ThreadPane } from './ThreadPane'
 import { ComposerPane } from './ComposerPane'
@@ -370,24 +372,32 @@ export function ConnectInboxPage({ currentUserId, canSeeAll, canClose }: Props) 
         onRetryItem={() => selectedId && void loadThread(selectedId, null)}
         headingRef={headingRef}
       />
-      <ComposerPane
-        selected={selected}
-        maskedRecipientLabel={maskedRecipientLabel}
-        canSend={canSend}
-        disabledReason={disabledReason}
-        draft={draft}
-        onDraftChange={setDraft}
-        onSend={() => void send()}
-        isSending={isSending}
-        lastStatus={lastStatus}
-        lastError={composerError}
-        canRetry={lastStatus === 'failed'}
-        onRetry={() => void retrySend()}
-        onResolve={() => void resolve()}
-        onReopen={() => void runLifecycle('reopen')}
-        onClose={() => void closeCase()}
-        canClose={canClose}
-      />
+      <div className="flex min-h-0 flex-col">
+        {selected ? (
+          <InjectionSpot
+            spotId={extensionPoints.hosts.inboxCaseDetailSla.spotId}
+            context={{ caseId: selected.id, retryLastMutation }}
+          />
+        ) : null}
+        <ComposerPane
+          selected={selected}
+          maskedRecipientLabel={maskedRecipientLabel}
+          canSend={canSend}
+          disabledReason={disabledReason}
+          draft={draft}
+          onDraftChange={setDraft}
+          onSend={() => void send()}
+          isSending={isSending}
+          lastStatus={lastStatus}
+          lastError={composerError}
+          canRetry={lastStatus === 'failed'}
+          onRetry={() => void retrySend()}
+          onResolve={() => void resolve()}
+          onReopen={() => void runLifecycle('reopen')}
+          onClose={() => void closeCase()}
+          canClose={canClose}
+        />
+      </div>
       {ConfirmDialogElement}
     </div>
   )
