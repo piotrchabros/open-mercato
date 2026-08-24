@@ -66,6 +66,28 @@ Record the backup path and pre-deploy commit before continuing.
 
 ### 3. Build and cut over
 
+#### Select the minimum safe path from the Git delta
+
+Before changing the checkout, compare the recorded live SHA with the target using `git diff --name-status <live>..<target>`. Classify the complete delta, choosing the most conservative matching path when categories overlap:
+
+- **Identical SHA:** do not rebuild or recreate containers. Re-run health and HTTP verification and report that no cutover was needed.
+- **Non-runtime only:** changes confined to documentation, specs, tests, skill metadata, or other files excluded from the production image require no image build. Advance the deployment checkout to the target and verify the unchanged runtime. Do not run Yarn, migrations, or ACL sync.
+- **Service/configuration only:** for Compose, Caddy, or a non-app service configuration change, validate the resolved configuration and recreate or reload only the affected service. Build the app only if its Docker build context, build arguments, image contents, or runtime configuration changed.
+- **Runtime application:** any app/package source, localization, migration, dependency manifest, generator, Dockerfile, or app entrypoint change requires a production app image build, app cutover, migration check, ACL sync, and MCP recreation. This is the default when classification is uncertain.
+
+Record the classification and the files that caused it. Never call a test-only file non-runtime when the same delta also contains runtime files.
+
+For a direct, persistent-workspace deployment (not the current production Compose builder), choose Yarn work by dependency rather than habit:
+
+- Run `yarn install --immutable` when the lockfile, root/workspace manifests, Yarn configuration, or install state changed.
+- Run the first `yarn build:packages` when package source or generator dependencies changed.
+- Run `yarn generate` when module discovery inputs, generator code/configuration, module registries, migrations, ACL/setup discovery, or app module files changed.
+- Run the second `yarn build:packages` whenever generation ran or generated package inputs changed.
+- Run `yarn build:app` for every runtime application change that can affect the Next.js bundle.
+- Run `yarn db:migrate` on every app cutover; run ACL sync after readiness. These are correctness gates, not build optimizations.
+
+Do not apply selective host-workspace commands to the current production image. Its fresh Docker builder must contain every package `dist` and generated artifact, so `docker compose ... build app` remains the safe runtime path and its Docker/Yarn/Turbo caches decide internal cache hits. A selective package build is allowed only after the image build itself has an explicit, validated mechanism to seed unchanged artifacts.
+
 For an existing database, preserve this order when deploying directly or when auditing the equivalent Docker build/startup stages:
 
 ```bash
