@@ -27,7 +27,11 @@ jest.mock("next/navigation", () => ({
   useRouter: jest.fn(),
 }));
 
-import { calendarPublication, policyPublication } from "../SlaAdminForm";
+import {
+  calendarPublication,
+  formInitialValues,
+  policyPublication,
+} from "../SlaAdminForm";
 
 const t = ((key: string) => key) as never;
 
@@ -74,6 +78,28 @@ describe("SLA administration forms", () => {
         t,
       ),
     ).toThrow();
+  });
+
+  test("maps the published calendar definition back into edit fields", () => {
+    expect(
+      formInitialValues("calendar", {
+        id: "calendar-id",
+        updatedAt: "2026-08-24T17:50:03.788Z",
+        currentDefinition: {
+          timezone: "Europe/Berlin",
+          windows: [
+            { weekday: 1, localStart: "09:00:00", localEnd: "17:00:00" },
+            { weekday: 2, localStart: "09:00:00", localEnd: "17:00:00" },
+          ],
+          holidays: [{ localDate: "2026-12-25", label: "Christmas" }],
+        },
+      }),
+    ).toMatchObject({
+      publishNow: false,
+      timezone: "Europe/Berlin",
+      windows: "1,09:00:00,17:00:00\n2,09:00:00,17:00:00",
+      holidays: "2026-12-25,Christmas",
+    });
   });
 
   test("builds policy publication and enforces warnings below targets", () => {

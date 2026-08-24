@@ -109,12 +109,20 @@ test.describe('TC-CONNECT-SLA-104: contracts, isolation, and UI', () => {
 
       const refreshedRow = page.getByRole('row').filter({ hasText: name })
       await refreshedRow.getByRole('button', { name: /open actions/i }).click()
+      await page.getByRole('menuitem', { name: /edit/i }).click()
+      await expect(page.getByPlaceholder('Europe/Berlin')).toHaveValue('UTC')
+      await expect(page.getByRole('main').getByRole('textbox').nth(2)).toHaveValue('1,09:00:00,17:00:00')
+      await expect(page.getByRole('checkbox', { name: /publish this version/i })).not.toBeChecked()
+      await page.goto('/backend/connect/sla/calendars')
+
+      const reopenedRow = page.getByRole('row').filter({ hasText: name })
+      await reopenedRow.getByRole('button', { name: /open actions/i }).click()
       const [deleteResponse] = await Promise.all([
         page.waitForResponse((response) => response.url().endsWith(`/api/connect-sla/calendars/${calendar.id}`) && response.request().method() === 'DELETE'),
         page.getByRole('menuitem', { name: /delete/i }).click(),
       ])
       expect(deleteResponse.status()).toBe(200)
-      await expect(refreshedRow).not.toBeVisible()
+      await expect(reopenedRow).not.toBeVisible()
     } finally {
       await ctx.ledger.cleanup(ctx.em, ctx.scope)
     }

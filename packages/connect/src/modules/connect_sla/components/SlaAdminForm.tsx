@@ -71,14 +71,14 @@ export function SlaAdminForm({
           setError(true);
           return;
         }
-        setInitialValues(value as RecordValue);
+        setInitialValues(formInitialValues(kind, value as RecordValue));
       })
       .catch(() => active && setError(true))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [endpoint, mode, recordId]);
+  }, [endpoint, kind, mode, recordId]);
 
   const groups = React.useMemo<CrudFormGroup[]>(
     () => (kind === "calendar" ? calendarGroups(t) : policyGroups(t)),
@@ -366,6 +366,44 @@ export function calendarPublication(
     holidays,
   };
 }
+
+export function formInitialValues(kind: Kind, value: RecordValue): RecordValue {
+  if (kind !== "calendar") return value;
+  const definition = record(value.currentDefinition);
+  if (!definition) return value;
+  const windows = Array.isArray(definition.windows)
+    ? definition.windows
+        .map(record)
+        .filter((window): window is Record<string, unknown> => window !== null)
+        .map((window) =>
+          [window.weekday, window.localStart, window.localEnd].join(","),
+        )
+        .join("\n")
+    : "";
+  const holidays = Array.isArray(definition.holidays)
+    ? definition.holidays
+        .map(record)
+        .filter((holiday): holiday is Record<string, unknown> => holiday !== null)
+        .map((holiday) =>
+          [holiday.localDate, holiday.label].filter(Boolean).join(","),
+        )
+        .join("\n")
+    : "";
+  return {
+    ...value,
+    publishNow: false,
+    timezone: typeof definition.timezone === "string" ? definition.timezone : "",
+    windows,
+    holidays,
+  };
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 export function policyPublication(
   values: Record<string, unknown>,
   t: ReturnType<typeof useT>,
