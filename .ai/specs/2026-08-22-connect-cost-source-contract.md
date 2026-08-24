@@ -230,4 +230,4 @@ Fully compliant and ready to implement before cost-reporting consumer work.
 |---|---|---|---|
 | Phase 1 — Contract and Arithmetic | Done | 2026-08-24 | Strict schemas, typed errors, bigint rational helpers, and unit coverage |
 | Phase 2 — Scoped Source Query and Index | Done | 2026-08-24 | Dual-scope projection, exact aggregation, stable DI key, partial index/snapshot, integration/performance coverage |
-| Phase 3 — Generated/Standalone Gate | In Progress | 2026-08-24 | Generate and package builds pass; remaining root gate and review underway |
+| Phase 3 — Generated/Standalone Gate | Done | 2026-08-24 | Generate, package/root typecheck, Connect tests, managed integration, app build, DB diff, template sync, and review pass; full test gate retains three unrelated CLI/customer fixture failures inherited from the synced base |
