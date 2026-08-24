@@ -52,6 +52,8 @@
   "connect_sla.form.save": "Save",
   "connect_sla.form.saveError": "Could not save the record.",
   "connect_sla.form.timezone": "Time zone",
+  "connect_sla.form.timezoneHelp": "Use an IANA time zone, for example Europe/Berlin or UTC.",
+  "connect_sla.form.timezoneInvalid": "Enter an IANA time zone, for example Europe/Berlin or UTC.",
   "connect_sla.form.timezonePlaceholder": "Europe/Berlin",
   "connect_sla.form.updated": "Updated successfully.",
   "connect_sla.form.warningInvalid": "Warning minutes must be below target minutes.",

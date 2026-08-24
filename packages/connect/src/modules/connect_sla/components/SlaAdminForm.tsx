@@ -229,6 +229,7 @@ function calendarGroups(t: ReturnType<typeof useT>): CrudFormGroup[] {
           type: "text",
           label: t("connect_sla.form.timezone"),
           placeholder: t("connect_sla.form.timezonePlaceholder"),
+          description: t("connect_sla.form.timezoneHelp"),
         },
         {
           id: "windows",
@@ -321,6 +322,14 @@ export function calendarPublication(
   values: Record<string, unknown>,
   t: ReturnType<typeof useT>,
 ) {
+  const timezone = required(values.timezone, "timezone", t);
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: timezone }).format();
+  } catch {
+    throw createCrudFormError(t("connect_sla.form.timezoneInvalid"), {
+      timezone: t("connect_sla.form.timezoneInvalid"),
+    });
+  }
   const windows = parseLines(values.windows, 3, "windows", t).map(
     ([weekday, localStart, localEnd]) => ({
       weekday: Number(weekday),
@@ -352,7 +361,7 @@ export function calendarPublication(
       holidays: t("connect_sla.form.linesInvalid"),
     });
   return {
-    timezone: required(values.timezone, "timezone", t),
+    timezone,
     windows,
     holidays,
   };

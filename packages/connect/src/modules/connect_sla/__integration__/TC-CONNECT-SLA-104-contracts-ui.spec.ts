@@ -140,6 +140,12 @@ test.describe('TC-CONNECT-SLA-104: contracts, isolation, and UI', () => {
       expect(createRequests).toBe(0)
 
       await page.getByRole('main').getByRole('textbox').nth(2).fill('1,09:00,17:00')
+      await page.getByPlaceholder('Europe/Berlin').fill('normal')
+      await page.getByRole('button', { name: /^Save$/ }).first().click()
+      await expect(page.getByText('Enter an IANA time zone, for example Europe/Berlin or UTC.').first()).toBeVisible()
+      expect(createRequests).toBe(0)
+
+      await page.getByPlaceholder('Europe/Berlin').fill('UTC')
       const [createResponse, publishResponse] = await Promise.all([
         page.waitForResponse((response) => response.url().endsWith('/api/connect-sla/calendars') && response.request().method() === 'POST'),
         page.waitForResponse((response) => response.url().endsWith('/publish') && response.request().method() === 'POST'),

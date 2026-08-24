@@ -58,6 +58,12 @@ describe("SLA administration forms", () => {
   test("rejects malformed publication lines", () => {
     expect(() =>
       calendarPublication(
+        { timezone: "normal", windows: "1,09:00,17:00", holidays: "" },
+        t,
+      ),
+    ).toThrow();
+    expect(() =>
+      calendarPublication(
         { timezone: "UTC", windows: "1,09:00", holidays: "" },
         t,
       ),
