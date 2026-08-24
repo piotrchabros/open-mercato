@@ -13,6 +13,12 @@ test.describe('TC-CONNECT-SLA-101: calendar and policy administration', () => {
       const calendar = await createCalendar.json()
       ctx.ledger.calendarIds.add(calendar.id)
 
+      const calendarList = await request.get('/api/connect-sla/calendars?page=1&pageSize=50', {
+        headers: ctx.authHeaders,
+      })
+      expect(calendarList.status()).toBe(200)
+      expect(JSON.stringify(await calendarList.json())).toContain(calendar.id)
+
       const publishCalendar = await request.post(`/api/connect-sla/calendars/${calendar.id}/publish`, {
         headers: { ...ctx.authHeaders, ...optimisticHeader(calendar.updatedAt) },
         data: {

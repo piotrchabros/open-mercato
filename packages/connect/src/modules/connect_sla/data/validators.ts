@@ -127,12 +127,17 @@ const cursorListSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
 }).strict()
 
-export const businessCalendarListQuerySchema = cursorListSchema.extend({
+const pagedListSchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+}).strict()
+
+export const businessCalendarListQuerySchema = pagedListSchema.extend({
   id: uuidSchema.optional(),
   includeDeleted: z.enum(['true', 'false']).optional(),
 }).strict()
 
-export const policyListQuerySchema = cursorListSchema.extend({
+export const policyListQuerySchema = pagedListSchema.extend({
   id: uuidSchema.optional(),
   isActive: z.enum(['true', 'false']).optional(),
   channelId: uuidSchema.optional(),

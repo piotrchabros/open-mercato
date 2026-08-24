@@ -1,10 +1,12 @@
 import {
   businessCalendarCreateSchema,
+  businessCalendarListQuerySchema,
   businessCalendarPublishSchema,
   caseClockListQuerySchema,
   clockEventPayloadSchema,
   isValidIanaTimezone,
   policyPublishSchema,
+  policyListQuerySchema,
   rebuildClocksSchema,
 } from '../validators'
 
@@ -73,5 +75,11 @@ describe('connect SLA validators', () => {
     expect(caseClockListQuerySchema.safeParse({ pageSize: 101 }).success).toBe(false)
     expect(rebuildClocksSchema.safeParse({ commandKey: 'rebuild-1', reason: 'Enable SLA' }).success).toBe(true)
     expect(rebuildClocksSchema.safeParse({ commandKey: ' ', reason: 'Enable SLA' }).success).toBe(false)
+  })
+
+  it('accepts DataTable page pagination for calendar and policy lists', () => {
+    expect(businessCalendarListQuerySchema.parse({ page: '2', pageSize: '50' })).toMatchObject({ page: 2, pageSize: 50 })
+    expect(policyListQuerySchema.parse({ page: '3', pageSize: '25' })).toMatchObject({ page: 3, pageSize: 25 })
+    expect(businessCalendarListQuerySchema.safeParse({ cursor: 'unexpected' }).success).toBe(false)
   })
 })
