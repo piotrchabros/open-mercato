@@ -85,7 +85,11 @@
     },
     "infra": {
       "description": "Rare, special-case skills.",
-      "skills": ["om-dev-container-maintenance", "om-integration-builder"]
+      "skills": [
+        "om-dev-container-maintenance",
+        "om-integration-builder",
+        "om-deploy-mercato-crm"
+      ]
     }
   }
 }
