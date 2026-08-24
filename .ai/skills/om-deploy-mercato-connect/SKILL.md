@@ -66,10 +66,35 @@ Record the backup path and pre-deploy commit before continuing.
 
 ### 3. Build and cut over
 
+For an existing database, preserve this order when deploying directly or when auditing the equivalent Docker build/startup stages:
+
+```bash
+yarn install --immutable
+yarn build:packages
+yarn generate
+yarn build:packages
+yarn build:app
+yarn db:migrate
+yarn mercato auth sync-role-acls
+# Optional when explicitly needed:
+yarn seed:defaults
+yarn start
+```
+
+The second `yarn build:packages` is intentional: generation writes discovered artifacts that packages must then rebuild. `yarn seed:defaults` is optional and must not be treated as a routine redeployment step.
+
+Never run either of these during an existing-database deployment:
+
+- `yarn initialize` — it is for initialization, not an existing database.
+- `yarn db:generate` — it creates migration files; it does not apply migrations.
+
+The production Compose image performs the install and build stages during `docker compose build app`; the app entrypoint applies migrations before `yarn start`. After the app becomes ready, run `yarn mercato auth sync-role-acls` in the app container. Confirm the Dockerfile and Compose entrypoint still cover the ordered steps rather than assuming they do.
+
 ```bash
 git -C /srv/open-mercato-connect checkout -B deploy/mercato-connect FETCH_HEAD
 docker compose -f /srv/open-mercato-connect/docker-compose.fullapp.yml build app
 docker compose -f /srv/open-mercato-connect/docker-compose.fullapp.yml up -d --no-deps app
+docker compose -f /srv/open-mercato-connect/docker-compose.fullapp.yml exec app yarn mercato auth sync-role-acls
 ```
 
 The app startup performs guarded initialization/migrations before starting Next.js. Follow its logs until startup completes; do not treat a running container alone as success.
