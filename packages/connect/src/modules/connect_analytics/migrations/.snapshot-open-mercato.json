@@ -522,6 +522,15 @@
           "unique": false
         },
         {
+          "columnNames": [],
+          "composite": false,
+          "constraint": false,
+          "keyName": "connect_cost_inputs_allocation_idx",
+          "primary": false,
+          "unique": false,
+          "expression": "create index \"connect_cost_inputs_allocation_idx\" on \"connect_cost_inputs\" (\"tenant_id\", \"organization_id\", \"currency_code\", \"period_start\", \"period_end\") where \"deleted_at\" is null"
+        },
+        {
           "columnNames": [
             "tenant_id",
             "organization_id",

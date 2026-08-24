@@ -2,7 +2,7 @@ import type { EntityManager } from '@mikro-orm/postgresql'
 import { asFunction } from 'awilix'
 import type { AppContainer } from '@open-mercato/shared/lib/di/container'
 import type { ConnectOperationalMetricsReader } from '@open-mercato/connect/modules/connect/lib/operational-metrics-reader'
-import { createConnectCostInputReader } from './lib/cost-input-reader'
+import { createConnectAllocatedCostReader } from './lib/allocated-cost-reader'
 import { createCostInputCurrencyResolver } from './lib/cost-input-currency'
 
 export type ConnectAnalyticsMetricsSource = ConnectOperationalMetricsReader | null
@@ -18,8 +18,8 @@ export function register(container: AppContainer) {
      * undefined EntityManager fails in a way that reads like "no cost data"
      * rather than like a wiring bug. Keep the bare `em` parameter.
      */
-    connectCostInputReader: asFunction((em: EntityManager) =>
-      createConnectCostInputReader(em),
+    connectAllocatedCostReader: asFunction((em: EntityManager) =>
+      createConnectAllocatedCostReader(em),
     ).scoped(),
 
     costInputCurrencyResolver: asFunction(() =>
