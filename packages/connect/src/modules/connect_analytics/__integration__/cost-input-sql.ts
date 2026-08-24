@@ -80,6 +80,8 @@ export async function insertCostInputRow(
     periodStart: string
     periodEnd: string
     costType: string
+    userId?: string | null
+    channelId?: string | null
     amountMinor: string
     currencyCode: string
     source?: string
@@ -88,8 +90,8 @@ export async function insertCostInputRow(
   const rows = await em.getConnection().execute<{ id: string }[]>(
     `insert into connect_cost_inputs
        (tenant_id, organization_id, period_start, period_end, cost_type,
-        amount_minor, currency_code, source, created_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?, now(), now())
+        user_id, channel_id, amount_minor, currency_code, source, created_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, now(), now())
      returning id`,
     [
       values.tenantId,
@@ -97,6 +99,8 @@ export async function insertCostInputRow(
       values.periodStart,
       values.periodEnd,
       values.costType,
+      values.userId ?? null,
+      values.channelId ?? null,
       values.amountMinor,
       values.currencyCode,
       values.source ?? 'manual',

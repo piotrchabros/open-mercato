@@ -2,86 +2,85 @@
 
 ## Executive Summary
 
-The specification is **Ready to implement before the cost-reporting consumer**. It is a cohesive source-owned capability with exact bounded rational DTOs, scoped/private projection, required overlap index and performance evidence, module-local tests, and additive versioning. Actual code contains no released cost reader, so replacing the earlier planned row reader before publication breaks no contract.
-
-## Verified As-Built Context
-
-- `connect_analytics` and cost inputs are not implemented; no DI reader/import/API/index is released.
-- The cost-input spec owns the future entity/migration/snapshot and already defines nonnegative bigint amounts, half-open timestamps, currency/type, soft deletion, encryption and scope.
-- No Case/SLA/routing source is needed; this contract reads only its owning cost table.
+The spec is ready to implement in the dedicated `packages/connect` extension package. The current code contains the planned row-level reader that this spec explicitly supersedes before publication; no released surface must be removed, and the database change is additive.
 
 ## Backward Compatibility
 
 ### Violations Found
 
-None.
+None. All contract categories were checked. The new DI key, exported schemas/types, required DTO fields, allocation formula, and version literal become stable on publication; the existing cost-input entity/API/ACL/events and generated conventions remain unchanged.
 
-### All 13 Contract Categories
+### Missing BC Section
 
-| # | Surface | Result |
-|---|---|
-| 1 | Auto-discovery | Existing module DI modification only; additive/pass. |
-| 2 | Types/interfaces | New exact strict DTO/types; additive/pass. |
-| 3 | Function signatures | New exact method; additive/pass. |
-| 4 | Import paths | New public contract paths, no move; pass. |
-| 5 | Event IDs | None; N/A. |
-| 6 | Widget IDs | None; N/A. |
-| 7 | API URLs | No API; N/A. |
-| 8 | DB schema | Additive index in not-yet-published cost migration/snapshot; pass. |
-| 9 | DI names | New stable `connectAllocatedCostReader`; additive/pass. |
-| 10 | ACL IDs | None; N/A. |
-| 11 | Notification IDs | None; N/A. |
-| 12 | CLI commands | None; N/A. |
-| 13 | Generated contracts | Standard DI/entity/migration discovery with explicit tests; pass. |
-
-Migration/BC correctly pins additive index, stable key/DTO/formula/version, no removal of a released row reader, and module-disable behavior.
+None. The spec includes a Migration & Backward Compatibility section and explicitly constrains future evolution to additive optional fields or a new version.
 
 ## Spec Completeness
 
-Required TLDR/Overview/problem/solution/architecture, exact schemas/formula/data/index, API/ACL N/A explanations, performance/cache, migration/BC, tests, Phasing, implementation/manifest, risks, compliance, and changelog are complete.
+### Missing Sections
+
+None applicable. There is intentionally no UI and no HTTP API.
+
+### Incomplete Sections
+
+None blocking. The performance target requires runtime PostgreSQL evidence after implementation rather than additional design detail.
 
 ## AGENTS.md Compliance
 
-No violations. Source owns its table query; both scopes are mandatory; Zod is exact; sensitive/encrypted columns are never selected; parameterized query/index/EXPLAIN are required; no HTTP/UI/write/event/cache; tests are module-local/self-contained; migration/snapshot/generation discipline is explicit.
+### Violations
+
+None. The design keeps storage/query/arithmetic within the owning extension, validates with Zod, enforces tenant and organization predicates, selects no PII, adds no ACL, and places executable integration coverage module-locally.
 
 ## Risk Assessment
 
-### High
+### High Risks
 
-| Risk | Mitigation |
-|---|---|
-| Precision drift | Arbitrary-precision reduced rationals/property tests. |
-| Cross-scope financial disclosure | Required scopes, predicates, sanitized projection and isolation tests. |
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Precision drift | Incorrect downstream financial totals | Bigint numerator/denominator arithmetic, canonical GCD reduction, and property/edge tests |
+| Cross-scope disclosure | Financial data crosses tenant or organization boundaries | Mandatory UUID scope plus both predicates and isolation integration coverage |
 
-### Medium
+### Medium Risks
 
-| Risk | Mitigation |
-|---|---|
-| Wide overlap scan | Required index, one projection query, >10k EXPLAIN/memory gate. |
-| Consumer version skew | Literal version, strict parse, source-first rollout. |
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Large overlap scan | Report latency or memory growth | Partial composite overlap index, projection allowlist, one query, three-entry accumulator, and >10k plan evidence |
+| Contract skew | Consumers parse a different formula or DTO | Strict schemas and literal `connect_analytics.allocated_cost.v1` |
+| Migration drift | Unrelated generated changes enter the PR | Modify the original cost-input migration and matching snapshot only; inspect the db diff |
 
-### Low
+### Low Risks
 
-| Risk | Mitigation |
-|---|---|
-| Platform-specific query plan | Record PostgreSQL plan; additive GiST fallback allowed in same migration review. |
+| Risk | Impact | Mitigation |
+|---|---|---|
+| Module disabled | Optional consumer cannot resolve service | Registration exists only with `connect_analytics`; test omission when disabled |
 
 ## Gap Analysis
 
-Critical gaps: none. Important gaps: none. Nice-to-have: record exact EXPLAIN output and standalone build artifact in PR evidence.
+### Critical Gaps (Block Implementation)
+
+None.
+
+### Important Gaps (Should Address)
+
+- Runtime plan evidence: execute the integration/performance scenario against PostgreSQL and retain the `EXPLAIN (ANALYZE, BUFFERS)` result in PR evidence.
+
+### Nice-to-Have Gaps
+
+None within this issue's scope.
 
 ## Remediation Plan
 
-Before implementation: no spec changes; implement before consumer. During: record migration/snapshot/generated diff, property/privacy/isolation/10k plan and runner evidence. Post: monitor p95; new materialization/cache requires evidence/new spec.
+### Before Implementation (Must Do)
+
+1. Synchronize with `origin/mercato-connect` and inspect the current cost-input reader, DI registration, migration, and snapshot. Completed.
+
+### During Implementation (Add to Spec)
+
+1. Record implementation status and any behavior divergence in the spec changelog.
+
+### Post-Implementation (Follow Up)
+
+1. Run the generated/standalone discovery gates before a downstream reporting consumer adopts the stable key.
 
 ## Recommendation
 
-**Ready to implement.** All 13 compatibility categories are additive/N/A and no blocking/important gap remains.
-
-## Re-Audit — 2026-08-22
-
-- BC: Pass 13/13.
-- Exact arithmetic/schema/version: Pass.
-- Scope/privacy/index/performance: Pass.
-- QA/generated/standalone: Pass.
-- Verdict: Ready before consumer.
+Ready to implement.

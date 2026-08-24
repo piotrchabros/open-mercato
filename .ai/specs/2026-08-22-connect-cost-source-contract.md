@@ -214,7 +214,20 @@ Fully compliant and ready to implement before cost-reporting consumer work.
 
 ## Changelog
 
+### 2026-08-24
+
+- Implemented the strict v1 contract, exact rational allocation, scoped PII-free source query, stable DI registration, partial overlap index, and executable unit/integration/performance coverage.
+- Managed ephemeral integration passed both scenarios; the 10,001-row indexed summary completed in 266 ms in the local runner.
+
 ### 2026-08-22
 
 - Initial standalone allocated-cost source contract split from cost-per-contact; bounded exact reader, index/performance/privacy/version/generated gates pinned.
 - Review: all 13 BC categories, security, performance, cache, commands, risks, and scope cohesion passed; Ready.
+
+## Implementation Status
+
+| Phase | Status | Date | Notes |
+|---|---|---|---|
+| Phase 1 — Contract and Arithmetic | Done | 2026-08-24 | Strict schemas, typed errors, bigint rational helpers, and unit coverage |
+| Phase 2 — Scoped Source Query and Index | Done | 2026-08-24 | Dual-scope projection, exact aggregation, stable DI key, partial index/snapshot, integration/performance coverage |
+| Phase 3 — Generated/Standalone Gate | Done | 2026-08-24 | Generate, package/root typecheck, Connect tests, managed integration, app build, DB diff, template sync, and review pass; full test gate retains three unrelated CLI/customer fixture failures inherited from the synced base |

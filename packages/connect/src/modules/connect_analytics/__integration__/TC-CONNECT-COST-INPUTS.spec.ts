@@ -36,14 +36,17 @@ const COLLECTION = '/api/connect_analytics/cost-inputs'
 const CURRENCY_OPTION = '/api/connect_analytics/cost-input-options/currency'
 const LOCK_HEADER = 'x-om-ext-optimistic-lock-expected-updated-at'
 
-type ConnectCostInputReaderLike = {
-  listOverlapping(input: {
+type ConnectAllocatedCostReaderLike = {
+  summarizeAllocated(input: {
     tenantId: string
     organizationId: string
     periodStart: Date
     periodEnd: Date
     currencyCode: string
-  }): Promise<Array<Record<string, unknown>>>
+  }): Promise<{
+    matchedInputCount: number
+    byType: Array<{ type: string; allocatedMinor: { numerator: string; denominator: string } }>
+  }>
 }
 
 type CostInputBody = {
@@ -357,7 +360,7 @@ test.describe('TC-CONNECT-COST-INPUTS', () => {
     await bootstrapFromAppRoot(APP_ROOT)
     const container = await createRequestContainer()
     const em = container.resolve<EntityManager>('em')
-    const reader = container.resolve<ConnectCostInputReaderLike>('connectCostInputReader')
+    const reader = container.resolve<ConnectAllocatedCostReaderLike>('connectAllocatedCostReader')
     const created: string[] = []
 
     try {
@@ -388,7 +391,7 @@ test.describe('TC-CONNECT-COST-INPUTS', () => {
       })
       created.push(overlapping, abutsStart, abutsEnd, straddlesStart, otherCurrency, sibling)
 
-      const rows = await reader.listOverlapping({
+      const summary = await reader.summarizeAllocated({
         tenantId,
         organizationId,
         periodStart: new Date(march(10)),
@@ -396,38 +399,25 @@ test.describe('TC-CONNECT-COST-INPUTS', () => {
         currencyCode,
       })
 
-      const amounts = rows.map((row) => row.amountMinor)
-      expect(amounts).toContain('100')
-      expect(amounts).toContain('400')
-      // Half-open: a row ending exactly at the window start, or starting exactly
-      // at its end, does not overlap it.
-      expect(amounts).not.toContain('200')
-      expect(amounts).not.toContain('300')
-      expect(amounts).not.toContain('500')
-      expect(amounts).not.toContain('600')
-
-      // Sanitized DTO: exactly five fields, no identity or description.
-      for (const row of rows) {
-        expect(Object.keys(row).sort()).toEqual(
-          ['amountMinor', 'costType', 'currencyCode', 'periodEnd', 'periodStart'],
-        )
-      }
-
-      // Deterministic ascending order by period start.
-      const starts = rows.map((row) => (row.periodStart as Date).getTime())
-      expect([...starts].sort((a, b) => a - b)).toEqual(starts)
+      expect(summary.matchedInputCount).toBe(2)
+      expect(summary.byType).toEqual([
+        { type: 'ai', allocatedMinor: { numerator: '500', denominator: '3' } },
+      ])
 
       await em.getConnection().execute('update connect_cost_inputs set deleted_at = now() where id = ?', [overlapping])
-      const afterDelete = await reader.listOverlapping({
+      const afterDelete = await reader.summarizeAllocated({
         tenantId,
         organizationId,
         periodStart: new Date(march(10)),
         periodEnd: new Date(march(20)),
         currencyCode,
       })
-      expect(afterDelete.map((row) => row.amountMinor)).not.toContain('100')
+      expect(afterDelete).toMatchObject({
+        matchedInputCount: 1,
+        byType: [{ type: 'ai', allocatedMinor: { numerator: '200', denominator: '3' } }],
+      })
 
-      await expect(reader.listOverlapping({
+      await expect(reader.summarizeAllocated({
         tenantId,
         organizationId,
         periodStart: new Date(march(20)),

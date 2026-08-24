@@ -69,27 +69,9 @@ The adapter structurally soft-resolves `baseCurrencyService` and calls `resolveB
 
 The cost form loads its singleton currency selector through sanitized `GET /api/connect_analytics/cost-input-options/currency`, guarded by `connect_analytics.cost_inputs.manage`; the route returns `{ item: { code } }` only after successful base-currency resolution and never requires or grants `currencies.view`. Missing/ambiguous dependency returns `503 currency_dependency_unavailable` and disables submit with a localized explanation. Agent and channel selectors use the existing scoped `/api/staff/team-members` (`staff.view`) and `/api/communication_channels/channels` (`communication_channels.view`) APIs only for callers who already have those features. Otherwise the relevant cost type is disabled; the server still validates UUID shape and dimension rules but deliberately does not infer peer authorization or import peer storage. Detail pages retain the stored scalar ID with localized “record unavailable” fallback if a peer record is deleted or inaccessible.
 
-### Cost Input Reader Contract
+### Allocated Cost Reader Contract
 
-```ts
-type ConnectCostInputReader = {
-  listOverlapping(input: {
-    tenantId: string
-    organizationId: string
-    periodStart: Date
-    periodEnd: Date
-    currencyCode: string
-  }): Promise<Array<{
-    periodStart: Date
-    periodEnd: Date
-    costType: 'agent' | 'channel' | 'ai'
-    amountMinor: string
-    currencyCode: string
-  }>>
-}
-```
-
-The input is parsed by a Zod schema and requires `periodStart < periodEnd`, uppercase currency, and a maximum requested span of 366 days. The reader filters live rows by both scopes and exact currency with `row.period_start < input.periodEnd AND row.period_end > input.periodStart`, orders by `period_start ASC, id ASC`, and rejects with `cost_input_result_too_large` rather than returning more than 10,000 rows. It never returns description, actor IDs, provider references, user ID, or channel ID. `amountMinor` is always a canonical decimal string. Its consumer owns allocation and report semantics.
+The planned row-level reader was superseded before publication by the bounded, exact `connectAllocatedCostReader` contract in `.ai/specs/2026-08-22-connect-cost-source-contract.md`. The owning module performs overlap allocation and returns at most three PII-free rational totals; consumers never receive individual cost rows.
 
 ## Data Models
 
@@ -166,20 +148,20 @@ All strings use `useT`/`resolveTranslations`; complete `en/de/es/ko/pl`. Client 
 
 ## Performance and Cache
 
-- Indexed query-engine pagination `<=100`; no N+1. Sanitized reader is one indexed overlap query, deterministic order, maximum 366 days and 10,000 rows.
+- Indexed query-engine pagination `<=100`; no N+1. The allocated reader uses one scoped overlap projection, a maximum 366-day range, exact arithmetic, and a three-row maximum DTO.
 - MVP uncached to prevent stale accounting. If profiling later justifies DI cache, key/tag by tenant/org; every CRUD/undo invalidates `tenant:<id>`, `org:<id>`, and `connect_analytics:cost_inputs`.
 
 ## Migration & Backward Compatibility
 
-Prerequisite order is base analytics AN-MOD-01, then this slice; no platform or peer module file changes. Add two tables, indexes/checks, entity/event IDs, CRUD/singleton-currency APIs, ACL IDs, `connectCostInputReader`, an extension-local adapter over existing `baseCurrencyService`, search config, and UI routes only. Migration creates schema, no seed costs. Update analytics snapshot; use `yarn db:generate` only as diff probe and never automated `db:migrate`. Generated `down()` drops only the two new analytics tables/checks/indexes; it does not alter currencies schema. Operational code rollback disables the new routes/pages/readers while intentionally retaining already-migrated rows. Existing operational reports remain unchanged. Route/ACL/entity/event/DI IDs become stable.
+Prerequisite order is base analytics AN-MOD-01, then this slice; no platform or peer module file changes. Add two tables, indexes/checks, entity/event IDs, CRUD/singleton-currency APIs, ACL IDs, the allocated reader defined by the successor source-contract spec, an extension-local adapter over existing `baseCurrencyService`, search config, and UI routes only. Migration creates schema, no seed costs. Update analytics snapshot; use `yarn db:generate` only as diff probe and never automated `db:migrate`. Generated `down()` drops only the two new analytics tables/checks/indexes; it does not alter currencies schema. Operational code rollback disables the new routes/pages/readers while intentionally retaining already-migrated rows. Existing operational reports remain unchanged. Route/ACL/entity/event/DI IDs become stable.
 
 ## Testing Strategy and Integration Coverage
 
-- Unit: exact bigint grammar/bounds/round-trip, provider normalization, schemas, conditional dimensions, half-open periods, reader overlap/order/currency/range/result limits.
+- Unit: exact bigint grammar/bounds/round-trip, provider normalization, schemas, conditional dimensions, half-open periods, and allocated-reader overlap/currency/range/exact-arithmetic limits.
 - **COST-INT-001:** CRUD/auth/features, organization selection, optimistic 409, undo, soft delete, exact provider replay versus changed-payload conflict.
 - **COST-INT-002:** tenant/sibling-org isolation including guessed IDs.
 - **COST-INT-003:** all type/source conditionals and invalid period/currency/negative/overflow/noncanonical amount; bigint never reaches JSON as a bigint/number.
-- **COST-INT-004:** reader overlap boundaries, currency filtering, deleted-row exclusion, and sanitized DTO.
+- **COST-INT-004:** allocated-reader overlap boundaries, currency filtering, deleted-row exclusion, and sanitized DTO.
 - **COST-INT-005:** encrypted description not plaintext in cost/revision tables, command/audit payload, reader/search/event/log/error; authorized scoped CRUD read and undo decrypt through revision secret.
 - **COST-INT-006:** audit/index/cache callbacks, redacted snapshots, `extractUndoPayload`, undo conflict/provider uniqueness, and key-rotation-compatible revision decryption.
 - **COST-INT-007:** base-currency resolver exact scope/code, singleton options-route ACL, missing/ambiguous/unavailable dependency 422/503 fail-closed behavior, and no implicit `currencies.view` grant.
@@ -199,7 +181,7 @@ Executable coverage lives at `packages/connect/src/modules/connect_analytics/__i
 3. **COST-DATA-01:** cost/revision entities, validators, encryption, migration/indexes/checks, snapshot.
 4. **COST-CMD-01:** CRUD/undo/replay/optimistic lock/redacted audit/index/invalidation.
 5. **COST-API-01:** exact guarded `makeCrudRoute`, options route, query engine, indexer, and OpenAPI.
-6. **COST-READ-01:** sanitized bounded overlap reader, DI registration, privacy/decoupling tests.
+6. **COST-READ-01:** exact bounded allocated reader, DI registration, privacy/decoupling tests per the successor source-contract spec.
 7. **COST-UI-01:** accessible DataTable/CrudForm/selectors and locales.
 8. **COST-TEST-01:** COST-INT-001..009 and browser/module-decoupling tests in the same change.
 9. **COST-VAL-01:** generate, migration probe/no-op confirmation, package test/typecheck/build, integration, root typecheck/lint, i18n/DS checks; record runner.
@@ -216,7 +198,7 @@ Executable coverage lives at `packages/connect/src/modules/connect_analytics/__i
 | `packages/connect/src/modules/connect_analytics/api/openapi.ts` | Create |
 | `packages/connect/src/modules/connect_analytics/api/cost-inputs/route.ts` | Create |
 | `packages/connect/src/modules/connect_analytics/api/cost-input-options/currency/route.ts` | Create sanitized singleton selector route |
-| `packages/connect/src/modules/connect_analytics/lib/cost-input-reader.ts` | Create |
+| `packages/connect/src/modules/connect_analytics/lib/{allocated-cost-contract,allocated-cost-reader,exact-rational}.ts` | Created by the successor source-contract spec |
 | `packages/connect/src/modules/connect_analytics/lib/cost-input-currency.ts` | Create soft base-currency adapter; no peer entity import |
 | `packages/connect/src/modules/connect_analytics/di.ts` | Modify |
 | `packages/connect/src/modules/connect_analytics/backend/connect/analytics/cost-inputs/**` | Create |

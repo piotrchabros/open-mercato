@@ -21,6 +21,7 @@ export class Migration20260823155947_connect_analytics extends Migration {
     this.addSql(`create index "connect_cost_inputs_user_idx" on "connect_cost_inputs" ("tenant_id", "organization_id", "user_id");`);
     this.addSql(`create index "connect_cost_inputs_currency_type_idx" on "connect_cost_inputs" ("tenant_id", "organization_id", "currency_code", "cost_type", "period_start");`);
     this.addSql(`create index "connect_cost_inputs_period_idx" on "connect_cost_inputs" ("tenant_id", "organization_id", "period_start", "period_end");`);
+    this.addSql(`create index "connect_cost_inputs_allocation_idx" on "connect_cost_inputs" ("tenant_id", "organization_id", "currency_code", "period_start", "period_end") where "deleted_at" is null;`);
     this.addSql(`create unique index "connect_cost_inputs_provider_line_uq" on "connect_cost_inputs" ("tenant_id", "organization_id", "provider_invoice_ref", "provider_line_ref") where "source" = 'provider_invoice' and "deleted_at" is null;`);
     this.addSql(`alter table "connect_cost_inputs" add constraint "connect_cost_inputs_provenance_chk" check ((
     ("source" = 'manual' and "provider_invoice_ref" is null and "provider_line_ref" is null)

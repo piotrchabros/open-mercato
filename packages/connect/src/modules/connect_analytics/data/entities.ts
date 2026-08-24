@@ -96,6 +96,11 @@ export type CostInputRevisionOperation = 'create' | 'update' | 'delete'
   properties: ['tenantId', 'organizationId', 'periodStart', 'periodEnd'],
 })
 @Index({
+  name: 'connect_cost_inputs_allocation_idx',
+  expression:
+    'create index "connect_cost_inputs_allocation_idx" on "connect_cost_inputs" ("tenant_id", "organization_id", "currency_code", "period_start", "period_end") where "deleted_at" is null',
+})
+@Index({
   name: 'connect_cost_inputs_currency_type_idx',
   properties: ['tenantId', 'organizationId', 'currencyCode', 'costType', 'periodStart'],
 })
