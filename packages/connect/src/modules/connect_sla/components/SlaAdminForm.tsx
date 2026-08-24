@@ -111,6 +111,12 @@ export function SlaAdminForm({
                     priority: integer(values.priority, "priority", t),
                     isActive: values.isActive !== false,
                   };
+            const publication =
+              values.publishNow === true
+                ? kind === "calendar"
+                  ? calendarPublication(values, t)
+                  : policyPublication(values, t)
+                : null;
             let id: string;
             let versionToken: string;
             if (mode === "create") {
@@ -124,18 +130,16 @@ export function SlaAdminForm({
               versionToken = created.result.updatedAt;
             } else {
               id = initialValues.id;
-              const updated = await updateCrud<{ updatedAt: string }>(`connect-sla/${plural}`, {
-                ...base,
-                id,
-                updatedAt: initialValues.updatedAt,
-              });
+              const updated = await updateCrud<{ updatedAt: string }>(
+                `connect-sla/${plural}/${encodeURIComponent(id)}`,
+                {
+                  ...base,
+                  id,
+                },
+              );
               versionToken = updated.result?.updatedAt ?? initialValues.updatedAt;
             }
-            if (values.publishNow === true) {
-              const publication =
-                kind === "calendar"
-                  ? calendarPublication(values, t)
-                  : policyPublication(values, t);
+            if (publication) {
               try {
                 await runMutation({
                   operation: async () => {
@@ -167,6 +171,8 @@ export function SlaAdminForm({
                   mutationPayload: publication,
                 });
               } catch (publishError) {
+                if (mode === "create")
+                  router.replace(`${backHref}/${encodeURIComponent(id)}`);
                 if (surfaceRecordConflict(publishError, t))
                   throw createCrudFormError(t("connect_sla.form.conflict"));
                 throw createCrudFormError(t("connect_sla.form.publishError"));

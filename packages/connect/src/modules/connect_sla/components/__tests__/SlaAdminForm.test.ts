@@ -62,6 +62,12 @@ describe("SLA administration forms", () => {
         t,
       ),
     ).toThrow();
+    expect(() =>
+      calendarPublication(
+        { timezone: "UTC", windows: "", holidays: "" },
+        t,
+      ),
+    ).toThrow();
   });
 
   test("builds policy publication and enforces warnings below targets", () => {

@@ -95,7 +95,18 @@ test.describe('TC-CONNECT-SLA-104: contracts, isolation, and UI', () => {
       await expect(page).toHaveURL(new RegExp(`/backend/connect/sla/calendars/${calendar.id}$`))
       await expect(page.getByRole('main').getByRole('textbox').first()).toHaveValue(name)
 
-      await page.goto('/backend/connect/sla/calendars')
+      await page.getByRole('checkbox', { name: /publish this version/i }).click()
+      await page.getByPlaceholder('Europe/Berlin').fill('UTC')
+      await page.getByRole('main').getByRole('textbox').nth(2).fill('1,09:00,17:00')
+      const [updateResponse, publishResponse] = await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith(`/api/connect-sla/calendars/${calendar.id}`) && response.request().method() === 'PUT'),
+        page.waitForResponse((response) => response.url().endsWith(`/api/connect-sla/calendars/${calendar.id}/publish`) && response.request().method() === 'POST'),
+        page.getByRole('button', { name: /^Save$/ }).first().click(),
+      ])
+      expect(updateResponse.status()).toBe(200)
+      expect(publishResponse.status()).toBe(200)
+      await expect(page).toHaveURL(/\/backend\/connect\/sla\/calendars$/)
+
       const refreshedRow = page.getByRole('row').filter({ hasText: name })
       await refreshedRow.getByRole('button', { name: /open actions/i }).click()
       const [deleteResponse] = await Promise.all([
@@ -105,6 +116,43 @@ test.describe('TC-CONNECT-SLA-104: contracts, isolation, and UI', () => {
       expect(deleteResponse.status()).toBe(200)
       await expect(refreshedRow).not.toBeVisible()
     } finally {
+      await ctx.ledger.cleanup(ctx.em, ctx.scope)
+    }
+  })
+
+  test('validates publication before creating a calendar', async ({ page, request }) => {
+    test.setTimeout(60_000)
+    const ctx = await openSlaSpec(request)
+    const name = fixtureName('sla-create-publish')
+    let createRequests = 0
+    const countCreates = (pendingRequest: { url: () => string; method: () => string }) => {
+      if (pendingRequest.url().endsWith('/api/connect-sla/calendars') && pendingRequest.method() === 'POST') createRequests += 1
+    }
+    page.on('request', countCreates)
+    try {
+      await login(page, 'admin')
+      await page.goto('/backend/connect/sla/calendars/create')
+      await page.getByRole('main').getByRole('textbox').first().fill(name)
+      await page.getByRole('checkbox', { name: /publish this version/i }).click()
+      await page.getByPlaceholder('Europe/Berlin').fill('UTC')
+      await page.getByRole('button', { name: /^Save$/ }).first().click()
+      await expect(page.getByText('This field is required.').first()).toBeVisible()
+      expect(createRequests).toBe(0)
+
+      await page.getByRole('main').getByRole('textbox').nth(2).fill('1,09:00,17:00')
+      const [createResponse, publishResponse] = await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith('/api/connect-sla/calendars') && response.request().method() === 'POST'),
+        page.waitForResponse((response) => response.url().endsWith('/publish') && response.request().method() === 'POST'),
+        page.getByRole('button', { name: /^Save$/ }).first().click(),
+      ])
+      expect(createResponse.status()).toBe(201)
+      expect(publishResponse.status()).toBe(200)
+      const calendar = await createResponse.json()
+      ctx.ledger.calendarIds.add(calendar.id)
+      expect(createRequests).toBe(1)
+      await expect(page).toHaveURL(/\/backend\/connect\/sla\/calendars$/)
+    } finally {
+      page.off('request', countCreates)
       await ctx.ledger.cleanup(ctx.em, ctx.scope)
     }
   })
