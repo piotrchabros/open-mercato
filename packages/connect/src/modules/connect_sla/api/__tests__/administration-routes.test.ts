@@ -36,4 +36,19 @@ describe('Connect SLA administration API contracts', () => {
       expect(source).toContain('export const openApi')
     },
   )
+
+  it('passes backend route ids into edit forms and deletes through item routes', () => {
+    const moduleRoot = path.resolve(API_ROOT, '..')
+    const calendarPage = fs.readFileSync(path.join(moduleRoot, 'backend/connect/sla/calendars/[id]/page.tsx'), 'utf8')
+    const policyPage = fs.readFileSync(path.join(moduleRoot, 'backend/connect/sla/policies/[id]/page.tsx'), 'utf8')
+    const form = fs.readFileSync(path.join(moduleRoot, 'components/SlaAdminForm.tsx'), 'utf8')
+    const table = fs.readFileSync(path.join(moduleRoot, 'components/SlaAdminTable.tsx'), 'utf8')
+
+    expect(calendarPage).toContain('recordId={typeof params?.id')
+    expect(policyPage).toContain('recordId={typeof params?.id')
+    expect(form).toContain('`${endpoint}/${encodeURIComponent(recordId)}`')
+    expect(form).not.toContain('useParams')
+    expect(table).toContain('`${endpoint}/${encodeURIComponent(row.id)}`')
+    expect(table).not.toContain('`${endpoint}?id=${encodeURIComponent(row.id)}`')
+  })
 })

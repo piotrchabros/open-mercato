@@ -255,7 +255,7 @@ function ResourceTable<Row extends BaseRow>({
           const call = await withScopedApiRequestHeaders(
             buildOptimisticLockHeader(row.updatedAt),
             () =>
-              apiCall(`${endpoint}?id=${encodeURIComponent(row.id)}`, {
+              apiCall(`${endpoint}/${encodeURIComponent(row.id)}`, {
                 method: "DELETE",
               }),
           );

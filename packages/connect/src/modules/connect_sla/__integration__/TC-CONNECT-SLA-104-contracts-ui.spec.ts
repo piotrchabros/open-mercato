@@ -6,6 +6,7 @@ import { fixtureName, openSlaSpec } from './helpers/slaSpec'
 
 test.describe('TC-CONNECT-SLA-104: contracts, isolation, and UI', () => {
   test('documents the API surface and enforces management ACLs', async ({ request }) => {
+    test.setTimeout(45_000)
     const ctx = await openSlaSpec(request)
     const openApi = await request.get('/api/docs/openapi', { headers: ctx.authHeaders })
     expect(openApi.status()).toBe(200)
@@ -64,5 +65,47 @@ test.describe('TC-CONNECT-SLA-104: contracts, isolation, and UI', () => {
     }
     await page.goto('/backend/connect/sla/calendars')
     await expect(page.getByRole('link', { name: /create/i }).first()).toBeVisible()
+  })
+
+  test('opens and deletes a calendar from its row actions', async ({ page, request }) => {
+    test.setTimeout(60_000)
+    const ctx = await openSlaSpec(request)
+    const name = fixtureName('sla-row-actions')
+    try {
+      const create = await request.post('/api/connect-sla/calendars', {
+        headers: ctx.authHeaders,
+        data: { name, isDefault: false },
+      })
+      expect(create.status()).toBe(201)
+      const calendar = await create.json()
+      ctx.ledger.calendarIds.add(calendar.id)
+
+      await login(page, 'admin')
+      await page.goto('/backend/connect/sla/calendars')
+      const row = page.getByRole('row').filter({ hasText: name })
+      await expect(row).toBeVisible()
+      await row.getByRole('button', { name: /open actions/i }).click()
+      const editAction = page.getByRole('menuitem', { name: /edit/i })
+      await expect(editAction).toHaveAttribute('href', `/backend/connect/sla/calendars/${calendar.id}`)
+      const [detailResponse] = await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith(`/api/connect-sla/calendars/${calendar.id}`) && response.request().method() === 'GET'),
+        editAction.click(),
+      ])
+      expect(detailResponse.status()).toBe(200)
+      await expect(page).toHaveURL(new RegExp(`/backend/connect/sla/calendars/${calendar.id}$`))
+      await expect(page.getByRole('main').getByRole('textbox').first()).toHaveValue(name)
+
+      await page.goto('/backend/connect/sla/calendars')
+      const refreshedRow = page.getByRole('row').filter({ hasText: name })
+      await refreshedRow.getByRole('button', { name: /open actions/i }).click()
+      const [deleteResponse] = await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith(`/api/connect-sla/calendars/${calendar.id}`) && response.request().method() === 'DELETE'),
+        page.getByRole('menuitem', { name: /delete/i }).click(),
+      ])
+      expect(deleteResponse.status()).toBe(200)
+      await expect(refreshedRow).not.toBeVisible()
+    } finally {
+      await ctx.ledger.cleanup(ctx.em, ctx.scope)
+    }
   })
 })

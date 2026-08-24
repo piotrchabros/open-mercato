@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useT } from "@open-mercato/shared/lib/i18n/context";
 import {
   CrudForm,
@@ -27,13 +27,14 @@ type ItemResponse = { item?: RecordValue } & Record<string, unknown>;
 export function SlaAdminForm({
   kind,
   mode,
+  recordId = "",
 }: {
   kind: Kind;
   mode: "create" | "edit";
+  recordId?: string;
 }) {
   const t = useT();
   const router = useRouter();
-  const params = useParams<{ id: string }>();
   const plural = kind === "calendar" ? "calendars" : "policies";
   const endpoint = `/api/connect-sla/${plural}`;
   const backHref = `/backend/connect/sla/${plural}`;
@@ -50,8 +51,13 @@ export function SlaAdminForm({
 
   React.useEffect(() => {
     if (mode !== "edit") return;
+    if (!recordId) {
+      setError(true);
+      setLoading(false);
+      return;
+    }
     let active = true;
-    apiCall<ItemResponse>(`${endpoint}/${params.id}`, undefined, {
+    apiCall<ItemResponse>(`${endpoint}/${encodeURIComponent(recordId)}`, undefined, {
       fallback: {},
     })
       .then((call) => {
@@ -72,7 +78,7 @@ export function SlaAdminForm({
     return () => {
       active = false;
     };
-  }, [endpoint, mode, params.id]);
+  }, [endpoint, mode, recordId]);
 
   const groups = React.useMemo<CrudFormGroup[]>(
     () => (kind === "calendar" ? calendarGroups(t) : policyGroups(t)),

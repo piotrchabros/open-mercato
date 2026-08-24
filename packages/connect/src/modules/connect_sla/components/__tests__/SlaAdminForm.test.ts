@@ -24,7 +24,6 @@ jest.mock("@open-mercato/ui/backend/FlashMessages", () => ({
 }));
 jest.mock("@open-mercato/shared/lib/i18n/context", () => ({ useT: jest.fn() }));
 jest.mock("next/navigation", () => ({
-  useParams: jest.fn(),
   useRouter: jest.fn(),
 }));
 
