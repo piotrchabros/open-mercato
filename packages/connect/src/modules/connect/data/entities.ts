@@ -37,6 +37,19 @@ export type ConnectCasePriority = 'low' | 'normal' | 'high' | 'urgent'
 
 export type ConnectPrincipalKind = 'human' | 'system_bot' | 'integration'
 
+/** Who composed an outbound reply's text. Server-owned; never client-submitted. */
+export type ConnectContentOrigin = 'human_authored' | 'ai_draft' | 'automation'
+
+/**
+ * What can be PROVEN about a reply's authorship, frozen at enqueue.
+ *
+ * `unknown` is not a failure state, it is the honest default: an absent
+ * classification, an unavailable Auth facade, a bot, an integration or an
+ * unaccepted AI draft all land here rather than being optimistically credited
+ * to a person.
+ */
+export type ConnectResponseEvidence = 'human' | 'human_accepted_ai' | 'unknown'
+
 @Entity({ tableName: 'connect_principal_classifications' })
 @Unique({
   name: 'connect_principal_classifications_scope_user_uq',
@@ -257,6 +270,10 @@ export class ConnectPrincipalClassificationManifestEntry {
   name: 'connect_cases_priority_chk',
   expression: `"priority" in ('low', 'normal', 'high', 'urgent')`,
 })
+@Check({
+  name: 'connect_cases_sla_generation_chk',
+  expression: `"sla_generation" >= 0`,
+})
 export class ConnectCase {
   [OptionalProps]?:
     | 'createdAt'
@@ -264,6 +281,7 @@ export class ConnectCase {
     | 'deletedAt'
     | 'status'
     | 'priority'
+    | 'slaGeneration'
     | 'subject'
     | 'displayLabel'
     | 'assigneeUserId'
@@ -352,6 +370,18 @@ export class ConnectCase {
    */
   @Property({ name: 'first_outbound_sent_at', type: Date, nullable: true })
   firstOutboundSentAt?: Date | null
+
+  /**
+   * The lifecycle ROUND this Case is currently in, counted from 0.
+   *
+   * A reopen starts a new round; resolve and close do not. Every outbound
+   * message snapshots the round it was enqueued in, so a delivery confirmed
+   * after a reopen still settles against the round it belongs to instead of
+   * silently crediting the new one. Deliberately SLA-agnostic: it carries no
+   * calendar, target or clock.
+   */
+  @Property({ name: 'sla_generation', type: 'int', default: 0 })
+  slaGeneration: number = 0
 
   @Property({ name: 'resolved_at', type: Date, nullable: true })
   resolvedAt?: Date | null
@@ -1278,8 +1308,35 @@ export class ConnectDomainOutboxEntry {
   properties: ['tenantId', 'organizationId', 'caseId', 'clientCommandKey'],
 })
 @Index({ name: 'connect_outbound_messages_case_idx', properties: ['tenantId', 'caseId', 'createdAt'] })
+@Check({
+  name: 'connect_outbound_messages_content_origin_chk',
+  expression: `"content_origin" in ('human_authored', 'ai_draft', 'automation')`,
+})
+@Check({
+  name: 'connect_outbound_messages_author_kind_chk',
+  expression: `"author_principal_kind" is null or "author_principal_kind" in ('human', 'system_bot', 'integration')`,
+})
+@Check({
+  name: 'connect_outbound_messages_acceptor_kind_chk',
+  expression: `"accepted_by_principal_kind" is null or "accepted_by_principal_kind" in ('human', 'system_bot', 'integration')`,
+})
+@Check({
+  name: 'connect_outbound_messages_response_evidence_chk',
+  expression: `"response_evidence" in ('human', 'human_accepted_ai', 'unknown')`,
+})
 export class ConnectOutboundMessage {
-  [OptionalProps]?: 'createdAt' | 'updatedAt' | 'maskedRecipientLabel' | 'erasedAt'
+  [OptionalProps]?:
+    | 'createdAt'
+    | 'updatedAt'
+    | 'maskedRecipientLabel'
+    | 'erasedAt'
+    | 'caseGeneration'
+    | 'contentOrigin'
+    | 'authorPrincipalKind'
+    | 'acceptedByUserId'
+    | 'acceptedByPrincipalKind'
+    | 'responseEvidence'
+    | 'responseEvidenceVersion'
 
   @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
   id!: string
@@ -1333,6 +1390,48 @@ export class ConnectOutboundMessage {
   /** Set when retention erased the ciphertext; the row itself is kept. */
   @Property({ name: 'erased_at', type: Date, nullable: true })
   erasedAt?: Date | null
+
+  /**
+   * The Case round in force when this reply was enqueued, read while the Case
+   * was locked. A late delivery belongs to ITS enqueue round, never to whatever
+   * round the Case happens to be in when the provider finally answers.
+   */
+  @Property({ name: 'case_generation', type: 'int', default: 0 })
+  caseGeneration: number = 0
+
+  /**
+   * Who composed the text. Server-owned: trusted human reply routes set it, and
+   * no client may submit it, because it is one half of the evidence that a real
+   * person answered the customer.
+   */
+  @Property({ name: 'content_origin', type: 'text', default: 'human_authored' })
+  contentOrigin: ConnectContentOrigin = 'human_authored'
+
+  /** Independently resolved at enqueue. Null when classification is unavailable. */
+  @Property({ name: 'author_principal_kind', type: 'text', nullable: true })
+  authorPrincipalKind?: ConnectPrincipalKind | null
+
+  /** The authenticated user who accepted an AI draft, when one did. */
+  @Property({ name: 'accepted_by_user_id', type: 'uuid', nullable: true })
+  acceptedByUserId?: string | null
+
+  @Property({ name: 'accepted_by_principal_kind', type: 'text', nullable: true })
+  acceptedByPrincipalKind?: ConnectPrincipalKind | null
+
+  /**
+   * Computed once inside the enqueue transaction and never rewritten.
+   *
+   * Immutability is the whole point: recomputing it later would let a user
+   * being reclassified, renamed or deleted retroactively change what the
+   * evidence says about a reply that was already sent. Anything short of proof
+   * is `unknown` — a false `human` is the failure that matters here.
+   */
+  @Property({ name: 'response_evidence', type: 'text', default: 'unknown' })
+  responseEvidence: ConnectResponseEvidence = 'unknown'
+
+  /** Version of the rule set that produced `responseEvidence`. */
+  @Property({ name: 'response_evidence_version', type: 'int', default: 1 })
+  responseEvidenceVersion: number = 1
 
   @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
   createdAt: Date = new Date()
@@ -2315,4 +2414,247 @@ export class ConnectMetricDaily {
 
   @Property({ name: 'updated_at', type: Date, onCreate: () => new Date(), onUpdate: () => new Date() })
   updatedAt: Date = new Date()
+}
+
+// ── SLA source facts ──────────────────────────────────────────
+
+/**
+ * Append-only source facts owned by Connect.
+ *
+ * They exist because an optional downstream consumer cannot safely infer a
+ * lifecycle from mutable rows: a Case that is reopened, reassigned or resolved
+ * again rewrites its own present tense, so anything computed from it at read
+ * time silently rewrites history that was already reported.
+ *
+ * Three rules hold for all three tables:
+ *
+ *   1. **Append-only.** Nothing here is ever updated or deleted, including by
+ *      command undo — a fact is what happened, not a user edit.
+ *   2. **Idempotent by `sourceEventId`.** Unique per tenant + organization, so
+ *      a redelivered or replayed write is rejected rather than double-counted.
+ *   3. **PII-free.** Identifiers, enums and timestamps only. No name, address,
+ *      handle, subject or body ever reaches a table that outlives retention on
+ *      the record it describes.
+ *
+ * Each row is one BOUNDARY, not an interval: a start row and its later end row
+ * are separate facts, which is what keeps the tables append-only and the keyset
+ * cursor stable.
+ */
+export type ConnectGenerationBoundary = 'started' | 'resolved'
+
+export type ConnectGenerationCause = 'opened' | 'reopened' | 'resolved'
+
+@Entity({ tableName: 'connect_case_generation_facts' })
+@Unique({
+  name: 'connect_case_generation_facts_source_uq',
+  properties: ['tenantId', 'organizationId', 'sourceEventId'],
+})
+@Index({
+  name: 'connect_case_generation_facts_keyset_idx',
+  properties: ['tenantId', 'organizationId', 'occurredAt', 'id'],
+})
+@Index({
+  name: 'connect_case_generation_facts_case_idx',
+  properties: ['tenantId', 'organizationId', 'caseId', 'generation', 'occurredAt', 'id'],
+})
+@Check({
+  name: 'connect_case_generation_facts_boundary_chk',
+  expression: `"boundary" in ('started', 'resolved')`,
+})
+@Check({
+  name: 'connect_case_generation_facts_cause_chk',
+  expression: `"cause" in ('opened', 'reopened', 'resolved')`,
+})
+@Check({
+  name: 'connect_case_generation_facts_generation_chk',
+  expression: `"generation" >= 0`,
+})
+export class ConnectCaseGenerationFact {
+  [OptionalProps]?: 'createdAt' | 'resolvedAt' | 'mergedIntoCaseId' | 'lineageVersion'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  /** The writer-derived idempotency key. Stable across replays. */
+  @Property({ name: 'source_event_id', type: 'text' })
+  sourceEventId!: string
+
+  @Property({ name: 'case_id', type: 'uuid' })
+  caseId!: string
+
+  @Property({ name: 'generation', type: 'int' })
+  generation!: number
+
+  @Property({ name: 'channel_id', type: 'uuid' })
+  channelId!: string
+
+  @Property({ name: 'boundary', type: 'text' })
+  boundary!: ConnectGenerationBoundary
+
+  @Property({ name: 'cause', type: 'text' })
+  cause!: ConnectGenerationCause
+
+  /** The instant this generation began, snapshotted onto every one of its rows. */
+  @Property({ name: 'started_at', type: Date })
+  startedAt!: Date
+
+  /** Non-null only on the resolution boundary. */
+  @Property({ name: 'resolved_at', type: Date, nullable: true })
+  resolvedAt?: Date | null
+
+  /** Reserved for Case lineage; null until a merge contract writes it. */
+  @Property({ name: 'merged_into_case_id', type: 'uuid', nullable: true })
+  mergedIntoCaseId?: string | null
+
+  @Property({ name: 'lineage_version', type: 'int', default: 0 })
+  lineageVersion: number = 0
+
+  @Property({ name: 'occurred_at', type: Date })
+  occurredAt!: Date
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+}
+
+export type ConnectWaitBoundary = 'started' | 'ended'
+
+@Entity({ tableName: 'connect_case_wait_facts' })
+@Unique({
+  name: 'connect_case_wait_facts_source_uq',
+  properties: ['tenantId', 'organizationId', 'sourceEventId'],
+})
+@Index({
+  name: 'connect_case_wait_facts_keyset_idx',
+  properties: ['tenantId', 'organizationId', 'occurredAt', 'id'],
+})
+@Index({
+  name: 'connect_case_wait_facts_case_idx',
+  properties: ['tenantId', 'organizationId', 'caseId', 'generation', 'occurredAt', 'id'],
+})
+@Check({
+  name: 'connect_case_wait_facts_boundary_chk',
+  expression: `"boundary" in ('started', 'ended')`,
+})
+@Check({
+  name: 'connect_case_wait_facts_generation_chk',
+  expression: `"generation" >= 0`,
+})
+export class ConnectCaseWaitFact {
+  [OptionalProps]?: 'createdAt' | 'endedAt'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'source_event_id', type: 'text' })
+  sourceEventId!: string
+
+  @Property({ name: 'case_id', type: 'uuid' })
+  caseId!: string
+
+  @Property({ name: 'generation', type: 'int' })
+  generation!: number
+
+  @Property({ name: 'boundary', type: 'text' })
+  boundary!: ConnectWaitBoundary
+
+  /** The instant the wait began, carried by BOTH boundaries of the interval. */
+  @Property({ name: 'started_at', type: Date })
+  startedAt!: Date
+
+  /** Non-null only on the closing boundary. */
+  @Property({ name: 'ended_at', type: Date, nullable: true })
+  endedAt?: Date | null
+
+  @Property({ name: 'occurred_at', type: Date })
+  occurredAt!: Date
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
+}
+
+@Entity({ tableName: 'connect_outbound_delivery_facts' })
+@Unique({
+  name: 'connect_outbound_delivery_facts_source_uq',
+  properties: ['tenantId', 'organizationId', 'sourceEventId'],
+})
+@Index({
+  name: 'connect_outbound_delivery_facts_keyset_idx',
+  properties: ['tenantId', 'organizationId', 'occurredAt', 'id'],
+})
+@Index({
+  name: 'connect_outbound_delivery_facts_case_idx',
+  properties: ['tenantId', 'organizationId', 'caseId', 'generation', 'occurredAt', 'id'],
+})
+@Check({
+  name: 'connect_outbound_delivery_facts_evidence_chk',
+  expression: `"response_evidence" in ('human', 'human_accepted_ai', 'unknown')`,
+})
+@Check({
+  name: 'connect_outbound_delivery_facts_generation_chk',
+  expression: `"generation" >= 0`,
+})
+export class ConnectOutboundDeliveryFact {
+  [OptionalProps]?: 'createdAt' | 'authorUserId' | 'acceptedByUserId' | 'responseEvidenceVersion'
+
+  @PrimaryKey({ type: 'uuid', defaultRaw: 'gen_random_uuid()' })
+  id!: string
+
+  @Property({ name: 'tenant_id', type: 'uuid' })
+  tenantId!: string
+
+  @Property({ name: 'organization_id', type: 'uuid' })
+  organizationId!: string
+
+  @Property({ name: 'source_event_id', type: 'text' })
+  sourceEventId!: string
+
+  @Property({ name: 'case_id', type: 'uuid' })
+  caseId!: string
+
+  /** The round the message was ENQUEUED in, not the Case's current round. */
+  @Property({ name: 'generation', type: 'int' })
+  generation!: number
+
+  @Property({ name: 'outbound_message_id', type: 'uuid' })
+  outboundMessageId!: string
+
+  @Property({ name: 'attempt_id', type: 'uuid' })
+  attemptId!: string
+
+  @Property({ name: 'delivery_revision', type: 'int' })
+  deliveryRevision!: number
+
+  @Property({ name: 'confirmed_at', type: Date })
+  confirmedAt!: Date
+
+  /** Copied from the message. Immutable evidence, never recomputed here. */
+  @Property({ name: 'response_evidence', type: 'text' })
+  responseEvidence!: ConnectResponseEvidence
+
+  @Property({ name: 'response_evidence_version', type: 'int', default: 1 })
+  responseEvidenceVersion: number = 1
+
+  @Property({ name: 'author_user_id', type: 'uuid', nullable: true })
+  authorUserId?: string | null
+
+  @Property({ name: 'accepted_by_user_id', type: 'uuid', nullable: true })
+  acceptedByUserId?: string | null
+
+  @Property({ name: 'occurred_at', type: Date })
+  occurredAt!: Date
+
+  @Property({ name: 'created_at', type: Date, onCreate: () => new Date() })
+  createdAt: Date = new Date()
 }

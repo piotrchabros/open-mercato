@@ -1,13 +1,16 @@
+import { LockMode } from '@mikro-orm/core'
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { createLogger } from '@open-mercato/shared/lib/logger'
 import {
   ConnectCase,
   ConnectOutboundAttempt,
+  ConnectOutboundMessage,
   ConnectUnknownDelivery,
   type ConnectAttemptStatus,
 } from '../data/entities'
 import { statusAfterFirstOutbound } from './case-lifecycle-outbound'
 import { stageDomainEvent } from './domain-outbox'
+import { recordDeliveryConfirmed, recordWaitStarted } from './sla-source-facts'
 
 const logger = createLogger('connect').child({ component: 'delivery-outcome-apply' })
 
@@ -52,6 +55,18 @@ export async function applyDeliveryOutcome(
   payload: DeliveryOutcomePayload,
   now: Date = new Date(),
 ): Promise<ApplyOutcomeResult> {
+  // One transaction for the attempt revision, the Case status, the source facts
+  // and the outbox. A partial application here is the worst outcome available:
+  // a consumer would see a delivery announced against a Case whose wait never
+  // opened, or a first-send stamp with no fact behind it.
+  return em.transactional(async (tem) => applyOutcomeInTransaction(tem as EntityManager, payload, now))
+}
+
+async function applyOutcomeInTransaction(
+  em: EntityManager,
+  payload: DeliveryOutcomePayload,
+  now: Date,
+): Promise<ApplyOutcomeResult> {
   const attempt = await em.findOne(ConnectOutboundAttempt, {
     id: payload.attemptId,
     tenantId: payload.tenantId,
@@ -95,12 +110,20 @@ export async function applyDeliveryOutcome(
     // Only a CONFIRMED send moves the Case to waiting_customer. A failed or
     // unknown attempt must not, or the queue would show work as handed back to
     // the customer when nothing reached them.
-    const target = await em.findOne(ConnectCase, {
-      id: attempt.caseId,
-      tenantId: attempt.tenantId,
-      organizationId: attempt.organizationId,
-      deletedAt: null,
-    })
+    //
+    // Locked because two attempts on the same Case can settle concurrently, and
+    // the status transition, the first-send stamp and the wait boundary must
+    // all be decided by one of them, not interleaved between both.
+    const target = await em.findOne(
+      ConnectCase,
+      {
+        id: attempt.caseId,
+        tenantId: attempt.tenantId,
+        organizationId: attempt.organizationId,
+        deletedAt: null,
+      },
+      { lockMode: LockMode.PESSIMISTIC_WRITE },
+    )
     if (target) {
       const next = statusAfterFirstOutbound(target.status)
       if (next !== target.status) {
@@ -111,9 +134,62 @@ export async function applyDeliveryOutcome(
       // Stamped once, on the FIRST confirmed send. Doing it at enqueue would
       // measure how fast an agent typed rather than when the customer heard
       // back, and a later retry would keep resetting it.
-      if (!target.firstOutboundSentAt) {
-        target.firstOutboundSentAt = now
+      //
+      // Serialized as a scoped conditional UPDATE ... RETURNING rather than a
+      // read-then-write: only the row that actually transitioned NULL → now
+      // comes back, so exactly one attempt reports the first send even if the
+      // lock is ever weakened or the row is touched by another writer. The
+      // legacy column itself stays unqualified — it says "something confirmed",
+      // not "a human answered". The evidence fact carries that.
+      const stamped = (await em.execute(
+        `update "connect_cases"
+            set "first_outbound_sent_at" = ?, "updated_at" = ?
+          where "id" = ? and "tenant_id" = ? and "organization_id" = ?
+            and "deleted_at" is null and "first_outbound_sent_at" is null
+        returning "first_outbound_sent_at"`,
+        [now, now, target.id, attempt.tenantId, attempt.organizationId],
+      )) as unknown[]
+      if (Array.isArray(stamped) && stamped.length > 0) {
         firstConfirmedHumanOutboundAt = now
+      }
+
+      const message = await em.findOne(ConnectOutboundMessage, {
+        id: attempt.messageId,
+        tenantId: attempt.tenantId,
+        organizationId: attempt.organizationId,
+      })
+      // The message's OWN round, not the Case's current one: a delivery
+      // confirmed after a reopen belongs to the round it was enqueued in.
+      const generation = message?.caseGeneration ?? target.slaGeneration
+      const factScope = { tenantId: attempt.tenantId, organizationId: attempt.organizationId }
+
+      await recordDeliveryConfirmed(em, {
+        ...factScope,
+        sourceEventId: `connect.outbound.delivery_confirmed:${attempt.id}:${payload.deliveryRevision}`,
+        caseId: attempt.caseId,
+        generation,
+        outboundMessageId: attempt.messageId,
+        attemptId: attempt.id,
+        deliveryRevision: payload.deliveryRevision,
+        confirmedAt: now,
+        responseEvidence: message?.responseEvidence ?? 'unknown',
+        responseEvidenceVersion: message?.responseEvidenceVersion ?? 1,
+        authorUserId: message?.actorUserId ?? null,
+        acceptedByUserId: message?.acceptedByUserId ?? null,
+        occurredAt: now,
+      })
+
+      // The ball is with the customer only when the Case actually crossed into
+      // waiting. A second confirmed reply while already waiting finds the wait
+      // open and adds nothing.
+      if (caseTransitioned && next === 'waiting_customer') {
+        await recordWaitStarted(em, {
+          ...factScope,
+          sourceEventId: `connect.case.customer_wait_started:${attempt.id}:${payload.deliveryRevision}`,
+          caseId: attempt.caseId,
+          generation,
+          occurredAt: now,
+        })
       }
     }
   }

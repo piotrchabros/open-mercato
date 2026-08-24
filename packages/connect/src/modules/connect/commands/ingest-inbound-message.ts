@@ -23,6 +23,7 @@ import { recordInboundHit } from '../lib/inbound-rate-limiter'
 import { hashHandle, resolveIdentity } from '../lib/identity-resolver'
 import { claimInboundReceipt, completeReceipt } from '../lib/receipt-claim'
 import { stageDomainEvent } from '../lib/domain-outbox'
+import { recordGenerationStarted, recordWaitEnded } from '../lib/sla-source-facts'
 import { evaluateActivation } from '../lib/activation'
 import { CONNECT_QUEUES } from '../lib/queue'
 
@@ -364,7 +365,7 @@ export async function ingestInboundMessage(
 
     let decided: CaseDecision
     if (ownership.decision === 'attach' && owner) {
-      decided = await applyAttach(txEm, scope, owner, ownership.nextStatus, now)
+      decided = await applyAttach(txEm, scope, owner, ownership.nextStatus, receipt.id, now)
     } else {
       decided = await decideByIdentity(txEm, {
         scope,
@@ -376,6 +377,7 @@ export async function ingestInboundMessage(
         // A Conversation whose Case closed chains to it directly. The identity
         // binding may point somewhere else entirely after a split.
         conversationSuccessorOf: ownership.decision === 'fall_through' ? ownership.successorOf : null,
+        receiptId: receipt.id,
         now,
       })
     }
@@ -512,6 +514,7 @@ async function decideByIdentity(
     envelope: { subject: string; replyTargetMaskedLabel: string }
     settings: typeof DEFAULT_SETTINGS
     conversationSuccessorOf: string | null
+    receiptId: string
     now: Date
   },
 ): Promise<CaseDecision> {
@@ -556,7 +559,7 @@ async function decideByIdentity(
   })
 
   if (decision.decision === 'attach' && eligibleBound && decision.caseId === eligibleBound.id) {
-    return applyAttach(em, scope, eligibleBound, decision.nextStatus, now)
+    return applyAttach(em, scope, eligibleBound, decision.nextStatus, args.receiptId, now)
   }
   if (decision.decision === 'attach') {
     const target = await em.findOne(ConnectCase, {
@@ -565,7 +568,7 @@ async function decideByIdentity(
       organizationId: scope.organizationId,
       deletedAt: null,
     })
-    if (target) return applyAttach(em, scope, target, decision.nextStatus, now)
+    if (target) return applyAttach(em, scope, target, decision.nextStatus, args.receiptId, now)
   }
 
   return openCase(em, {
@@ -576,6 +579,7 @@ async function decideByIdentity(
     envelope: args.envelope,
     previousCaseId:
       args.conversationSuccessorOf ?? (boundCase?.status === 'closed' ? boundCase.id : null),
+    receiptId: args.receiptId,
     now,
   })
 }
@@ -585,6 +589,7 @@ async function applyAttach(
   scope: { tenantId: string; organizationId: string },
   target: ConnectCase,
   nextStatus: ConnectCaseStatus,
+  receiptId: string,
   now: Date,
 ): Promise<{ caseId: string; opened: false }> {
   const previousStatus = target.status
@@ -605,6 +610,37 @@ async function applyAttach(
       }),
     )
   }
+
+  // The customer answered, so any wait on the round they were answering is
+  // over. Recorded against the round in force BEFORE a reopen, otherwise the
+  // interval would be attributed to a round that had not started when it began.
+  if (previousStatus === 'waiting_customer' && nextStatus !== previousStatus) {
+    await recordWaitEnded(em, {
+      ...scope,
+      sourceEventId: `connect.case.customer_wait_ended:${receiptId}`,
+      caseId: target.id,
+      generation: target.slaGeneration,
+      occurredAt: now,
+    })
+  }
+
+  // An inbound that revives a resolved Case is a reopen in every sense that
+  // matters downstream, so it starts a new round exactly as the explicit
+  // command does. Treating only the button as a reopen would let a customer's
+  // reply accrue silently against the round that was already reported resolved.
+  if (previousStatus === 'resolved' && nextStatus === 'in_progress') {
+    target.slaGeneration += 1
+    await recordGenerationStarted(em, {
+      ...scope,
+      sourceEventId: `connect.case.generation_started:${receiptId}`,
+      caseId: target.id,
+      generation: target.slaGeneration,
+      channelId: target.channelId,
+      cause: 'reopened',
+      occurredAt: now,
+    })
+  }
+
   await em.flush()
   return { caseId: target.id, opened: false }
 }
@@ -618,6 +654,7 @@ async function openCase(
     binding: ConnectIdentityCaseBinding
     envelope: { subject: string; replyTargetMaskedLabel: string }
     previousCaseId: string | null
+    receiptId: string
     now: Date
   },
 ): Promise<{ caseId: string; opened: true }> {
@@ -657,6 +694,20 @@ async function openCase(
       payload: { trigger: 'inbound', successor: args.previousCaseId != null },
     }),
   )
+  await em.flush()
+
+  // Round 0 opens with the Case. Emitting it here, rather than lazily on the
+  // first reply, is what lets a consumer see a Case that was never answered at
+  // all — the case that matters most and the one a lazy write would hide.
+  await recordGenerationStarted(em, {
+    ...scope,
+    sourceEventId: `connect.case.generation_started:${args.receiptId}`,
+    caseId: created.id,
+    generation: created.slaGeneration,
+    channelId: args.channelId,
+    cause: 'opened',
+    occurredAt: now,
+  })
   await em.flush()
 
   args.binding.currentCaseId = created.id

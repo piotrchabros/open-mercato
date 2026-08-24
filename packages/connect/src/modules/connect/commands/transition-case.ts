@@ -5,6 +5,12 @@ import { ConnectCase, ConnectCaseTransition, type ConnectCaseStatus } from '../d
 import { evaluateCaseAccess, type CaseActor } from '../lib/case-access'
 import { validateTransition } from '../lib/case-lifecycle'
 import { stageDomainEvent } from '../lib/domain-outbox'
+import {
+  findGenerationStartedAt,
+  recordGenerationResolved,
+  recordGenerationStarted,
+  recordWaitEnded,
+} from '../lib/sla-source-facts'
 
 /**
  * The single writer for interactive lifecycle changes AND the auto-close sweep.
@@ -142,6 +148,14 @@ export async function transitionCase(
     if (to === 'closed') target.closedAt = now
     if (to === 'in_progress') target.resolvedAt = null
 
+    // A reopen starts a NEW round; resolve and close do not. Incrementing under
+    // the lock we already hold is what makes it exactly-once, so a reply
+    // enqueued a moment later cannot straddle two rounds.
+    const generationBefore = target.slaGeneration
+    if (input.action === 'reopen') target.slaGeneration = generationBefore + 1
+    const factScope = { tenantId: input.actor.tenantId, organizationId: input.actor.organizationId }
+    const factKey = `${target.id}:${now.getTime()}`
+
     em.persist(
       em.create(ConnectCaseTransition, {
         tenantId: input.actor.tenantId,
@@ -179,6 +193,46 @@ export async function transitionCase(
         occurredAt: now.toISOString(),
       },
     })
+
+    if (input.action === 'reopen') {
+      await recordGenerationStarted(em, {
+        ...factScope,
+        sourceEventId: `connect.case.generation_started:${factKey}`,
+        caseId: target.id,
+        generation: target.slaGeneration,
+        channelId: target.channelId,
+        cause: 'reopened',
+        occurredAt: now,
+      })
+    }
+
+    if (input.action === 'resolve') {
+      // Close the customer wait BEFORE the resolution, at the same instant: a
+      // wait left open across a resolution would keep accruing against a Case
+      // nobody is waiting on any more.
+      await recordWaitEnded(em, {
+        ...factScope,
+        sourceEventId: `connect.case.customer_wait_ended:${factKey}`,
+        caseId: target.id,
+        generation: generationBefore,
+        occurredAt: now,
+      })
+      await recordGenerationResolved(em, {
+        ...factScope,
+        sourceEventId: `connect.case.generation_resolved:${factKey}`,
+        caseId: target.id,
+        generation: generationBefore,
+        channelId: target.channelId,
+        startedAt: await findGenerationStartedAt(
+          em,
+          factScope,
+          target.id,
+          generationBefore,
+          target.createdAt,
+        ),
+        occurredAt: now,
+      })
+    }
 
     await em.flush()
     return { status: 'transitioned', caseId: target.id, from, to, updatedAt: target.updatedAt.toISOString() }
