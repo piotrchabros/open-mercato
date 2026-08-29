@@ -1,0 +1,418 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:84927743ebecd1d02ef919bc37a0631bad0b94cd1567ae0d40cc7e8ec71f701e",
+  "claims": [
+    {
+      "id": "claim_46df548f840644d4b6daa8a6bc172402",
+      "statement": "Each feature module lives under src/modules/<module>/ with convention-based files (index.ts metadata, acl.ts features, setup.ts tenant init, events.ts, di.ts, ce.ts, search.ts, data/entities.ts, data/migrations, api/, backend/, frontend/, subscribers/, workers/, widgets/, i18n/) that the code generator auto-discovers into generated registries.",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/src/modules/customers/acl.ts",
+          "version": "repo-file-v1:sha256:7d2df34a07bd050b2a593342571362af5ac7260a00187b2af23b5fd128ff66da"
+        },
+        {
+          "resource": "repo://packages/core/src/modules/customers/events.ts",
+          "version": "repo-file-v1:sha256:338efa3a07c145d800646d34b1584fb1a2264901aacd5ee79e19ca1f676b6fad"
+        },
+        {
+          "resource": "repo://packages/core/src/modules/customers/index.ts",
+          "version": "repo-file-v1:sha256:bc0507b459ff0794519cd4a2c4998bbe44c46812aae5ef8619241f2fde6c3d71"
+        },
+        {
+          "resource": "repo://packages/core/src/modules/customers/search.ts",
+          "version": "repo-file-v1:sha256:bdaccc940aac08635077f765d7ace280c60fbfaaf4587499c65372a918e4180e"
+        },
+        {
+          "resource": "repo://packages/core/src/modules/customers/setup.ts",
+          "version": "repo-file-v1:sha256:4460ec03a9d06f3ce930f46729540d4c08b44c38291111096c1b3f076ac2e57e"
+        }
+      ]
+    },
+    {
+      "id": "claim_9b8c92e33f2745709305adbcac982288",
+      "statement": "Auto-discovery file names, expected export names, and directory-to-route mappings (frontend/<path>.tsx -> /<path>, backend/<path>.tsx -> /backend/<path>, api/<method>/<path>.ts -> /api/<path> by method, subscribers/*.ts, workers/*.ts) are a frozen public contract in BACKWARD_COMPATIBILITY.md; existing convention files MUST NOT change in a breaking way, only additive new ones may be added.",
+      "evidence": [
+        {
+          "resource": "repo://BACKWARD_COMPATIBILITY.md#L31-L66",
+          "version": "repo-lines-v1:sha256:620c3befa7432e9b6d30fc98323ff7fd4b64593f8beccbb9546ab4ccb84c91a1:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA0OTA5MjFiMzhlYzVlMDc1YWYzODlmNzJlYWY0MzQwYzcxYTQ4ZGMyMDIxZjVmYTVkOTAwNGU2MTU4ODM1YWUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyYTJmMGQyODUzZWY1OGRhZDFjMDRmNDkxN2JjMDViNzE3OWE0ZDRiYWI1NDQ4YjA4N2IwNGYwMGNmOGE3MzQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY0YjUxMjU5NzEyMjA2ZGM0MzcwNTBkZTA2YzRlYjk3Yzg0ZWIyNjhmNTNkY2UyODQ3N2YxZmFiNzMzMTNiN2UiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmOGJjZDY4NmQxNzZmOTg2YzdiMmMyY2FhOWQ1OGIzNTM4ZWEwYzk3OGIxN2RkYzU0MTYxNDc0NzU5YTE2ZTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d1a97d50566f41af87c27f671e2eeab3",
+      "statement": "apps/mercato/src/modules.ts is the central enablement+override layer: enabledModules lists { id, from, overrides? } entries; official modules are appended from official-modules entries; example_customers_sync is pulled in only when example is enabled; storage_s3 and enterprise modules (record_locks, system_status_overlays, sso, security) are gated by OM_ENABLE_* env flags.",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/modules.ts#L71-L203",
+          "version": "repo-lines-v1:sha256:383eb3348d071be615428eed8b9fec947e5d187f5fedac765b3b4f7d0d33d358:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyZDgzZjI3ZTg2YTU4Y2U3ZWIxNWIzZGFhOGI3NDk4NWZiZWY0MWExY2E1YjZlNTI1OWFiMjY1ZGI3NWFlZGExIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJhNGYwMTM4ZTMyODZmYzVhYzM1ZGE0MTAyM2Y0OWQ3ZGI1NmMyMDQ3NmUwNjAyOTRhOGVhMmI5NjIxM2E3ZTBlIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_9b7902de28b249afa5e1d8b561285687",
+      "statement": "The bundled example module is disabled by default (its enabledModules entry is commented out) and demonstrates the full entry.overrides surface (routes, widgets, events, workers, ACL, DI, encryption, nav); re-enabling it also pulls in the companion example_customers_sync module.",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/modules.ts#L142-L180",
+          "version": "repo-lines-v1:sha256:18a2025b12054876c3ef9ff283da89437d415dabe20b68e01026e3cfdd328e37:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE4MDJjZDYwYWY3ZjJhYTQ1MWQwYmYxM2Y3ZWQzZjVhMTM4Mzg1YmFlZjFhNzc1NjAzNDgzODE1M2MyZmY0ZGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYxZGU4ODljNjUwODE4ZTRhZjFhMjQxYTQzZjVmZTFkODg1NzI1MDk3MTA1NDE1ZTUzNjA3YTU0Yjg0YzRlYTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhjNjg5ZWYxMmNhYjgyNjQxZGU2NGE3MzZjZTE5YjlkNWY0ZDExZjkzNmZhMzcwNzkwZDBkOGNlZmU1ODk2YjkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7bda8d4c88334ba0b3897d73f3ebe638",
+      "statement": "createRequestContainer() builds a per-request Awilix container in InjectionMode.CLASSIC: core engines (em fork, queryEngine, dataEngine, commandRegistry, commandBus, default optimistic-lock guards) first, then module DI registrars (fail-open, logged), then core bootstrap (or replayed cache when OM_BOOTSTRAP_CACHE=1), then the app-level DI registrar, then applyDiOverridesToContainer, then re-registers the tenant encryption subscriber on the fresh EM.",
+      "evidence": [
+        {
+          "resource": "repo://packages/shared/src/lib/di/container.ts#L203-L252",
+          "version": "repo-lines-v1:sha256:3996436fc141bf6f45205de9634deca52673cfbb97cedddf21b62947bfbdb5d8:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA2NzBiODNkOTZkM2IxNjcyNTg3NDM2NzM2MmQ0YWFmMjE3YzE1MTAwMmIzZDIyZWNhMjk5NDVjM2RkZDk2YzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ZTU3ODhkNWQ5ZDczZDI0YTgxZGJjMGE1YTc0YmZhODJjOWMzYjNhZjk5ZTUyYWY3OTZlOTBiNDY4YThhM2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM0MGM1ZDNkYzNhNzczMDc5M2M4OTI3OTQ4YjU1OTY2NDIwN2Y3OWJhODc3NzNjMjE1MDA0NDMxOTYyZmQ0ODgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE2NGRmNTc2OTViMTUzZmQyNzNiMjgyNTMwNWM3ZTg1Njk2ZjI1NzNlYmM1MGZmN2Q0ZTFkZDE5MmUxMjg2MzYifQ"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/di/container.ts#L253-L338",
+          "version": "repo-lines-v1:sha256:4071831fc296ec45c25f7128b469f0904eaf1ff03fb912156bd525f6c9e3fb6f:eyJzZWxlY3RlZExpbmVDb3VudCI6ODYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlNWQxMmU5NDE3OWY4YWM4NTMxNWQ4ZjY3NGZiMmZmZjdlOTk0NTg4YjVhZjE3ZjczYmJlNjRmODExMWI1ZTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVjNWNiYmMzODk4NWU4YWVjZDlhMjY3YmEyM2Q2YzIyNTg5MzM1ZDAwZWFkNDg3ZjJhNTk2MmVjMWQxM2VmM2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgwZjQ1YjM3NTE4M2RlODgyYzQ0Y2I5Y2ZkMDdmMmQ1NmE5NjRjZWY1Mzc3MTgwZTFkNzI1NDQwYjJmNWNhMTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8092571700ae431891206958ac43daac",
+      "statement": "Awilix InjectionMode.CLASSIC resolves factory dependencies by parameter name and passes them positionally, so destructuring patterns like asFunction(({ em }) => ...) silently inject undefined; registrars must use plain named parameters (asFunction((em) => ...)) or chain .proxy().",
+      "evidence": [
+        {
+          "resource": "repo://packages/shared/AGENTS.md#L49-L49",
+          "version": "repo-lines-v1:sha256:27d52bcf8d5d387612e2837c0c727e02604b56f2fd4bcf70fefae2574f2817ce:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjdkNTJiY2Y4ZDVkMzg3NjEyZTI4MzdjMGM3MjdlMDI2MDRiNTZmMmZkNGJjZjcwZmVmYWUyNTc0ZjI4MTdjZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjdkNTJiY2Y4ZDVkMzg3NjEyZTI4MzdjMGM3MjdlMDI2MDRiNTZmMmZkNGJjZjcwZmVmYWUyNTc0ZjI4MTdjZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNGViZWNmMWQxMzcxNDU3MmNiODI0OGVlNTVjNTk4ZDdmZTcyMmMzMzdkN2IyMWNlMDc5MWMwZTU1ODIwYjQzMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMjMwYmYyYjIxZGMxM2UxMDMwMDg3NmY5ODgxZTkyMGRkNjQ1NGQxMTkzNjE4MmZhYzJjZDE4MWYzMDM4OWMwMyJ9"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/di/container.ts#L208-L209",
+          "version": "repo-lines-v1:sha256:20136547fedde97c75b383f708ce93783156cc336dc47c635a3fbfe58d451d0e:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOThiMDUwNGZlMzY2NmU5NWRlMGM4YjkzM2I2OWYyZGNiYzExOTJhMGJhMWZhY2QzMjk0ZjFmYWUxOGVlMDUxNCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWEwOWU4MDk4M2FjZDc5MjkxNWFlZDU1M2E3OTk1MWEwM2ZlNjRiZTVkOGY4NWY1NTYyYjQwOTlhYzllZmY5YyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTdkMTM0YmUwYzA4Yzk5OTk0MWFmMjEwNWI5MTBhZWY5MDJhYTNkMmJjYjAzZjZjNmFjZGJiMGU1Yjc0NTk0YyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzYyYzU4ZGJkNWZkOTM2YjFhZTk1MGZkZTJiMDM2M2E2M2QxZjYzMDMzMzc1N2MzNTM1OTQzYmJjYjU5MzYyYiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_ed10e717750b482e8cb752a37a97fb88",
+      "statement": "DI registrars, the cache singleton, the rate limiter, the bootstrap cache, and nav-group ordering state live on globalThis so they survive tsx/esbuild/webpack module duplication and HMR; HMR clears the bootstrap cache so module subscribers can change.",
+      "evidence": [
+        {
+          "resource": "repo://packages/shared/src/lib/di/container.ts#L25-L43",
+          "version": "repo-lines-v1:sha256:cf4bf6c3b60605c2b01243d8d43dfb608c82aadfd5871f94e5da8237b25c4ab1:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE5NGVkYTUxOWE2YmIwZTM0ZWU1YjAzZTUyYzBkNDg2YTU5OWQ5YWYyMzUxNDg2MmE5MjAyMjU5OGY4NzMxMmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEzYzAzYWMyODYyZTk0MTIwMTQ1NGExZGE2OGY0MjVjYTg1NTFlMjVhY2MxZmEwMjAxOGIzNGM3NGJkNGFiZWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdjN2MzZDhhNDdlNmFmNDVjMjM3MTBhNGM5YTM3YTE4MGYzODI5NWM0MDY5MTVmYTQ1ZDVlOTkwYmUwMmY0NDkifQ"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/di/container.ts#L278-L316",
+          "version": "repo-lines-v1:sha256:711c03592f9cf81993e09be78b4fd4b54a7b00ba7973f495ad1512e19682e06b:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE3N2RkZWI3ODc4MGY3OWM1NTAwOTI3OWY2ZDlkNDE3ODVkMWY4ZDMzOTlkOGEyMDUxMjY5NmNhM2I3ZmM4YWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ZTU3ODhkNWQ5ZDczZDI0YTgxZGJjMGE1YTc0YmZhODJjOWMzYjNhZjk5ZTUyYWY3OTZlOTBiNDY4YThhM2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVlNjg5MWRmYjg4YTZkOTIxNjc2ZjJiMjQ2MTgwNWM1OTkzOTlkZWEyM2E4YWFmMThmN2EzMGFlMjU2OGIxMTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZjZmE5MzlhY2ZiZTdkOTU4ZGVlNjg3M2RkNDMwNzc2OWRhMTIzMmY3ZDgxM2ExYTZhZDNlYjBjZGFjMWYyZDUifQ"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/di/container.ts#L56-L81",
+          "version": "repo-lines-v1:sha256:cd752ee2f333d68396aebcea2c4bb9ae9d072c70022b6edebe1400196275d652:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ5MzhjZTc4NDY0ZWNhNmZiMTRhNjc2ZDk5ODZkMGIxNDcxYTg1MjhmZGYwMGJiNTgxMDg2YTExMmU2OTIxYzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc5M2ExOTgyYzM2OGYyZjQyN2Q1NmUyYTNlODNlZDA0MGM0YzA0YzUxNzdlZjMzYzJlOTMwODMwZDQzZDUzZjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhhN2JkZTZiMWVmNjhmZTMwZWIxOWNhZTdmNTVjMzUzOTRiNjM4MGRhODNmYTI3N2Q3YzFlZjhhYzgxYzc5YWYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a15dd9ce23114405b13de1c75aa2a491",
+      "statement": "bootstrap() (packages/core/src/bootstrap.ts) wires process-scoped infrastructure into the request container: a singleton cache service (OM_CACHE_SINGLETON, default ON, with memory fallback and SIGTERM/SIGINT close), the event bus (QUEUE_STRATEGY/EVENTS_STRATEGY async|redis|local with no-op fallback that omits dispatchQueued so failures are loud), module subscriber + sync-subscriber registration, KMS + TenantDataEncryptionService (only registers the encryption subscriber when KMS is healthy), a singleton rate limiter (getCachedRateLimiterService never throws), and search module registration (registerSearchModule + search-delete subscriber).",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/src/bootstrap.ts#L111-L265",
+          "version": "repo-lines-v1:sha256:2b3abd3e3cbb66ae173356ccf1add3cdd0b200f4a965a152f2d645348ba3403f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTU1LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJkODgzNzJjOTg1MDk1YzEzOWJhNGQzMTk4YzIwZGM5ZDYzZjExNzRjZWI3ZWI1NTQzMzAwMmFhMmY0MDIyMDc3IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIyN2U1Nzg4ZDVkOWQ3M2QyNGE4MWRiYzBhNWE3NGJmYTgyYzljM2IzYWY5OWU1MmFmNzk2ZTkwYjQ2OGE4YTNkIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJhNzNmYzhhMTBhMzBhOWRmOWY2ZmQxZTFkODNmNWU2NTUyMDY2NGY5Y2I5MDNmMmZjYTQ0ODA3YmE0ZGZlNGY3IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MSwiZm9sbG93aW5nQ29udGV4dEhhc2giOiI0MTJjYTM0NWNjZjc1YmY5YzA4MDZiY2U2OTViZThkZTgwOGI3OTk4NDI1MWE3YTU0ZDIwMmNmNjEwMWRkNDUxIn0"
+        },
+        {
+          "resource": "repo://packages/core/src/bootstrap.ts#L56-L109",
+          "version": "repo-lines-v1:sha256:fa181b323512f2b45680e3bb1430d6399feb4625390c45d4a70f6b57c5b16495:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUwZGQ3NDM2MGIzOTQxOWM2ODU2ODY2ZTQwNDEzZWVlZTg4ODM1YWYzMzEwNThlYjc3MDkwYjhkYzczZjUzYzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRiNWM3MWExYzEzMzIyMDFiMmFhODNiNGQ5OTViMTExYjMwNGFmYjNkN2Y4Yjg3ZGJmOGQxNjk5NDM5NzVhYWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI5ZmQ5ZDU3OWI5MzU3Njk2OTI5ZWIzNzUzMjZlNTAzN2UzYWNiOGIyNGNhMjlhYmFkOGQ5OWI1NDFiYjk1ODEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_128cdabd45f241c4b809ecdd09b90d33",
+      "statement": "The Phase 5 bootstrap cache (OM_BOOTSTRAP_CACHE=1, default OFF) caches the harvested bootstrap services on globalThis after the first successful bootstrap so later request containers skip the await bootstrap() body and re-register cached instances; it is OFF by default because some bootstrap services close over per-request state (e.g. tenantEncryptionService captures the first request's em fork).",
+      "evidence": [
+        {
+          "resource": "repo://packages/shared/src/lib/di/container.ts#L259-L277",
+          "version": "repo-lines-v1:sha256:55a15a9e80a89faddacb6dce586b6b89af9f257a14ed7ccc6c8b4eebf06cce07:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI1OTNiZDFkMzM2YTA2NDc0YTgyYzk4Mjk3ZThhMmQ4YWIzOWY3ZGQ2NmI1N2FhMGI4ZTk1YWI1OTE3ODk4MDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ZTU3ODhkNWQ5ZDczZDI0YTgxZGJjMGE1YTc0YmZhODJjOWMzYjNhZjk5ZTUyYWY3OTZlOTBiNDY4YThhM2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA2NzM1ZWVhODkxOTZjYWNlMzJhNjk4MTVjMGY4OGNhNDA1YTYzYzMxZDcyMGU2YWM5YWJlYTg4Y2U3NWU5MWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAyZjA2ZGViNWU0MDY0MGNmYTMyNDA4M2FkYzBjYmIwODA5NjgwZThjMjgyODYzNDUxZDc4ZjJkMjZkNDgxYWEifQ"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/di/container.ts#L56-L94",
+          "version": "repo-lines-v1:sha256:1758885ae9cdbd4146359add0a3288558888ea70c41710e78db28f29f5b0cf04:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ5MzhjZTc4NDY0ZWNhNmZiMTRhNjc2ZDk5ODZkMGIxNDcxYTg1MjhmZGYwMGJiNTgxMDg2YTExMmU2OTIxYzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc5M2ExOTgyYzM2OGYyZjQyN2Q1NmUyYTNlODNlZDA0MGM0YzA0YzUxNzdlZjMzYzJlOTMwODMwZDQzZDUzZjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdlNDViNWUyYTgwZWViMDMwZTkzMjQ0ZjVhYWEwODRjMjE2MTZiZDYzOWM4MTQ5ODIyNDI4MjJmZDZmOThhMzUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_27a0a6cd2680410ab8275d1cd443a0d8",
+      "statement": "The app-level DI registrar (registerAppDiRegistrar, with a legacy import('@/di') fallback for apps without explicit wiring) runs after core bootstrap and module registrars; the scaffolded app's src/di.ts guards against duplicate bootstrap (skips when eventBus is already registered) and emits application lifecycle events (bootstrapStarted/Completed/Failed).",
+      "evidence": [
+        {
+          "resource": "repo://packages/create-app/template/src/di.ts#L42-L80",
+          "version": "repo-lines-v1:sha256:7ce295ded239d367dff1379f17e9f87224c10e00c8fa47bdb5d664f340dd50e0:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNiYjA4MzBjY2Q5OWY2NjIyYzNlZjM0ZTIwYzM1ZTRjM2NjOWQzMjc2NzhiOTE3MjIxZGQyOTc5MDRmM2I5ZWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYwMjI2MTA2YWEwOTUzYmE4MDJkMDFhMzhkODg4NmIyOGMyNWVlYWJiNDI2YTQ3NDQ1YjYzYWVhZDU5MmUwZDAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjcyYzhjN2JjOGM3YjI2YTczYjNjYTFiZjFkYjRjMTc2N2U5NGVhYzk2MmU5ZjQ2OWMzZmU0MzYxMTFiZWI0OWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/di/container.ts#L280-L316",
+          "version": "repo-lines-v1:sha256:c36db0bba137f39eccae9a807e815fe18b622ff2e557e68ee37750fbacee6eb7:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4YzE0M2JmNDk4NzRjNGU1Mjg5ZGNhYjVjZWFmMDEyOWYxYzFmYTY2Zjg3NmFmNGE0OWUzYWM5ZDI1M2Q4YzEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ZTU3ODhkNWQ5ZDczZDI0YTgxZGJjMGE1YTc0YmZhODJjOWMzYjNhZjk5ZTUyYWY3OTZlOTBiNDY4YThhM2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZjMjNmNGMxYzg4MjNjM2M0MWMxNjc2YmQ4OWE3NWU2ZTJkYmRkMWIwZjFiNWIxNTRlZWIxYjc4NWM1ODNkZWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZjZmE5MzlhY2ZiZTdkOTU4ZGVlNjg3M2RkNDMwNzc2OWRhMTIzMmY3ZDgxM2ExYTZhZDNlYjBjZGFjMWYyZDUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_90514df8285e491b9b237f80cd5ef559",
+      "statement": "Three Next.js catch-all dispatchers (api/[...slug]/route.ts, (backend)/backend/[...slug]/page.tsx, (frontend)/[...slug]/page.tsx) import a generated route manifest, match by specificity-sorted patterns, and centrally enforce auth, wildcard-aware RBAC feature checks, tenant selection (enforceTenantSelection, superadmins cross-tenant), organization scope resolution, and rate limiting.",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/app/api/%5B...slug%5D/route.ts#L117-L198",
+          "version": "repo-lines-v1:sha256:579b302b1b0bddba2a85aa7d08fd9195ec7e94826619befc303482a113df4f67:eyJzZWxlY3RlZExpbmVDb3VudCI6ODIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ5MDEwNGZkOGUyYmQwMGU1OTdkZDgyMzIzMDc4ZGFhZmZmNWUyMzNkMDY1NzY0Y2YyMGJhNmRmOTJjNjBmZDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkOTdlZGY1NWEzN2NjMzM0NTdkMjQxNmFhZThjYTAwOTkxNTY1MTk1YzViMGU5M2Y4MjNkZDk3NWQ2ZjljYzMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIzZTQ4YzljOWFkYzM2NzQ1ZTg2MTdmM2MwNDllMGU0MjFkZmViZGU3NTE2MmU4M2E2ODhkNjcxYzFlZTFmNjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdhMWE2Yzg3NWIzMjEzZDM3YWY5YjE5MTMxNzRhZWZlODZlNzJlMGJiZmI2OTQ1OThhNGE0ZGY3ODFhNGE0MTIifQ"
+        },
+        {
+          "resource": "repo://apps/mercato/src/app/api/%5B...slug%5D/route.ts#L33-L42",
+          "version": "repo-lines-v1:sha256:f92335ac111b48e0bcc87fd8717ffe5fb1b03cf8d04d8b026cb0e34b7a4b3fb2:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZkNWEwYzZkMDQ4MGQ1N2IxMzE5NDhmNjU2YWExNWRjZGUzNDQ3MDY0ZjEzODE0NTQ5MDgwMWJkNmUwMWFlMDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEyNTc4MTgyMzRmYThlY2QzMTBlNTI5MTIyZDQwOGU3MzRlN2VkMzE5ZDY1ZDJjMjZlODFjZWYzOTU5YzBjMDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMxMTE0ODAyZWYzNmNkMDJhNTRkYzViMDU0MjMyOTRlOTIyNzgyMWM1NTE4NGVjZDFhMzE3YjNhYTUzN2VmYjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU0OTBkNDBlYjMzMjZlZDlkMzFhZjMyZWUzZWRhY2NmZjI3MTQxMjYyYTM0NTczY2RjNTEwMWJiNzliMWZjZjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f98b0844afd342a2a4cd31e8dbabf974",
+      "statement": "requireRoles route guards are deprecated and ignored at runtime because role names are mutable/spoofable; route metadata MUST use requireFeatures with immutable acl.ts feature IDs, and the dispatcher warns when it encounters a requireRoles guard.",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/app/api/%5B...slug%5D/route.ts#L162-L167",
+          "version": "repo-lines-v1:sha256:16e28438c81675cddab3d6ef79ec2e9e784af181bc592e641846c9eee2417e1a:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmVkMDBjMzUyYmMyODcyY2NiMWQyNDU4YmU4MjFhNWFkMzUzOTA4ZjE1YTI1ZmExZTQxN2MyZTMxNzgyNDczYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDliMjJkODFkMWMwZjQ1ODVkMDdiNzVkZjg3OGMzMWQwYmM0NTFjYjJhYjNmODAyZWFhNDIwMGE0YTU1ZTkyNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODQzNDlhNmJlMmRiNGE5ODQ1ZDY2YzY0MGIyYTA4NDVlMmZjZDZkMDRlOTNiYWJjMGZlMjg5MjczMDA3ODI0MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDY5YzYwNjVlM2ZmYTRiNGQwNjA3ZDBlNDg3M2FlMzE0MTQxZTY2MDczM2FhNDY2NTUwNjMyNGJjNjNjNmQ4NyJ9"
+        },
+        {
+          "resource": "repo://apps/mercato/src/app/api/%5B...slug%5D/route.ts#L33-L42",
+          "version": "repo-lines-v1:sha256:f92335ac111b48e0bcc87fd8717ffe5fb1b03cf8d04d8b026cb0e34b7a4b3fb2:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZkNWEwYzZkMDQ4MGQ1N2IxMzE5NDhmNjU2YWExNWRjZGUzNDQ3MDY0ZjEzODE0NTQ5MDgwMWJkNmUwMWFlMDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEyNTc4MTgyMzRmYThlY2QzMTBlNTI5MTIyZDQwOGU3MzRlN2VkMzE5ZDY1ZDJjMjZlODFjZWYzOTU5YzBjMDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMxMTE0ODAyZWYzNmNkMDJhNTRkYzViMDU0MjMyOTRlOTIyNzgyMWM1NTE4NGVjZDFhMzE3YjNhYTUzN2VmYjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImU0OTBkNDBlYjMzMjZlZDlkMzFhZjMyZWUzZWRhY2NmZjI3MTQxMjYyYTM0NTczY2RjNTEwMWJiNzliMWZjZjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_be99290ca76a4313986a89ff464314f2",
+      "statement": "matchFeature() from @open-mercato/shared/lib/auth/featureMatch implements wildcard matching: '*' matches everything, 'prefix.*' matches all features starting with 'prefix.' and the exact prefix itself, and exact match otherwise; hasAllFeatures requires every required feature to be satisfied by some granted feature. Never use includes()/Set.has()/ad hoc every(...includes(...)) for feature checks.",
+      "evidence": [
+        {
+          "resource": "repo://packages/shared/src/lib/auth/__tests__/featureMatch.test.ts#L41-L58",
+          "version": "repo-lines-v1:sha256:13a1671acab5b28768ccf46bcb12a255c1d4d33c853d6bfc4da599d5d9df4996:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjczNWM3OGJmYTAxNTEzZGE1YTFlOTljYzdiODkwOTQ3ZGFjNGNkZDE0ZjIwZDdjMzIzY2VkZmYyMjZhMWIwNGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgxMjU4ODVkYTNkZTkwMjVhZWViMjhkZTI0ODc3NTZkZGZjM2NlYzZiYjMxYTg5ODk1OTE5ODZiODcwMTExZjUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFlZjBiOWRjMmI1ZTFiOWFiZWNiZjJmMTAxNWE0NTIzY2IyYTc1MWVlZDgyNDQyYTBhNzA4ODBmZmNhZjliZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFlZjBiOWRjMmI1ZTFiOWFiZWNiZjJmMTAxNWE0NTIzY2IyYTc1MWVlZDgyNDQyYTBhNzA4ODBmZmNhZjliZmYifQ"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/auth/featureMatch.ts#L25-L41",
+          "version": "repo-lines-v1:sha256:9d6b7ee2269ab3a7fd0c12064813fa3bba6efbf80d1ba4cb25321b5a28ff8449:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwZWQ1Y2Q2NGI1ZDgyYTQwZDdkMTg1MzNiMzhmODY5NmFkYzNkNjgwYTU0NWNiNmI5MmZlNWY1ZWM3ZmZlYzciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk5MTFjMWQ4Y2UzNDYyYWFmODhlZTdhYTVjNzk0YTkxYjQzZGYzNDJkZDY3OGJlYjM2NTdkYmUwNmMxNTk1ZWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b7785e617d9c47e4b0c48b700891acf9",
+      "statement": "RBAC features are declared in acl.ts as Array<{id,title,module,dependsOn?}> using the <module>.<action> naming convention, granted to default roles via setup.ts defaultRoleFeatures, and propagated to existing tenants by the idempotent `yarn mercato auth sync-role-acls` command (new tenants get them during setup).",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/AGENTS.md#L254-L262",
+          "version": "repo-lines-v1:sha256:4337526a071cd0aa9572529760e7f9d48d8e5afb406a5995dc982b98fc65e1fd:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiODZiZDlkYzc3Nzc3YjBiOWFmMmZmZTRlMTViNTk3MTZjZjI3ODJjZTA4MmJmY2IyOWQzZDFlOWE5NGY5YjY1OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODJiMzk3ZTc4NGE4N2NjMGUxZWMwOTI5YzAwZTc5ZjVkOTNmM2I2NzRkMGExYjYwOWU5NDA1MDVkZDY5MTU0NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNjcxMjk5MDRiOTI0NWNhZGM3OWQ1NmFkNmNjY2RmYWUyNjY0NTRhOTBiYmM4ODg4YzkzZDgyY2M3ODkzZmE3NCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMmU4ZWFhYzhkZTIwYTNjNDY2MTY1ODkwODdkMWVlYmFiY2UwY2NhMzgyNzYwOTcwMmQ1ZjUxYmY0NDRmMzkwYSJ9"
+        },
+        {
+          "resource": "repo://packages/core/src/modules/customers/acl.ts#L1-L60",
+          "version": "repo-lines-v1:sha256:aa7b032a35eb2a2a266b0cd83d035760522eb583a9bbe6475ced829d80b7b250:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVkZGIxYTFiYjExZjc4MmMwNzNiNjdhYWU3MGNmZWY3YTk0MDA2MTk5NWVkOGZjYTM5ZDQ2MjUwYjA4NzBjYWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkNWNkMmZiNGYzZGY4ODQ1MTUyNTViMzk1MjNmMmY4YjU0NzJiZWVhOWY1NjZmZmNhMjA0ZGI4MDI1NjEwNDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYwYjY4MGIwNmJkOWQ5ZGJlOWEwNzg2ZGQ1Y2ZlYjQzMjk4ODZjNmEzY2YzM2RhMjlhZmZhMTBjNWJkNjc5MTQifQ"
+        },
+        {
+          "resource": "repo://packages/core/src/modules/customers/setup.ts#L84-L108",
+          "version": "repo-lines-v1:sha256:844740c8883479cf9eef556460e24d6a5345d0bb5a33711d47d5312de368b971:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYyM2I2ZTFlOTIxYjkzNzM3ZmM0YTU0NzFkZTRlM2Q1NGNhMzc3M2U0Y2JiNDVkZDA5ZmVjOGZiMzU1MTgzOGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ3NzdmYzUwN2RiOTlkZTdhNWY3ZTQyYzI5YWRhNTk5MDQyMzMyNjA0OWYzM2U5NzFkYTBmMmFkMmU4ZWFhMmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5NTRlY2VkYmJjZGQ5ZmNiNmI1NjI2YTExNjNlODFiYWM1MzdkNWFiOWU1YzUxMzU1Mjk2Y2FlYzljZGM0MTkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_88f158d33ea44f0aa9c45bc4409abe19",
+      "statement": "Optimistic locking is ON by default (OM_OPTIMISTIC_LOCK; opt out with off/false/0/no/disabled/none) and relies on an updated_at column; user-editable entities MUST include updated_at and return updatedAt in list/detail responses or CrudForm's auto-derive silently no-ops and concurrent edits are lost, and the optimistic-lock-editable-entities.test.ts guard fails if a curated editable entity drops it. Append-only logs, junction/assignment tables, session/token rows, job rows, and parent-aggregate-guarded sub-resource lines are exempt.",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/AGENTS.md#L636-L637",
+          "version": "repo-lines-v1:sha256:2e73607877ee846ed2c1d6d075b421d31b17e7417a5061db2fa9a8c8ad450277:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjMyMTM4NmQxOTQzMWFkODdkNzc4NWMwMDA3MzViYjI2MjRiNmY3OWMwOGZiYWM5YWM4ODc4MjE2ZWQ3M2NjYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODllN2MwYWRhYTkxNWEwYWI1NWRjNGRlM2Q2YTk0M2I0ZGJiNjViOTc2MzM4MzhiYTAyZjI1NjVhODA3ZGE2NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNDc2YjkyODAxNGM4ZDk2ZDIzMGZmMWY0Y2ZkZDk1MTA1MDk5OGVkNWM2ZWEzYWIzODNhMDA4NGQ0NmY5NjE3MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGE4MTJlNDBhNmEzNjc4ZjBhMzY5NDU0MjNkYzdjN2YxZDBjYjhiMTQ4ZjdmMjA3YTJkYWFkZWVmNjFlZWIwNiJ9"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/crud/__tests__/optimistic-lock.test.ts#L121-L129",
+          "version": "repo-lines-v1:sha256:d9931c97929781e302666907b2f207f59f5b809dd61e8600eeff022cfd8e44b4:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzQyNTE3OGZjYmI4YmMzMTFmMDk3MTZiNGEwZjkyNDE1ZDVmYjczMTUzOWJmZDVjYTQ3NTljODk2MjAzZDEzMiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzhlZGUyZjNjMjhlMmNkNTY0ZjExZGM3OTQ0OTEyODc5MzhmOTE2NTJkMDdmOTc4NWU2NjEwZDc1YjI3YWJmNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTE4MTUwMzQ3ZTgyNmZiYzdmOWMwOTVkZjhkNGZkNWVhZjI0OGIwMDIwMzUwYjkzMjZkNTJkNzI3MTZjNDkyYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmU0ZWE2ODVlMjQ1ZTUwMjZiMjEzNTI0YjNlMzkxODAzNWM0OTliNmZmZjA0MGVkZGQxOTIyOTgzYjk5ZTBiOCJ9"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/crud/optimistic-lock.ts#L12-L78",
+          "version": "repo-lines-v1:sha256:c32c36b6d3b6b675dc288b57c9689deda990976b4357fca998a0c70b901d5d58:eyJzZWxlY3RlZExpbmVDb3VudCI6NjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE5NjQ3YzMyMmRjN2U0ZTlkOTRiYWQ3YmY0MTQ2MjMzZGM3Y2NiOWY4MTFjZmMxOGM5M2M4Yzc2YmEwYTNjMzMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNjN2MyMDc3ZmQ4NGUwZGM2M2U2MWMxNTkyN2RlZjUwMDFkYWNkYWI3OWZhOWU3MDJjMjRlYzU5OWUxZDk0YTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQ4YmE4YTUzNTdlZTk3YzUxMGQ5MzQ5YWRhMjVmOTEyNWVkMzgyNjRlNTAyY2Q2Nzc3OWQyOWQwN2ExODI2ZTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjljZWJmNTE2ZDY2YmE3NmJiOTQzZmJjNzQ3MzNmOTE3NTU3MzlmM2JlMjI5MmJhZTYyNzY4NzM5M2UxMGM2MmIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_417a5407f1224e0da13fbe4edf6467aa",
+      "statement": "The default OSS optimistic-lock guards (crudMutationGuardService and commandOptimisticLockGuardService) are registered as scoped asFunction in createRequestContainer reading from the global reader store; module di.ts registrations (and the enterprise record_locks module) override these DI keys via Awilix replace semantics to back them with record locks.",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/src/modules/customers/di.ts#L55-L77",
+          "version": "repo-lines-v1:sha256:07f7c0091291916e87a459648dae736ed11a6340a408dde390f135bcf18fc1c5:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcxYTk2ZTIzNjI0MDhjZjFkN2M5M2I5N2QyMWQ0OTRiYjEyZjQ5OGMwZDdkYzE1YzgxZGNlYWZiNmM5NTI5NGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMxMzdjNDQxN2Q2NDg3MDYzOTU4YzkyNDE0MTM4Mjg2MDljZTcxMDA2MzAzNTUzMGQ2ZjQ0NTIwOGY1NDdjNjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/di/container.ts#L219-L242",
+          "version": "repo-lines-v1:sha256:a0d40eb08c490ba9f7fbec443c9a68529c096f60f1b0554b4e1715091ae44934:eyJzZWxlY3RlZExpbmVDb3VudCI6MjQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3NTYyZmFjY2I3ZDdkNzU5ZmM0OTMxYzM2Y2U5ZDA2MjhmOWE1NjVhMmVkNzkzN2Q4YjIyNjNjZjk5Zjk2MDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRjYmM4YmUxZjk4NDBmZjY3YTcxMWVmODZhNmY5NjZhOGExZGZjMWRkNmVhZDY2NDg1NzkwOWEwYTk1NDViZGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI5ODAxYWY2ZTBiNTZlMDM0OTVkNWEwOTFlMjcxYTE1MTMyNzk5YzQzMzJjYzY5NWZmMGM4NmU4ZmJkYTIwODAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ3OWU2M2VlZDNjODg5ZDZiYjQwNzE0NTA3MmE0ODg3MDA3NmEzYzg2ZGY4ZTI4MGU4ZmMzZDFiYWU3MmQ3ZjMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fdb1132b5503444a9e5f9b91b1335dd8",
+      "statement": "MikroORM runs as a process-level singleton (getOrm()); createRequestContainer() forks orm.em with clear:true, freshEventManager:true, useContext:true so request-level subscribers (e.g. encryption) do not pile up globally, giving each request container its own EntityManager fork.",
+      "evidence": [
+        {
+          "resource": "repo://packages/shared/AGENTS.md#L81-L90",
+          "version": "repo-lines-v1:sha256:a258fedc6388b1e1cda60620e1112407499374b504ffb6f2c972338015af5890:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNhYmQ5YWE0OTI5NGU1N2ViZjVjNzBmZTE5MjA1MzMxYzM1NDg2MjlkMjQ0ZTM1Y2VhN2E1YmJkM2VjNTRkYjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE0NWQ5Y2MyMjdhMDEzMjA2NjYxYzkxY2ZhNGQ1MTQ4M2VmNDY4MjdkYjVhYjgxYmRkNjUxYmEyYWYzN2FlNDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRmODAwYTQ5OWY5OWYyMjRiZDg1MjgzMzJjMzk3ODEzNDlmMTJlOTUwYzU2NWE3NDRmNzljOTFhZTczOGM2NzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM0OWIzM2EzYjE3NzgzZjRmNTFjZTM4ZTAyMjQ4MTIyM2IwZjNiMmQyYTczZWNjY2ViZjM2NDYxOTk3Y2RkNjQifQ"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/di/container.ts#L205-L208",
+          "version": "repo-lines-v1:sha256:06853fe26f62c2c11f1a2d0b91a4fe5ade1ff07ac36a2687e84796bd5b6ea8ff:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDA3ZjE3NjFmYWE3Yzk0ODg5NmMyNGIzN2NlYWU2MmY0YjJkNWI3OWJlNTkwNzYyMzdmM2RmMDU3MDg5MTBlMSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOThiMDUwNGZlMzY2NmU5NWRlMGM4YjkzM2I2OWYyZGNiYzExOTJhMGJhMWZhY2QzMjk0ZjFmYWUxOGVlMDUxNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZjIyMDNiYzgyMTM4MDI4ZDJhYmEzYWQ2NTZjMjRmOGZkNWRkOWQ4MDgxMTE5ODkwOWNiOGE0NGRjMGY5ZmY1MyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZjNiZDc5OGMxZGE3ZjA1YzkxZWYyZjMxODA3ZWU4NzEwN2M3MTI1ODM0Y2MwNzU4NzY1ZDA3ZmE3ZDc0ZTAxZCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_9f75eefff2984e81ad3fd5e177ab262d",
+      "statement": "Migrations are generated and applied per-module (files live in src/modules/<module>/migrations/) with no global schema; tables use plural snake_case with <module>_ prefixes, UUID PKs, explicit FKs, and deleted_at for soft delete. Modules MUST NOT create direct ORM relationships across modules — they reference each other by FK IDs + snapshots, verified by the module-decoupling test.",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/AGENTS.md#L631-L637",
+          "version": "repo-lines-v1:sha256:2e2903d893098f3c665bd9f771360f28da5a2093126eeaeec8364f599ba8e6c3:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjc0YzUwZTdhOWY5ZjllZTI2OWUzNTAwNDk5YjhjYzQ4MzU2OWU1ZWY1YmYwNWMxMDk4MGM0MWEyMmQ0MmU5YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiODllN2MwYWRhYTkxNWEwYWI1NWRjNGRlM2Q2YTk0M2I0ZGJiNjViOTc2MzM4MzhiYTAyZjI1NjVhODA3ZGE2NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzE2Yjc0YmJiNTczYTkxNmNjY2I4NDg1MDRlMmVjYjNlOWM1NTljODA2YzJlZmEyODg0ODgwNDk5M2RjNzUyNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZGE4MTJlNDBhNmEzNjc4ZjBhMzY5NDU0MjNkYzdjN2YxZDBjYjhiMTQ4ZjdmMjA3YTJkYWFkZWVmNjFlZWIwNiJ9"
+        },
+        {
+          "resource": "repo://packages/core/src/__tests__/module-decoupling.test.ts",
+          "version": "repo-file-v1:sha256:de7139a16af0418006bdf6f3ee4456e3b473a19e998d8358ea8f96069b25b82b"
+        }
+      ]
+    },
+    {
+      "id": "claim_89b74f73daa54b6d8889ba51f21e5ae8",
+      "statement": "Each process gets its own MikroORM pool (DB_POOL_MAX default 20) configured via resolvePoolConfig(); because each background worker job runs in its own request container with one pooled connection, the invariant web_pool_max + worker_pool_max + scheduler/overhead <= Postgres max_connections MUST hold with headroom, and worker job concurrency is bound by OM_WORKERS_DB_CONNECTION_BUDGET (with DB_STATEMENT_TIMEOUT_MS/DB_LOCK_TIMEOUT_MS tuning).",
+      "evidence": [
+        {
+          "resource": "repo://packages/shared/AGENTS.md#L81-L90",
+          "version": "repo-lines-v1:sha256:a258fedc6388b1e1cda60620e1112407499374b504ffb6f2c972338015af5890:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNhYmQ5YWE0OTI5NGU1N2ViZjVjNzBmZTE5MjA1MzMxYzM1NDg2MjlkMjQ0ZTM1Y2VhN2E1YmJkM2VjNTRkYjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE0NWQ5Y2MyMjdhMDEzMjA2NjYxYzkxY2ZhNGQ1MTQ4M2VmNDY4MjdkYjVhYjgxYmRkNjUxYmEyYWYzN2FlNDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRmODAwYTQ5OWY5OWYyMjRiZDg1MjgzMzJjMzk3ODEzNDlmMTJlOTUwYzU2NWE3NDRmNzljOTFhZTczOGM2NzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM0OWIzM2EzYjE3NzgzZjRmNTFjZTM4ZTAyMjQ4MTIyM2IwZjNiMmQyYTczZWNjY2ViZjM2NDYxOTk3Y2RkNjQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fae0555942bf4423aaa76b946c1c904a",
+      "statement": "Encrypted entities MUST be queried via findWithDecryption/findOneWithDecryption/findAndCountWithDecryption from @open-mercato/shared/lib/encryption/find (never raw em.find), always supplying tenantId and organizationId; GDPR-sensitive fields are declared in the module's encryption.ts defaultEncryptionMaps, and encryption maps default to tenant-scoped keys with an additive keyScope:'system' option for pre-tenant records.",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/AGENTS.md#L521-L529",
+          "version": "repo-lines-v1:sha256:6501fefcbee83bb9e8e1fa9c548e540e7646baf50105b684bdaf6812d6f1ca2c:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2JmYmUxOGFhZmJhNTQ0YzJhNWMwNWI1YzRiZjY3MmNkNGJhNmQyZDMwZTM1ZmI2Yjg4ZDRiNDhjYjYwZjljMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzc2NjM4NmUzNjJkOTQ5NzhkMTA0MzMzZmQyNTcyMjM1MDAyZGUxNjllMWY4ZDYwMDA4ZTc0NTRkNTk1NzU3ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODU3MmUwOTEzNjczMDcwNWRkYjI4ZWFkNTY0MzVmZWU5NjkxZDhlMWQ5NzE3ODMwNzVjNTc4ZDFlNjQzYzdhNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzFhMGQwNmVmZTk1MzM3NDQ4MDBiY2U5Nzk0MTBlZDQyM2ZkZDUxYjkzMTJjZGRjNTlkMDc0NjQzZDNkZTZlMCJ9"
+        },
+        {
+          "resource": "repo://packages/shared/AGENTS.md#L92-L99",
+          "version": "repo-lines-v1:sha256:3a592f8a25350035ba3ced598e007ebc3e62c7c86993e4b46c05727461b7b12b:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTUyZDZhYzQxYzM5MWU4ZDYwOWUzMzMxYjlmN2U1MzgxMjNlYTc1NmY2NzI1NDJhZjBjN2U2ZGQ3ZjBiZTBhZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYjBlNGMwODhhMGVlZDBmNGYzYWRiNGMzNmRkMjg4ZjcxMzc4NTM2YzMwYjdlNWUxNjc0N2I1OWEyNjYzODFiZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTdkNzg2MzM3ZDkxZjQwMDBjZmI1MmYzYWZlODE4NWYxOTUyODhlOTFlN2NiMTM5MDZmYWU2ODUxNDY2ZWFlNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNmQzZTMwZmU0MTJmMGRiNmU3YjYyNTI1ZDRiY2VmZDZjNGIzNzk3ZjA4NDgyZmM2Y2ZmZTliNTNhMTM1ZjQ0MyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_d68214e40a5148b7beb7b734469f1551",
+      "statement": "Organization scope is resolved per request by resolveOrganizationScopeForRequest (packages/core/src/modules/directory/utils/organizationScope.ts) from cookies + RBAC, with per-request memoization and a short-TTL cache with tag-based invalidation.",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/src/modules/directory/utils/organizationScope.ts#L435-L604",
+          "version": "repo-lines-v1:sha256:befd416c83a6b3aa37f5eb65cd959ed16d12115417763c0c376b1ba162ac79df:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI4NGEyYjliODU4NjliNDIwMjhjYjIyMzc2ZDlmZmNiYjljMjc0M2YyNTJlMDc5NmRjODA3OTc4ZWI1MjAyOGYxIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIxYTEwMTE4YWE1NzAxZTBmZTFmYjAxMTk1MGE5MzljM2NmYjljNTg1NmY3MzRiNGRiNzQyZWJhNWJlYjkwYzIzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJmYjU4MGU5NjRmODNhNDczZjQzZDQ0Mzg0NjI5NDlkNjhiNTYwMGZkYTc4N2YxNjM3NDVkMDBkZTg5Y2JmMzZhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIwNzQ0YWUxMmQ3NzEyMzU1ZjJlM2UzODFmMjQ1YTc0ZDNhYTczNWY3YjYzMTA4YmE5N2E5YTA4NmJmYTkxMTA0In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_ff6cbe7190624919953928ac2e8dee67",
+      "statement": "When BACKEND_CUSTOM_DOMAINS_ENABLED is on and a hostname resolves to a backend-target DomainMapping, the request Host authoritatively narrows organization scope (it can only narrow, never widen): applySuperAdminScope (packages/shared/src/lib/auth/server.ts) applies the host binding at all three auth call sites (cookie, token, API-key) before the cookie override is written (conflicting cookie discarded, cross-tenant session refused with 403) and adds a hostBinding field to AuthContext, and resolveOrganizationScopeForRequest forces the mapping's org/tenant into effectiveTenantId/normalizedSelectedId and adds the bound org as an explicit cache-key component so a poisoned entry cannot be shared (__all__ on a bound host is a hard 4xx).",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/src/modules/directory/utils/organizationScope.ts#L435-L604",
+          "version": "repo-lines-v1:sha256:befd416c83a6b3aa37f5eb65cd959ed16d12115417763c0c376b1ba162ac79df:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI4NGEyYjliODU4NjliNDIwMjhjYjIyMzc2ZDlmZmNiYjljMjc0M2YyNTJlMDc5NmRjODA3OTc4ZWI1MjAyOGYxIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIxYTEwMTE4YWE1NzAxZTBmZTFmYjAxMTk1MGE5MzljM2NmYjljNTg1NmY3MzRiNGRiNzQyZWJhNWJlYjkwYzIzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJmYjU4MGU5NjRmODNhNDczZjQzZDQ0Mzg0NjI5NDlkNjhiNTYwMGZkYTc4N2YxNjM3NDVkMDBkZTg5Y2JmMzZhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIwNzQ0YWUxMmQ3NzEyMzU1ZjJlM2UzODFmMjQ1YTc0ZDNhYTczNWY3YjYzMTA4YmE5N2E5YTA4NmJmYTkxMTA0In0"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/auth/server.ts",
+          "version": "repo-file-v1:sha256:ca4555b95704a03af29b024397424eea487424b874e8ae32aaa4d7670fc27025"
+        }
+      ]
+    },
+    {
+      "id": "claim_4ac13daa9fe644e1bc6f2c66962a2cf2",
+      "statement": "The host binding is registered into packages/shared at bootstrap by customer_accounts/di.ts because shared cannot import the module where DomainMapping lives; the feature is gated by BACKEND_CUSTOM_DOMAINS_ENABLED (default off) and hard-fails at boot without TRUSTED_PROXY_CIDRS since the base compose stack exposes the app port where any client can forge a Host header.",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/src/modules/customer_accounts/di.ts",
+          "version": "repo-file-v1:sha256:a806aedce2aee2b823a6d809300b6f48653de3cc73b3592b2b543d7365de5aa5"
+        }
+      ]
+    },
+    {
+      "id": "claim_bda673b66555456487bca8db404afc0e",
+      "statement": "A module di.ts exports register(container) that registers entities as values and services into the Awilix container; it may also register optimistic-lock readers at module-load time via registerOptimisticLockReaders (e.g. customers registers readers for both 'customers.person' and 'customers.people' resource kinds because the factory does not singularize the irregular plural 'people').",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/src/modules/customers/di.ts#L67-L77",
+          "version": "repo-lines-v1:sha256:1b971771859611cbb315b83d6154ea05b1ad2868a3582d34755082b229a32a59:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM5ZDg0OGE2NjY4MzcyZWNiNGE0MmRmZTUxMjZkZjYyMjFmZDI1YTk3MTJhMzFmYjkxZmM2ZTlmYzkwN2JkODMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk3OWMwMTI3YWJjMWIxYzkwZjYwNTk1ODc3YmIwYjRkYjVmN2I4ODZmNWU4ZjI4MDIxNmZjOTVhNzc0MTFhZDIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://packages/shared/src/modules/overrides.ts",
+          "version": "repo-file-v1:sha256:82d95f35821b3e9ee851c66fddeac78a69147087b140694b8bc7561f3d4de7ef"
+        }
+      ]
+    },
+    {
+      "id": "claim_d5b96a0a286f41d99bd129728c7c1e8f",
+      "statement": "entry.overrides is the ONLY canonical override surface (never patch upstream module source): applyModuleOverridesFromEnabledModules dispatches every overrides.<domain> shape to wired appliers (api/pages routes, subscribers, workers, widgets, notifications, interceptors, enrichers, guards, cli, setup, acl, encryption, di, nav); API-route keys are 'METHOD /api/path' (method case-insensitive, leading slash optional, trailing slashes stripped), page keys are '/backend/path' or '/frontend/path', null disables a method, and {handler,metadata?} replaces it.",
+      "evidence": [
+        {
+          "resource": "repo://packages/shared/AGENTS.md#L271-L295",
+          "version": "repo-lines-v1:sha256:52dca19c97c4695a1c1f993b87e07c98ac1cf29d52a65cd09fdbcf7ab0fb8f82:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI1MGM1MGU2OWQ3ZjQxMGUzOGJhNGQ0MGVjN2EzMzgxZTAwYjgxYmY0MzgzZmE2ZDI1NjQxMjIyZjQwYTA5YWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk4MDk5OWVmNjBkMWI3MDI3OTZjMjRkNTU1YzU2MWVkMjdlMWMzODUzNTEyZTZmNDc2ZmRjMzMwODU5ODViMDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e04b3bf5638d48d996e295c7c3532d68",
+      "statement": "setup.ts (ModuleSetupConfig) declares tenant lifecycle hooks: onTenantCreated (settings rows, sequences — always, idempotent), seedDefaults (dictionaries, tax rates, statuses — always during init/onboarding), seedExamples (demo data — skipped with --no-examples), and defaultRoleFeatures (declarative, merged during ensureDefaultRoleAcls() and sync-role-acls); modules MUST NOT hardcode setup logic in setup-app.ts or directly import another module's seed functions.",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/AGENTS.md#L225-L232",
+          "version": "repo-lines-v1:sha256:3a94a6fb11b2f555a8cdeaa7bd123df585b4241fa478ce0c76bddbba3c791591:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjA0MzAwZDNiZThkZjM1ZGJhNjRjMTE1M2FjYjgyMjVjY2E3MWIxNzFjN2M3ZjUyN2RlMDI2Njk2MDdmZDQ0MyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTFmN2I0NDk3OWVlMTkxZmNmMGU1MDRiODJkYmEyY2FmNTc4MTNjNTFiZjg5N2Q2N2VlN2QyNDYwNDNmYzU2NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODA1ODAyYWFmZGI3Y2JjYjkzZWI0NzE3MTg2YjA4ZTc3YjliYmVkMGQ2Nzc3MGYwMDUwNWY1ZjYyZWRiYWJiMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzZhM2UzYWIwMGQ3M2RkMTllYTg0OWIzZDFlYzI4MDhjNDVhYTgzZTI1YTVjOTZiYmM3NzFlNTIxNDljNTZjZCJ9"
+        },
+        {
+          "resource": "repo://packages/core/src/modules/customers/setup.ts#L58-L108",
+          "version": "repo-lines-v1:sha256:e052710bc8d6ae8a789c849649f6cf0216bded7e79294cc8df07ea40ac8cc64b:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyOTAwMTE3ZTVhNmZiOGI4OTAyZDcwNDA4NzdjM2FiNDMxYjAwZmE5YTU5MDg2ODE3ODBhNTAxNzc1MTIxNzIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImY0YTk5Mjc2NGFkMTFhY2E0OTdiNjQyOWM3ZDg2MDgyZGJiMjVjNmQ5YzgzNzZkNzBjNjZjNTlmNDRkMTFjN2EiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5NTRlY2VkYmJjZGQ5ZmNiNmI1NjI2YTExNjNlODFiYWM1MzdkNWFiOWU1YzUxMzU1Mjk2Y2FlYzljZGM0MTkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7ad11762e4024f1290899821828fd07f",
+      "statement": "Server authorization uses the consolidated feature policy (authorizeFeatures/resolveEffectiveFeatures from @open-mercato/shared/security/featurePolicy) or the realm services (rbacService.userHasAllFeatures / customerRbacService.userHasAllFeatures); policy ordering denies invalid scope and nulled/disabled features before super-admin or wildcard grants, isSuperAdmin grants all active features, and resolveEffectiveFeatures returns concrete IDs (never wildcards) for browser capability payloads.",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/AGENTS.md#L499-L507",
+          "version": "repo-lines-v1:sha256:ebb894600b2aab260ec8f8cbac9c9feb960ad7bcaa5004e8ef65886687696aef:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMmZjZTAyNGE4MTM2ZjM5OWE0YmY4NWU2OWMyMTE0MWM2ZDk0NTIwYjQ2MDY5MTJmZWZhOTRhYThhMjljNWQzYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDZhYzJhOGMyZDMyNTRiOTI3YTVhZDIxNmE1ODQ1ODA3MGRhOTg4Mjc3ZTU2MmVmZGQ3OTFhNGFlMGE5NzIyMSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzBlYWZjMzMzYTAwYTU1MWJkODIzM2IyMGQzZDA0MTE5ZDZlYmE4ZWIzOWFhOTE3ODM5ZGY1NDEzYmFkNTEzMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDEyM2Y2MDJiOTdkZGU3MTMxYzhlODhmMGQ0NDllZjY1YzliYTQ1NGQwMmE5Y2RkZGEzZDY0ZGExMjc3MDcwNiJ9"
+        },
+        {
+          "resource": "repo://packages/shared/AGENTS.md#L198-L230",
+          "version": "repo-lines-v1:sha256:ce44cf15db1e5408b8cb1f87c8e9f5501699352b61871fbe372050ad91265d23:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2YzJkNWRiYmNlODFhMjI3YjJhOWVmYjg5ZTY2MzZjM2E2NDVhZTA2ZWE0YTE4ODkzMGViZTAyNDkwMTNjZmEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUxZGI2MzRjNTg5NDE5MTQxNzJhNmIwZTllN2Y2MjkxNzQzNzkxZjQwMGMyNzdhNmU3NDJlYTcxNTA4ZjM4NWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYzYzc4MTkxN2Q5MjQxNzY3NzFiODNkOTUwMjFkZTdhZjRjMGRlNjA4NzA0MWI2YTUyZGQ5MGMxMjZlYzQ5ZjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e60d733be18a41bcb0fc56c312423521",
+      "statement": "The module-decoupling test (packages/core/src/__tests__/module-decoupling.test.ts) verifies the app works when optional modules are disabled by registering only a subset of modules via registerModules(); cross-module optional integration must use a per-module tryResolve helper wrapping container.resolve() that returns undefined when the peer is absent, then no-op or degrade — never declare a hard requires on an optional peer.",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/AGENTS.md#L266-L277",
+          "version": "repo-lines-v1:sha256:49c75b3e1a3333e319a79ff74d73377aee9892fbfd8343d14debbad033a5a75e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2N2ZkNmYxZTMzNzFjYmY3M2NmYjMyOWFiZTgwMThkNzllZDg4ZDExMTAxYTUzODkxYTkyZDU2NGVkNTliYTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ3YzA2YzU2MWQ1YzMyNzM0MzY4NTI2OGE0NmIzMzkxZjM5OThlZWU4OTBkMmJlNTFmMGQyMWNjNGE1M2FlNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJlOGVhYWM4ZGUyMGEzYzQ2NjE2NTg5MDg3ZDFlZWJhYmNlMGNjYTM4Mjc2MDk3MDJkNWY1MWJmNDQ0ZjM5MGEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhmZjQyMTI4MGJjYTlkNGNmZDVkZDE4ZjU5YmI2NzZkNTMyODk5NmFlYTI1MjZhNTk3MDhhY2E2ZWIyNmViNTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_245f5679b3d0425aabc32a1ae55f5123",
+      "statement": "makeCrudRoute() (@open-mercato/shared/lib/crud/factory.ts) handles Zod validation, RBAC feature gating (requiredFeatures), CRUD list/detail/create/update/delete, custom fields, optimistic locking, response enrichers, API interceptors, mutation guards, multi-id (?ids=) filtering, list caching, exporters, and sync event emission; custom non-CRUD write routes MUST wire runMutationGuards(...) from the mutation-guard-registry before mutation logic.",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/AGENTS.md#L113-L120",
+          "version": "repo-lines-v1:sha256:bf84409fa8b6eba155e7c36832a4255bcc865be411988a8ba843ba418e704e20:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTMyOWFhYjQ4M2M2Y2ZiZGY0ZTgzNGVlMGY0OGE4YTdkMjc1MjZjMjZhOGQ1NjA0YjVhOTJkMWEzYzkzODVkZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmE4MGM5YjBmMmRhMjBhMTZhNDkzMWJjMTRlYjk1Yzk1ZDc3NWNiYzM1NTg4NzhmMTNiMzU0YzE4MzA0MGMxYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzQzZDUyZjliZDE5Yjg3MzgwNGI4ZGE0N2FhNWE0NTE2MjNlOGI5ZmU5ZjYxOTEwMDFlNjFjNDI4OTBjOWE4MyJ9"
+        },
+        {
+          "resource": "repo://packages/core/AGENTS.md#L145-L178",
+          "version": "repo-lines-v1:sha256:e2c00a725d32d10349f487aa900cfaadf24d5ef72dd8dd7c560163c882b471ae:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhNDM4NDZjNzgxM2RlZTgyMjU2OTA5YTc4MmIzMGUzMWRjOWMyNTdhNTlkMDNiZjljYTZjM2M4Y2U1ZmRkNjMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ3YmI0NzMwNWE5MjM0MTA0NGE0ZWIzNTU3Y2VkYWUxZTAyNGI0MTY3OTY4N2ZkNzUwNWJkYWVhMGI1ODIzMTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEzN2Y0M2I0OGNkOWQ4ODc5OGU0NWQzY2I3MDcwOGQ5NzcwMzAzYmUyN2I2YWZhOTQ0Njg1Y2UyZTY3M2UzNDgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4d615fd9d8b04852a971c327fb8c9305",
+      "statement": "Every auto-discovery file convention, public type, and function signature in BACKWARD_COMPATIBILITY.md is a public contract; changes MUST follow the deprecation protocol (deprecate first with @deprecated + migration guidance, provide a bridge, document in UPGRADE_NOTES.md, reference a spec with a Migration & Backward Compatibility section) or they are breaking changes that block merge, with a narrow emergency security exception that waives only steps 1-3 when the surface being removed is itself the vulnerability.",
+      "evidence": [
+        {
+          "resource": "repo://BACKWARD_COMPATIBILITY.md#L1-L25",
+          "version": "repo-lines-v1:sha256:7ae99865e9f46336b06bdcc49c9feaa37162d8d33926cab87e6f679bbdccd44d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdhZjAxZTg2NjI3NjZlN2Y0OGI1ZTMxNDI2ZDcxODYyOGJmOGU0ZWU5MzNiOTQ3YTBhMjA0ODhhMzJlOWQzOTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY3NWYxZmE4NTM4MGY2NWE5NGI3Yjk4MWNlYTdkMDIxODc2YWQ3ZjI0NjAxZGE1ZjJiZTI2NDU2ZjFiYmRkZTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAwMWYyZWMxNzU5M2MxMDU0ZWI0NjM2N2Q4NDUzZWYyNGExNzNjZTk2YjcxMTdkOTFmOWE2OGQ0NGZlZjhiMDEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.4.3",
+    "at": "2026-08-29T13:33:16.246Z"
+  }
+}

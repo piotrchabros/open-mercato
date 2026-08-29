@@ -1,0 +1,576 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:6866d2179e5c68f63caf1d447e90463abdcf47dc7e464363f1432bcd5d0514fe",
+  "claims": [
+    {
+      "id": "claim_02a28b10f6664d4aac2dc252e59e60f5",
+      "statement": "The `apps/mercato/` Next.js App Router app is the main runtime: it exposes catch-all dispatchers (`app/api/[...slug]/route.ts`, `app/(backend)/backend/[...slug]/page.tsx`, `app/(frontend)/[...slug]/page.tsx`), declares module enablement in `src/modules.ts`, and bootstraps server foundation data (modules, entities, DI registrars, generated registries) via `src/bootstrap-common.ts` and `src/bootstrap.ts`/`src/bootstrap-api.ts`.",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/bootstrap-common.ts",
+          "version": "repo-file-v1:sha256:c131b13dd2ae24b70fa9e1ba61e4375172c48eb8ec3836ddfcd3b25e5c75051d"
+        },
+        {
+          "resource": "repo://apps/mercato/src/bootstrap.ts",
+          "version": "repo-file-v1:sha256:4fd8cf8e89d47ac7505c5d2824c934b5e96e2c50151a6f402049006a4b2012c5"
+        },
+        {
+          "resource": "repo://apps/mercato/src/modules.ts",
+          "version": "repo-file-v1:sha256:c6677a7dde4d8c6a294960c9e377ea250af16add6644cf5063ba1eedb55a2c87"
+        }
+      ]
+    },
+    {
+      "id": "claim_cf0600ccdb6f4f3bbb7e181ede8dc9e1",
+      "statement": "`apps/mercato/src/modules.ts` exports `enabledModules`, the ordered list of `{ id, from, overrides? }` entries that wire every module to its package (`@open-mercato/core`, `@app`, `@open-mercato/search`, `@open-mercato/scheduler`, provider packages, etc.); user-created modules live in `src/modules/` under the `@app` alias.",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/modules.ts#L71-L169",
+          "version": "repo-lines-v1:sha256:c9a94b08c2c9a446a9c613ee1c12b411e4582fbf6081242baea96421dbb647a8:eyJzZWxlY3RlZExpbmVDb3VudCI6OTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJkODNmMjdlODZhNThjZTdlYjE1YjNkYWE4Yjc0OTg1ZmJlZjQxYTFjYTViNmU1MjU5YWIyNjVkYjc1YWVkYTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExMWIwMjFhY2M3Mjk1MjYwM2YwMjIyZWUzNmEwZjIzZGQ1MzQwZGExZjllZGM2NDU3MWUyNTYzOGY3YmNjNWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE0ZjAxMzhlMzI4NmZjNWFjMzVkYTQxMDIzZjQ5ZDdkYjU2YzIwNDc2ZTA2MDI5NGE4ZWEyYjk2MjEzYTdlMGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNmOWI5NTllMzZlNGEwZmYwNDA3ZTdjZDZlZDg0NzM2OGFjN2ZkN2Y4OGY0NGMyMTg4YThjZTA5MjYxZWE3Y2QifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_86288ebec0f84259ae85ff9eaba29e58",
+      "statement": "App-only modules in `modules.ts` are `example` (reference module, disabled by default — uncomment its entry to re-enable), `example_customers_sync` (auto-pushed only while `example` is present), and `ratelimit_probe` (lightweight rate-limit endpoint probe from `@app`).",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/modules.ts#L142-L169",
+          "version": "repo-lines-v1:sha256:6e68b2097181621023d5d8469b71e43d5128cbcfb5aa5fe6f23cc12383f553a8:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE4MDJjZDYwYWY3ZjJhYTQ1MWQwYmYxM2Y3ZWQzZjVhMTM4Mzg1YmFlZjFhNzc1NjAzNDgzODE1M2MyZmY0ZGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExMWIwMjFhY2M3Mjk1MjYwM2YwMjIyZWUzNmEwZjIzZGQ1MzQwZGExZjllZGM2NDU3MWUyNTYzOGY3YmNjNWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYxZGU4ODljNjUwODE4ZTRhZjFhMjQxYTQzZjVmZTFkODg1NzI1MDk3MTA1NDE1ZTUzNjA3YTU0Yjg0YzRlYTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNmOWI5NTllMzZlNGEwZmYwNDA3ZTdjZDZlZDg0NzM2OGFjN2ZkN2Y4OGY0NGMyMTg4YThjZTA5MjYxZWE3Y2QifQ"
+        },
+        {
+          "resource": "repo://apps/mercato/src/modules.ts#L178-L184",
+          "version": "repo-lines-v1:sha256:c185f7a3b439db8892c26452efacdc9ce4e23628eb9227e69d34d9c9a547d854:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjVlMzM2MjRlYmY4YTBhYjFhZjY0ZDk4OGRiNmUzOGYzMjU3ZmUxYWViMmYwZTQwMTYxNWRkMDAwYmRjZDAzNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNGM1NWZlZjRlMzYzOGRkMmMzMjM5YWI3MTAxOTQ0OWU5YTBjMzVhYWZlMGZkZWQ4OGRmMmU0ZDVmNmM5ZmU4NyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGQ2MDE0MDNhODM1ZWQzZjczMDYwYzVhY2FhOThlYzNiMjAzOWE0M2RmNzFkOWExNjM0NDAzMmM1ZDNiNzQ1MSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_9234f973239b49a19f585e7091ab117a",
+      "statement": "Enterprise modules are gated by env flags parsed in `modules.ts`: `OM_ENABLE_ENTERPRISE_MODULES=true` adds `record_locks` and `system_status_overlays`; `OM_ENABLE_ENTERPRISE_MODULES_SSO=true` adds `sso`; `OM_ENABLE_ENTERPRISE_MODULES_SECURITY=true` adds `security`; all from `@open-mercato/enterprise`.",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/modules.ts#L182-L198",
+          "version": "repo-lines-v1:sha256:de26791d308a076be778d3eb52780f82ac7ba99790956261f10f2702c48e1c54:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIxYzE2ZTYwZTc1Y2IxYWRiODQ1M2UyMDcxYmNlNDA1YjQ4YmM2MGJlM2YwYjkzOTU4YjFhOTJkNGEwNTZkMmEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgxM2ViNjgxMTAwMTFkMDhhNjA2MTM4MzY0YzljZDI2MjgzMjBjNjk3NmIyZTk2OTk2ZjJkMzM1ODBiYzVmYTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjA4MDZmZjRkNzcxMTEwOGRhNTRlNTlmZmM1N2ZiZWU5NmUxMDZjZWZkYjNkMTAwMDM0ZTliN2EzMTc3ZTgyZTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4NDQ0MWEwMTJhZjZiZWZkODljZGQxYzI2Mjg5Y2YzY2JlZjA0MzhhN2NmMDQzOTIwNjRiMDUwY2M3YTg1Y2MifQ"
+        },
+        {
+          "resource": "repo://packages/enterprise/src/index.ts",
+          "version": "repo-file-v1:sha256:b0dc7f618fbd29f5815b085e745bb344b62c65074cb824be14948d74ee054dd6"
+        }
+      ]
+    },
+    {
+      "id": "claim_b58e646b579949e587f7e11665db6a64",
+      "statement": "`storage_s3` is conditionally enabled only when `OM_ENABLE_STORAGE_S3` is truthy, pushing `{ id: 'storage_s3', from: '@open-mercato/storage-s3' }` onto `enabledModules`.",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/modules.ts#L182-L184",
+          "version": "repo-lines-v1:sha256:257effa76372edd63dfdfffdf4ff954cef4c40ff2113d852f4dde052a3dbbcf5:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYjFjMTZlNjBlNzVjYjFhZGI4NDUzZTIwNzFiY2U0MDViNDhiYzYwYmUzZjBiOTM5NThiMWE5MmQ0YTA1NmQyYSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDgwNmZmNGQ3NzExMTA4ZGE1NGU1OWZmYzU3ZmJlZTk2ZTEwNmNlZmRiM2QxMDAwMzRlOWI3YTMxNzdlODJlNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGQ2MDE0MDNhODM1ZWQzZjczMDYwYzVhY2FhOThlYzNiMjAzOWE0M2RmNzFkOWExNjM0NDAzMmM1ZDNiNzQ1MSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_6a8e6a94d0924f069399804d78649933",
+      "statement": "`apps/docs/` is a Docusaurus site (package `open-mercato-docs`) published to `docs.open-mercato.dev`, using `@docusaurus/theme-mermaid` for diagrams and `@easyops-cn/docusaurus-search-local` for local search; configured by `docusaurus.config.ts`/`sidebars.ts` and deployed via `vercel.json`.",
+      "evidence": [
+        {
+          "resource": "repo://apps/docs/docusaurus.config.ts#L1-L23",
+          "version": "repo-lines-v1:sha256:ab7ae62a380b8d7b91e8694144a7017e6a9df2c00b1e259e3b445726f8f044df:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkOGY5NzY4NzMyM2M4NjA5Y2FjYjNkMWMxNmZmM2IwZjA3ZGI4NGE1N2YzZjg5N2MxYzhiYmQzOTZiNzM5OGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUwN2E5Yjk2MTE4N2JlMTY4NDBjZWUzMzUwNjJkZDQ2NDU3MGM2ZGZhYWQzZDVmMTllZTZkOGU3MTM2MzFhMTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdkMmIyZjA2NTA1NzNhYzcwMTZhZGFlYTQ3OTUxODJjY2Q0ZjQxNTBiZmZlYjA0YzI1ZjM0NWY3Y2Y2NzlmZjgifQ"
+        },
+        {
+          "resource": "repo://apps/docs/package.json#L1-L39",
+          "version": "repo-lines-v1:sha256:5979c8228a05a5e324a88c4fd3f924dfb97661454a100b32f69bb71720906bbf:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2ZmIwOGZkYTFhY2I5NTdiNjExNmJkMzc4MTFhMWZlNDFhMDE2MTFjMDYzMWVkYmY3ODZkNjg4OWEyN2E1NWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI3ZTU3ODhkNWQ5ZDczZDI0YTgxZGJjMGE1YTc0YmZhODJjOWMzYjNhZjk5ZTUyYWY3OTZlOTBiNDY4YThhM2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://apps/docs/vercel.json",
+          "version": "repo-file-v1:sha256:afd9948104bfcb5c1069298768cc256789325bdc1359d1a0635dcfa88111a841"
+        }
+      ]
+    },
+    {
+      "id": "claim_2c48b30bebc541dabe2dc3d0219e116a",
+      "statement": "The repo is a Yarn 4 workspaces monorepo (`packageManager: yarn@4.17.1`, Node 24) with workspaces `apps/*`, `packages/*`, and `external/official-modules/packages/*`; package names use the `@open-mercato/*` scope and `create-mercato-app` for the scaffolder.",
+      "evidence": [
+        {
+          "resource": "repo://package.json#L1-L12",
+          "version": "repo-lines-v1:sha256:16ab06be3f29a7717acfd57233b55aedb057b424e2de50d94e23627a6faa0807:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2ZmIwOGZkYTFhY2I5NTdiNjExNmJkMzc4MTFhMWZlNDFhMDE2MTFjMDYzMWVkYmY3ODZkNjg4OWEyN2E1NWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIzYWM0NTgyMmI5OTgzNDcyZGNiMGMzNDVjZjUyMjZlMTg4ZDIwNjFiYjUzYWQ4ZWE4NjBlMDk1MGQ2NzRhNDciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY3OTVkNDYxYmMzMGVjMGUyNDJjMTgxYWNkOGI5ZTdkZjY0MTg3OTMyZDFjNzA3MjI1NzZkNjZkN2M2ZWY0YjYifQ"
+        },
+        {
+          "resource": "repo://packages/core/src/modules/auth/index.ts",
+          "version": "repo-file-v1:sha256:1c59f4a414d533aa85a84874d9fad91ebb2bc1058132139e0bec50998fa720fc"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/url-safety.ts",
+          "version": "repo-file-v1:sha256:9c91da6e4ed215718adf17cf433cf9908867a3cbe53fb8953a96cdd06154f9d4"
+        },
+        {
+          "resource": "repo://packages/ui/src/index.ts",
+          "version": "repo-file-v1:sha256:93dad82e4d736bbaf6c1e6ccd91812b222b1dde4177824bf87a0f3c55bcc8746"
+        }
+      ]
+    },
+    {
+      "id": "claim_cc9d62af5c3d49a0a455f91c8df46eed",
+      "statement": "`packages/shared` (`@open-mercato/shared`) holds cross-cutting utilities with zero domain dependencies: CRUD factory + optimistic-lock helpers, DI container (`createRequestContainer`), i18n, RBAC feature matching, encryption-with-decryption, module event declarations (`createModuleEvents`), Standard Webhooks sign/verify primitives, and SSRF URL-safety guards.",
+      "evidence": [
+        {
+          "resource": "repo://packages/shared/src/lib/crud/factory.ts",
+          "version": "repo-file-v1:sha256:661d27660712de0c6017f345143c81ff59cd2b53bd359b592a7175568465c6c4"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/di/container.ts",
+          "version": "repo-file-v1:sha256:62636bd3d0ed30fe9009988f1793c9ef7a70a51ed38664bc6af3cfec2ca0cfee"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/encryption/find.ts",
+          "version": "repo-file-v1:sha256:c8a3815181be1f97209c40cb30fde5374317909efaaf60c2c85713f26ca7e805"
+        },
+        {
+          "resource": "repo://packages/shared/src/lib/webhooks/index.ts",
+          "version": "repo-file-v1:sha256:33915c735d0c2b0d42fc7718611e89f4bbe6f59941c979deab4779952e9bd6ce"
+        },
+        {
+          "resource": "repo://packages/shared/src/modules/events/factory.ts",
+          "version": "repo-file-v1:sha256:8f99c8d2cfab9a173bc5acf06ca34381cd2c8ed59d8b5b9951ebae3991602490"
+        }
+      ]
+    },
+    {
+      "id": "claim_07ca0eec1fa34c169ab125e7742172dd",
+      "statement": "`packages/core` (`@open-mercato/core`) is the largest package, containing 40+ business modules under `src/modules/` (auth, directory, customers, catalog, sales, wms, workflows, communication_channels, push_notifications, etc.), each following the standard module convention; it is documented by `AGENTS.md` and the per-module directories.",
+      "evidence": [
+        {
+          "resource": "repo://packages/core/src/modules/auth/index.ts",
+          "version": "repo-file-v1:sha256:1c59f4a414d533aa85a84874d9fad91ebb2bc1058132139e0bec50998fa720fc"
+        },
+        {
+          "resource": "repo://packages/core/src/modules/customers/index.ts",
+          "version": "repo-file-v1:sha256:bc0507b459ff0794519cd4a2c4998bbe44c46812aae5ef8619241f2fde6c3d71"
+        }
+      ]
+    },
+    {
+      "id": "claim_201040b08fe347f6b4af4e8b6fb1b1eb",
+      "statement": "`packages/ui` (`@open-mercato/ui`) exports the backend admin UI and design-system components (AppShell, Page, DataTable, CrudForm, RowActions, dashboard, messages) from `src/index.ts`, plus frontend Layout/AuthFooter/LanguageSwitcher, primitives (buttons, inputs, spinner), and AI record card types from `src/ai`.",
+      "evidence": [
+        {
+          "resource": "repo://packages/ui/src/backend/AppShell.tsx",
+          "version": "repo-file-v1:sha256:bfca891b8e7dc4da1f8661e1c96b97408db7e4aa0c8c2c9d32702441dc7aea71"
+        },
+        {
+          "resource": "repo://packages/ui/src/index.ts#L1-L50",
+          "version": "repo-lines-v1:sha256:93dad82e4d736bbaf6c1e6ccd91812b222b1dde4177824bf87a0f3c55bcc8746:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYyNWNiZjkxZmNiNGZlNDBiZTIwN2UwOGJjNTk1YWVlMjZmNmM3NWQ3MWY4Yjk4NmQ3OGEzNTQzZTRjYWI3ZDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiYTc3YjRjYzI0NTIzMTJkYjY5MzQ1NzZhODJhYjEyZGZkMTE0NzJiNjQ3ZDRkZDU2MjQwNzdhMjFmZWQ4YmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b07b81545c6e45bd8e1a53adeb4cced6",
+      "statement": "`packages/ai-assistant` (`@open-mercato/ai-assistant`) provides the AI chat backend and MCP server: it exports `defineAiAgent`/`defineAiTool`/`registerMcpTool`, runs an MCP HTTP server (default port 3001) via `mcp:serve`/`mcp:dev`, and houses Code Mode tools + scope-injection in `src/modules/ai_assistant/lib/`.",
+      "evidence": [
+        {
+          "resource": "repo://packages/ai-assistant/package.json#L10-L16",
+          "version": "repo-lines-v1:sha256:306ea0152bc6bac4793de80926e0cfd4755f69d386161f8780a1df1d718bbeb6:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzQ4MzNkNTk0OWMwM2E0MGNhOTUyNDkxNjEwYTY2NTk2NDRiM2FhNDY2MzYyZjc5OTAyMGRiZjE5ODE1NDdkYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGQ1Y2QyZmI0ZjNkZjg4NDUxNTI1NWIzOTUyM2YyZjhiNTQ3MmJlZWE5ZjU2NmZmY2EyMDRkYjgwMjU2MTA0MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNTNlMGM0ZjBkMmVmMGVlZmMxYjMyZTE3ZWJiM2Y3NmYyNTk0ZDIxOWVlZWJkY2M5YjQ2NjZmY2QxYjI4OGY4ZCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMGE3YTI4NDJhY2RmNzA0NDliZjdjNzllOGU3OTM0YWZiMzUyZjBlMDZmMDQzNzM0NTI5ZjA0YWM4ZGE4NWI2NiJ9"
+        },
+        {
+          "resource": "repo://packages/ai-assistant/src/index.ts#L29-L79",
+          "version": "repo-lines-v1:sha256:e6be92d5f12be3cf7a5ea490d0e9a06b3975d8ed74c21db76cc05d7ed836de63:eyJzZWxlY3RlZExpbmVDb3VudCI6NTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVlYzgzZmRjNGRlMDZiZDE0NDA4Y2IxNTRlZGU0MGUyZjRlNTJhMzE1YjYxOTVjMTEzMTdjNTYzOWQ3MjJiYjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU4MWFlMDMyYWVjZDIwYzg3OWUzZjBhODlmN2I1NGYzN2RlMGEwNDkwZGU1MmRlZjdmNDMxZWNjMGVkMDhmYjciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFjNThhMWNjNWEyZThlMDliYzAwODZmNWNhY2Y0YzM1ODQ5YjgyNmVjZDM2NjhkMTQ5MmI0ZjRlZWVmZGYzMWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI2MzQ1MzNhMGE4ODQ1NTg0M2MxMjg0Y2NlM2UxM2VlYjcwZjRjZmIwYmU3NTkzNjk3N2RjYjQzZWMzZDgyYTAifQ"
+        },
+        {
+          "resource": "repo://packages/ai-assistant/src/modules/ai_assistant/cli.ts#L128-L128",
+          "version": "repo-lines-v1:sha256:9f168f1091a9a164d6ef013aa4746096551236fa316ed4b30a21ab1676e074b5:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOWYxNjhmMTA5MWE5YTE2NGQ2ZWYwMTNhYTQ3NDYwOTY1NTEyMzZmYTMxNmVkNGIzMGEyMWFiMTY3NmUwNzRiNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOWYxNjhmMTA5MWE5YTE2NGQ2ZWYwMTNhYTQ3NDYwOTY1NTEyMzZmYTMxNmVkNGIzMGEyMWFiMTY3NmUwNzRiNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTRmMDEzOGUzMjg2ZmM1YWMzNWRhNDEwMjNmNDlkN2RiNTZjMjA0NzZlMDYwMjk0YThlYTJiOTYyMTNhN2UwZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTM5NjA3MGQ0OGE1MWJiNzkzYjFjM2Q4ODBkYzFmMjVjOWU5Yjc0ZTQ5MGI3OWJkYzU0MGJlNzk4YTdlYTg2MCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_76910455b10144298843ee0b0d655a09",
+      "statement": "`packages/search` (`@open-mercato/search`) bundles three strategies — TokenSearchStrategy (encrypted data), VectorSearchStrategy (embeddings via `src/vector/`), and FullTextSearchStrategy (pluggable Meilisearch/Algolia drivers) — exposed through `SearchService` and a search module under `src/modules/search/`.",
+      "evidence": [
+        {
+          "resource": "repo://packages/search/src/index.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:1837da3b4ec82f737fde1e1cd6952029546b32107868dac486b1fc76ba3c5058:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEwZDFiMzY5NGEwMWQ1OWM2MmI4ODdiMGUwMGRlMjE3OGNhNjlhZDU5MDgwNDYzYTc3OTQ3M2Y4NGIzYTg0NmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIxYzY1Mzg1ZjNjYWRjNmE4NTFlZGQ5MmIwODA4NjI1ZWNjZTY3ZWJlMTQwMjg1N2NhNzcwZWU0ODVkNzE3YTMifQ"
+        },
+        {
+          "resource": "repo://packages/search/src/service.ts",
+          "version": "repo-file-v1:sha256:520e37b79ca88a47741f8aab308d51aa8d87a5d91a04909867a13b744dcdf348"
+        },
+        {
+          "resource": "repo://packages/search/src/strategies/index.ts",
+          "version": "repo-file-v1:sha256:765fc0d55ae4114519687ac3385539e2a12807d8674534a8d3c85fcb42126097"
+        }
+      ]
+    },
+    {
+      "id": "claim_3a2ca6b3555a4063a5221f470579fd56",
+      "statement": "`packages/events` (`@open-mercato/events`) is the event bus backbone: it dispatches ephemeral (inline) and persistent (queued via `@open-mercato/queue`) subscribers, supports `clientBroadcast`/`crossProcessBroadcast` events bridged across processes via PostgreSQL LISTEN/NOTIFY, and keeps persistent subscribers durable across restarts.",
+      "evidence": [
+        {
+          "resource": "repo://packages/events/package.json#L35-L39",
+          "version": "repo-lines-v1:sha256:4a279e2dcb4837c3c8ca7aecc030572b6fd5077bc105cdb56cff6e592a1f7049:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmEzYjQ2OWQ5ZTA5NzU3MjI0NjY2NzM0YzllZjdiMjU0ZDg4NTM0ZjVkNWJiNzA5ODk2MDgwNWM1NTNkYzMwNyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNGQ1Y2QyZmI0ZjNkZjg4NDUxNTI1NWIzOTUyM2YyZjhiNTQ3MmJlZWE5ZjU2NmZmY2EyMDRkYjgwMjU2MTA0MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODcwMTFiMzIxZWRiZjg4YTA1ZTIxZTM3YmViY2Y0YWFiNmM2OGFmMzkzNDNjZjg0YTAxMGQyNmFhNjg3OTY2NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzUyMzlhNTAxZTc3OTc1ZGNjYTI1ZjFmYjY0ZjU1MzU1NGJkNTQ1ZmYxMWZiOTNlNzlkOGM5MTQ5OWViNWQ2OSJ9"
+        },
+        {
+          "resource": "repo://packages/events/src/bridge.ts#L1-L29",
+          "version": "repo-lines-v1:sha256:59fbe1e2ecd98d9d06a63e8af2954181c068cb7d7296688c37cf4e254706649e:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJlNDY2ZDdmYWE5Njk5YWMzZWFlOGJiMzIyZGM3ZDk4YjdmOGQzOTkyYjE1OGRiMDZkNmRkZmIwMTBmZGI5NGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZkOTMwNTIzMmJlNzcwNTk1MmM1ODk4ZTZlYTQxM2ZiZDNkODg5NzcyMDI5MDgyNGJjZThlNWZkNjk3MTBhYjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1NTUzOGQxM2FlMjFhNjQyYTk3Yzc1ZDc5N2FkZGY4OGI1M2ViMzVjNDNjYjQ5NmViYzlhZDljODU5MjZiM2EifQ"
+        },
+        {
+          "resource": "repo://packages/events/src/bus.ts#L1-L59",
+          "version": "repo-lines-v1:sha256:b1e6fddb39014877812087e0951080dce4531986e40509ba98594f045d81a433:eyJzZWxlY3RlZExpbmVDb3VudCI6NTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYwYTYwZmY2MmUwMDA1YjdiNjhlM2ViNDcwN2EwZThkN2I1MzkwZmY4YTM1ZTc0OWJhODY5NzE3YjFhYmE1MTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNiMTg5NmJiYjAxMjdlYjZiZjYzYzFhOGI3ODZmMDMxMDlkMzRlNDJjNjY5YjU3OGQ0OGM3Y2E3YmJkZWE0ZWUifQ"
+        },
+        {
+          "resource": "repo://packages/shared/src/modules/events/factory.ts#L144-L169",
+          "version": "repo-lines-v1:sha256:7294595bbba62751ba891e8f45af7f201bd833e6766bcad7fdffbd1f462b3057:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlNDhiNGI0OTQyMWRlN2RlMDg5ZjI3MDc0ZmFkNTc4OTFmNjlhN2FiZjE3NDM5MTZmN2M0Y2I4YzEyNzVhZmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmOTM0NjMyNTRkYTI0YjAwNzkyNWM0Njc5Y2ViN2JhMzc4NDk3MGM2YjUyZTEzMjFjZjhiZTYwNmE3YzQ1MWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM3OTI5ZTkxZTBmOTljM2U4MjVkZTY5YjQzNWZiNjQ4NGQxYjBhMWRmMmY0NjU2MWFiZjFhMjlmMDQxODhiODgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3OTI5ZTkxZTBmOTljM2U4MjVkZTY5YjQzNWZiNjQ4NGQxYjBhMWRmMmY0NjU2MWFiZjFhMjlmMDQxODhiODgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6a64a4c60518462085e5af7db6e57167",
+      "statement": "`packages/queue` (`@open-mercato/queue`) provides a unified job-queue API with two strategies — local (file-based under `.mercato/queue/`) and async (BullMQ/Redis with retries) — plus a worker contract (`metadata = { queue, id?, concurrency? }`); the DB connection budget invariant `web_pool_max + worker_pool_max + scheduler/overhead ≤ Postgres max_connections` must hold.",
+      "evidence": [
+        {
+          "resource": "repo://packages/queue/AGENTS.md#L54-L54",
+          "version": "repo-lines-v1:sha256:3b2a807a073e7923a696b1873decbe8baecd8d1f3772788983ec64c2e644a8b6:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiM2IyYTgwN2EwNzNlNzkyM2E2OTZiMTg3M2RlY2JlOGJhZWNkOGQxZjM3NzI3ODg5ODNlYzY0YzJlNjQ0YThiNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiM2IyYTgwN2EwNzNlNzkyM2E2OTZiMTg3M2RlY2JlOGJhZWNkOGQxZjM3NzI3ODg5ODNlYzY0YzJlNjQ0YThiNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2VkYzJhY2ExOGE0ZDVkZGY5YTMxYTUyMmIxZWJiOGIyODZkNjNjNGRhYTJlYTlkNzhkMzA1ZGY0MWE3YzAxMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTMyNTgxZDlmNjBiZjM4NDhmYmIxZmE4NmZlMmQwOWNiNjdkMzcwMTE1YmRlMTJlZGJhYmVjZDIyZGQ1OTcwOSJ9"
+        },
+        {
+          "resource": "repo://packages/queue/src/index.ts#L1-L32",
+          "version": "repo-lines-v1:sha256:46e570c6217e1da908ac40a577a71bee8b5899379cd5df3c27b0b8aba38c1f12:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYxOGIzN2E1Y2U5M2U0MjMxY2Q5NjU2MTVmMTk3NmZjMDBlZWZiZWU1OGFiOTU1N2I4ZTkwMjA4MTM4NDBhMzIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://packages/queue/src/strategies/async.ts",
+          "version": "repo-file-v1:sha256:d3f14e3cfb295cbdcbe3214ef3d4678609ad61500c036c3fc4b7750a51c49a33"
+        },
+        {
+          "resource": "repo://packages/queue/src/strategies/local.ts",
+          "version": "repo-file-v1:sha256:35673d620c7e0395d16e22ffbace8675a303b7bc7b3eced7daa37f9466415981"
+        }
+      ]
+    },
+    {
+      "id": "claim_6ad5a79b6c9146fdb62994b9823f8272",
+      "statement": "`packages/cache` (`@open-mercato/cache`) provides tenant-scoped caching with four strategies — memory (default, LRU-bounded, default 50000 entries tunable via `CACHE_MEMORY_MAX_ENTRIES`), SQLite, Redis, and JSON file — plus tag-based invalidation; cache invalidation fires post-commit after `withAtomicFlush`.",
+      "evidence": [
+        {
+          "resource": "repo://packages/cache/src/index.ts",
+          "version": "repo-file-v1:sha256:f2aff4c0bf4594737d251e6e77625bec2c05ada80771e75e96506326b1db7d61"
+        },
+        {
+          "resource": "repo://packages/cache/src/service.ts#L1-L60",
+          "version": "repo-lines-v1:sha256:4730a7d77739a2fee20ebbac65a80b46653eb0f924f5bdfe92da191966ac4223:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkOWRiY2NmMDFmYzQzZGRhOGY5N2QyZjEwZGI5MjdhMzU0MTE3MjA3MzRmODM2YzllMTVmOWNhNWZlMjc2NTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVmN2M1NDY4Nzg4ZTFhNGQ4MjgzZWZkODllMGVmMTMwMGU2MjQ1ZjcyMDI2OTgwZGZlOGRkNzI4NzU4ZjlkMGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhlNTVmNGVlY2Y0NGFkMWVmYzM1OTJkN2Y1YzY4MjI0YzE3MTgyYzYxM2UyNDA0NDIxZDBkNDZiNGFmMDNiYjMifQ"
+        },
+        {
+          "resource": "repo://packages/cache/src/strategies/memory.ts#L16-L49",
+          "version": "repo-lines-v1:sha256:bdcb568fd8cd13a06f6692d1af34abf1a59fd6aad445ecf7d274971d5b9bd90d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1NDQ4ODNhNzlhNTlmM2JjNTcxM2YyZDRmMjRlNDllZWExMTE1Y2JkNDhiMzNhZjQ2M2YwZjJkNTI4YzQzMWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ3NDdlNzRmZThiOTE1M2JlZjE2MzMyOTM1MDk2Y2NiY2FhMDAyN2Y5NmM2YjhiM2MyMjFlZGZmMDk1YjMzZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcyYTQxM2UyMWQ3NGVhZDc4MGRhZjQyNzViY2IxZGVmN2EyMDgzY2JiN2RjOTY4MDM5YTg0ODcxNDM0Y2I4MWUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_344b990882124d9fbd222253f449d54f",
+      "statement": "`packages/scheduler` (`@open-mercato/scheduler`) is a standalone module package (not under `packages/core`) enabled in `modules.ts` via `{ id: 'scheduler', from: '@open-mercato/scheduler' }`; it manages database-backed scheduled jobs (cron/interval, queue/command targets, next-run tracking) through `SchedulerService`/`BullMQSchedulerService`/`LocalSchedulerService`, depending on `@open-mercato/queue` and `@open-mercato/shared`.",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/modules.ts#L119-L119",
+          "version": "repo-lines-v1:sha256:657d32d5ad87efec1e9f19a507eef783ff65fe33222479f77392e89e1e98a351:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNjU3ZDMyZDVhZDg3ZWZlYzFlOWYxOWE1MDdlZWY3ODNmZjY1ZmUzMzIyMjQ3OWY3NzM5MmU4OWUxZTk4YTM1MSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNjU3ZDMyZDVhZDg3ZWZlYzFlOWYxOWE1MDdlZWY3ODNmZjY1ZmUzMzIyMjQ3OWY3NzM5MmU4OWUxZTk4YTM1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMTczNTUxNDBkMzFlNGUwMTMxN2I3ODNjYjk3NjY1M2UzZjJiMWUxOTZlOWQ3YzhhYTlkZDNkMTZhZjc1Y2YwOCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmFhMzVhM2FlMjg2MzAwMGY2MDNlNDNjYTRhMDMwYTg2ODQ4NGY1ZmU3NDQ2NGQ1MjA0ZjM0MmI0NmMyMTM2MiJ9"
+        },
+        {
+          "resource": "repo://packages/scheduler/src/index.ts#L1-L14",
+          "version": "repo-lines-v1:sha256:24f60fb586587591ac34bd6bf4a801ef76453d0382b4acbd399c18195296460a:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkZDMxZWM3MjI5MWM0NjQzMjFmNjFhNmE2ZjM1M2RmNDllODUyZGUyY2YwMjcyZDM5NDRhMWM2MjNkY2I4YTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://packages/scheduler/src/modules/scheduler/data/entities.ts",
+          "version": "repo-file-v1:sha256:922e1576a2c0860bec42c78d050fc377a2d2ebe11665d43bcde16c7773bd1b74"
+        }
+      ]
+    },
+    {
+      "id": "claim_c9e16bb6c0ba42baa743359d99fcf2ee",
+      "statement": "`packages/telemetry` (`@open-mercato/telemetry`) is vendor-neutral telemetry (spans, metrics, error reporting, shared-logger bridge) that is OFF by default: `initTelemetry()` only starts a provider when `TELEMETRY_BACKEND` resolves to non-`noop`; OTLP backends `signoz`/`newrelic`/`otlp` share one dynamically-loaded exporter differing only by endpoint+headers, and `@opentelemetry/*` is imported solely by `src/provider/otlp-provider.ts`.",
+      "evidence": [
+        {
+          "resource": "repo://packages/telemetry/src/env.ts#L4-L8",
+          "version": "repo-lines-v1:sha256:993420e84a5ea28abfe4976cd7803655f7cd73f118149d6f37e3db16d1768289:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmMwMmFjNzQ2MGExYjdkYWU0YzY2ZTU3ZDNkNjZiNDFhNmVmYzM3MDAyOGM0ZDYxMjM1MDZkN2VlMjRmZjFlNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZDM5ZWM1M2M4MzBkZDY3Njk0MWI1YzY5ZjAyM2FkNGIwMjM5ZDNlMWVjYzY4ZWM3Mjc3OTAyMGUyMDc0NDQ4NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2E1NzlkN2Q3NmFhZGZhN2IwZjJhZWM3NjgwOTFjY2Y3NGJlOTFhY2E2MTAxNjM1M2NhYjgxZWIxOWZjYzExNiJ9"
+        },
+        {
+          "resource": "repo://packages/telemetry/src/index.ts#L1-L14",
+          "version": "repo-lines-v1:sha256:c60c69505d089ed3a91b327874fd5648d9b3f1bf21217c07539377d59a536691:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVhZjIyY2YwNzMyNTkyYzI0NzE0MWNiZTYxZWZhMTEwMTI2MTJmNWEzMTIyYjlhZjliYmFmNTJmNTcyNGQxOTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVlZDFmNDdmODAxNjIzOGE3OTkyNzdiYTcxMTBlMzJlMWJjMmE3N2RjYzFiNTQzYTUyZjFlNGEwZTRiZjJjMGIifQ"
+        },
+        {
+          "resource": "repo://packages/telemetry/src/init.ts#L34-L71",
+          "version": "repo-lines-v1:sha256:b063f3fe337a14340303fbfe95f5a6f40a598930aefa2f1a9dcc93fa49de5376:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUxZjhhMmYwYTNmYjUwNDVhMTU2NzNhNDBlNzQwYTcxZDNjMGNkMzgwZmE5MzZhYmY1ZGQ1YzM3MzdmZTQwZDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI5M2E5ZTQ2YzdiNjc4YmY2NjZmYjg0OWU2NmM5NmVhODNjYTRiNmRmMjk0NjI3MTBlOTAxYTgxYjA1ODdlYmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRlZmE4OWUwYzU2M2JmODZhZjgxMWNhMGJjN2ZhNTJmNjdlOTM1NThlYTlmYjQ3YjI5N2I4OTRkMzQ2MzBlMzYifQ"
+        },
+        {
+          "resource": "repo://packages/telemetry/src/provider/otlp-provider.ts",
+          "version": "repo-file-v1:sha256:d24f7baf617e8550ad2734fdc88cc2ae12cb9b214bcbbdf934a435053a750bfe"
+        }
+      ]
+    },
+    {
+      "id": "claim_fb4bb1fb80d7455d9b199b6ea9f6217d",
+      "statement": "`packages/eslint-plugin-ds` (`@open-mercato/eslint-plugin-ds`) is a private structural ESLint plugin enforcing the design system with seven rules (all at `warn` during rollout): `require-empty-state`, `require-page-wrapper`, `no-raw-table`, `require-loading-state`, `require-status-badge`, `no-hardcoded-status-colors`, and `no-legacy-alert-variant`; the six backend-structural rules scope to backend globs while `no-legacy-alert-variant` spans `packages/*/src/**/*.tsx` and `apps/*/src/**/*.tsx`, invoked via `yarn lint:ds`.",
+      "evidence": [
+        {
+          "resource": "repo://eslint.ds.config.mjs#L59-L89",
+          "version": "repo-lines-v1:sha256:a8a5b3ff4e4022906a14174332dd408f193fcfb2b6148724db21f0e9eb570e0e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY5NjdlMTBkYTY3NDI3ZWE5NDk1YTFjMDk1NTMzZDg3ZGE0ZmE0NjYxNTdlNGMxMDYxMTExMGMyNGYzNmYzYzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRkNWNkMmZiNGYzZGY4ODQ1MTUyNTViMzk1MjNmMmY4YjU0NzJiZWVhOWY1NjZmZmNhMjA0ZGI4MDI1NjEwNDEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU1MzQzYjM1MzAwNmNlOGYzYjQ5OWUxMjRlZDI3MzgyMTJhYjU2Y2MxOTg4YTYyZDhkNjc2ZmQ0NGNkZjNkMGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjlkNmRiY2JkYjBkMzlmZDQ1MjhmZjVhNGFhMTc1NjU0MTE1ZDFhMWZhODBjOTRkOWFhYmI3NjIyYmYxNzI4NTUifQ"
+        },
+        {
+          "resource": "repo://packages/eslint-plugin-ds/index.js#L1-L49",
+          "version": "repo-lines-v1:sha256:2393249cba31a15d9a5dad55fe66e845e2dcba807a2b47588e14db303e655a81:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM0OGRjOGI4MWFiY2NhYzYzMzI2MDllZGY3ZjhiMjQxOTJkMmYzYjhkNDgzNTI2OGQ2MjUxOGY0ZWUwNmNhNGYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkzMGJlY2ViYWMxNDljM2YzNzYwOTU5ZjdiMjdjY2JjODNkMGJiODk4MGM0NzUxNTdlMGYyNjA1ZTI4N2IwMDAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_25ea785627464054acc63d5b9a53f006",
+      "statement": "`packages/cli` (`@open-mercato/cli`) holds code generators and CLI tooling; its binary `packages/cli/dist/bin.js` (invoked as `yarn mercato`) backs AST-based module discovery/generation (`yarn generate` → ~20 generated registries) and MikroORM migration generation (`yarn db:generate`), with `mercato` and `registry` export surfaces.",
+      "evidence": [
+        {
+          "resource": "repo://package.json#L42-L44",
+          "version": "repo-lines-v1:sha256:7d842299b0b7289e7392b182339e6a34f8660795c3c2ad1f247c65fa0d888e6f:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjBkZmI0N2ZlNTNkYTg1ZTMyY2M2Nzc5OWUyYjM3OGQwYzQzOTU5NGNmM2VlZjViNmFjOWQ1MWE3MDFkYTU3ZSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMmE4YThjNGEwMzA0MjlmYTE5NWNjMmVhMjMwNjU1N2ExNTJkMjAyMGQ3ZjM5MjY5NjE5NDEyN2U4YTFmNDdhOCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGRiZmY4MjY3MzdhNTcyMTQ4YWY1ZTRmMjkyOGQ0NjliM2E4YmIwNmUxNDQ1MGQ4YThkM2FiYWRlYjQzY2I5NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODdlOWQ1ZjczYmEzYTM4MzVhODAxNDkzOGY2NzM0M2E2MTI1ODA0ZGRjZWMzNDI1MjUxMzhjODdjYzU4MWI3ZiJ9"
+        },
+        {
+          "resource": "repo://packages/cli/package.json#L9-L12",
+          "version": "repo-lines-v1:sha256:ae47336b2100cd63ac4650dbe22e5cf575216fad4165d729f657693ce26ab351:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMTgxNmUzYTUzMWI3NWJiNWFhYjYxYzZhNjZmOGJkNDMwMjRjMWEyNGUyN2I1MGZkNDNhNTFlMjBmNzMxZGRhYyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMWYwY2RiOTcyYTdiZmI3ZWQyNDZmOWZmNjcyMzg1ZTU1ZjQ5NjhmYzExMDQzZGM1YjY4NGQ1MWRmYTMxZGJjYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmY5YzdmYTM0YjRjOWUzYjBhYmMzNmMxMmEwM2ZkMDA3YjNkMGZlYWI2NDg4NzZiOWEyODFkMmQ5NTIwNDdhMCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMzIyODJjYTJkNmE4YmE1MTI4Zjg4OTBlNTI4Yzk0Y2I2ZmIxZGU2ZGI5OGM0ZDVkNzI3YjA2ODA4Yjc3NmUwYSJ9"
+        },
+        {
+          "resource": "repo://packages/cli/src/bin.ts",
+          "version": "repo-file-v1:sha256:f3fa0845b1366de56b8911fee1d73727b5c72971cd60a94886a83bb2c43b933a"
+        },
+        {
+          "resource": "repo://packages/cli/src/mercato.ts",
+          "version": "repo-file-v1:sha256:e846f26c4ff3d56919b96ac81734751b5635807f135e42b9b52bde4257df0235"
+        }
+      ]
+    },
+    {
+      "id": "claim_33f116295cc442ec8079453d08f186bd",
+      "statement": "`packages/onboarding` (`@open-mercato/onboarding`) provides the self-service tenant/organization onboarding flow — setup wizard, deferred provisioning, ready/invitation email flows — enabled in `modules.ts` via `{ id: 'onboarding', from: '@open-mercato/onboarding' }`.",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/modules.ts#L90-L90",
+          "version": "repo-lines-v1:sha256:c733d25f92695dbc6eaeebceb584ad8b9280b90b1920b82cf13c37d169da7d4d:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYzczM2QyNWY5MjY5NWRiYzZlYWVlYmNlYjU4NGFkOGI5MjgwYjkwYjE5MjBiODJjZjEzYzM3ZDE2OWRhN2Q0ZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYzczM2QyNWY5MjY5NWRiYzZlYWVlYmNlYjU4NGFkOGI5MjgwYjkwYjE5MjBiODJjZjEzYzM3ZDE2OWRhN2Q0ZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOTg4N2Q0NTIwZWM0MzhmNmFjYmM4MDAxYjM4N2M5ODM4OTgzOWJhNmI0M2EyNWFlMjcwNmFjODIyOWNhMWFiYSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDM1OTRiNGE5Nzg4MThkMTI0NzhjMDI5MGU3MWUxNThjNWViNGQ1ZDQzZTZlYmM1MjZjMGJmZGY3ZGFkYWFjNyJ9"
+        },
+        {
+          "resource": "repo://packages/onboarding/src/modules/onboarding/index.ts",
+          "version": "repo-file-v1:sha256:2aed470680a84da4d1259c20802ac9901e537e6c87184d0d64842534928ce356"
+        },
+        {
+          "resource": "repo://packages/onboarding/src/modules/onboarding/lib/deferred-provisioning.ts",
+          "version": "repo-file-v1:sha256:50c6a724ece4c2c42006f6727145e7b7f10770f1955de485925d7c47f9a31a11"
+        },
+        {
+          "resource": "repo://packages/onboarding/src/modules/onboarding/lib/ready-email.ts",
+          "version": "repo-file-v1:sha256:610b31d71b1ecb0bf25ca32c4d697ce55e0c3a1ccb01e0ba7059f7e0a821a7b8"
+        }
+      ]
+    },
+    {
+      "id": "claim_4ff7247ebf844fcf878e60b2e401508e",
+      "statement": "`packages/content` (`@open-mercato/content`) provides static informational content pages (terms of service, privacy policy) via a `content` module enabled in `modules.ts` from `@open-mercato/content`.",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/modules.ts#L89-L89",
+          "version": "repo-lines-v1:sha256:d333b27c9f978bae14a914f969a521d4c43d1e54618511f13cf1028cdcefd7bd:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDMzM2IyN2M5Zjk3OGJhZTE0YTkxNGY5NjlhNTIxZDRjNDNkMWU1NDYxODUxMWYxM2NmMTAyOGNkY2VmZDdiZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDMzM2IyN2M5Zjk3OGJhZTE0YTkxNGY5NjlhNTIxZDRjNDNkMWU1NDYxODUxMWYxM2NmMTAyOGNkY2VmZDdiZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGY0YWI5ZjI3ZTUyZGQxZTg5M2EyMjRhNmVhMzQ1YzBjYjM5N2M4YmY1NTA0YjdiMmQzNDA2ZDA3YWVmYzZiYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiODRiYWY0ZmFmZDJjYjY5MzVmMGZmYjc3NGM3YTM1OGQ4MTRlNmQ1MGY4MjQyOTkzZjQwOThiNjFkNjM5YjVhZiJ9"
+        },
+        {
+          "resource": "repo://packages/content/src/modules/content/index.ts",
+          "version": "repo-file-v1:sha256:6a2e5ea99b5082343c7283f59c7482b9e01b9d2ce57c8a58d7db4d3eb770ac14"
+        }
+      ]
+    },
+    {
+      "id": "claim_8a1e4937051140c4bbae925b27933e60",
+      "statement": "`packages/create-app` (`create-mercato-app`) is the standalone app scaffolder run via `npx create-mercato-app` (binary `./bin/create-mercato-app`), mirroring `apps/mercato/` into a template and keeping them in sync via the root `template:sync` script.",
+      "evidence": [
+        {
+          "resource": "repo://packages/create-app/bin/create-mercato-app",
+          "version": "repo-file-v1:sha256:ce2d5164b95e9a483bd392a3fc7acbc07e2f71d2c400bab3f2e506a1a93dcd1a"
+        },
+        {
+          "resource": "repo://packages/create-app/package.json#L1-L8",
+          "version": "repo-lines-v1:sha256:3452adaade31fc3dd2d4a0995a43aaf785f21ddd3f2770c544ef5db95bd49e15:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTZmYjA4ZmRhMWFjYjk1N2I2MTE2YmQzNzgxMWExZmU0MWEwMTYxMWMwNjMxZWRiZjc4NmQ2ODg5YTI3YTU1YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDY0NmMwYmYwMzk1MjgxYzBjZGI2YjhhZThiZTVjNGYwNjhlN2Q5NTk3MDlkMDhmNjRlZTA4NTgwZjA5OGRiNyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTAyMDQwZjc5ODBkN2I4Zjg0MjY4NDU5YzIzODVmOTU1YWQ1YWZjMjEyYzU3ZGZjODAzMWM3NDVhMWI1NGE0NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_57f534392cf143c09d25883be2ce0e79",
+      "statement": "Communication-channel provider packages (channel-apns/expo/fcm/gmail/imap) register a `ChannelAdapter` at import time via `setup.ts` into the Communications Hub's adapter-registry singleton, keyed by `providerKey` (e.g. `apns` for Apple Push); the hub routes each device/message by matching `providerKey`.",
+      "evidence": [
+        {
+          "resource": "repo://packages/channel-apns/src/modules/channel_apns/index.ts#L1-L6",
+          "version": "repo-lines-v1:sha256:9db6c8d58a5ce03f104bef21dc2c263b40fdd35840e40dd07ca86e1b92b59eab:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNDFiZGU4YjMzZDliNzBiNWY2NzFlMDEwMjNkZTE3NmNlNTNkMWFiZTk5OTcyODI4MGZhMDI5OTQwNmU3Y2VhNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://packages/channel-apns/src/modules/channel_apns/lib/adapter.ts#L160-L160",
+          "version": "repo-lines-v1:sha256:be096a200da00ece5131cb3b40ba6c27d71c5ae3eff31e4191a405bf86a1f6ad:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmUwOTZhMjAwZGEwMGVjZTUxMzFjYjNiNDBiYTZjMjdkNzFjNWFlM2VmZjMxZTQxOTFhNDA1YmY4NmExZjZhZCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYmUwOTZhMjAwZGEwMGVjZTUxMzFjYjNiNDBiYTZjMjdkNzFjNWFlM2VmZjMxZTQxOTFhNDA1YmY4NmExZjZhZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiODkwZDhkYjQ3YmRhMGE3YTQ3YTIxNzY3OGNlM2JmY2FjNGMyNDkyZTdmMWM5ZTJmNzhhNGYyYTJjYzJlYzlkNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiN2JjMWU5ZGQ3NmNlNDg4M2ExZGExMDkzMTVhMDI4N2RlZTlmYmY0YTI1NDZiZWI1NGY2ODRmMDNlODEyMmI1YyJ9"
+        },
+        {
+          "resource": "repo://packages/channel-apns/src/modules/channel_apns/setup.ts#L1-L19",
+          "version": "repo-lines-v1:sha256:1de8c7aeae7f044bb6c2ce424dba3763ff53778dcbfc1b9f8370b98a769cc816:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdmY2VmZWM1N2E0ZWJlODhkZTFkNjAwMzkxOTk0MzgwZTljNjhlYThlYWYyZWQ4NWE5OTU0MjY1ODdiYzhmMTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNiNTNmYWI1ZjFmZmZlNTVlOGUzNDc5MTZjNzcyNGY5NzgwYzM1OTk2Y2UzNDkyODgyODcwMDUwNjBhMDdhNmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIwODE1MzhlMWNmMmVhMjZkNzdhMDJkOTYxZTgxOWY3YThmYmFmYjdlZTJkYzU4MThjOWRjNzg4YmQ0MTlhZTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ddbb2d38fc3346b0879e7b8df303c370",
+      "statement": "Integration provider packages are dedicated npm workspaces (`gateway-stripe`, `channel-*`, `storage-s3`, `sync-akeneo`, `checkout`, `documents`, `webhooks`) that MUST NOT be placed inside `packages/core/src/modules/`; each is enabled as a `ModuleEntry` in `modules.ts` from its `@open-mercato/*` import.",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/modules.ts#L124-L137",
+          "version": "repo-lines-v1:sha256:70f06b51c8d4d1724c054aba112497811d85f07b22414dbfd37af4efc3615cd5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdjZjgwZDJkYTNmYmVhMTY2MjM5YWYwOGMwYzNmN2Q0N2UyODBmMjU0MzZmYjBlOTk0MTg5ZmVhZTRiZDIzMDAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUzODExZDdjNDNkNTk5OTdhMzQ3OWU2OTlmZDlkNTBjMjcxMGEzYTAzNTBhMGYyZWQzMmMzMzZiM2Y4ZmIzM2UiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU4MjNkMzZhNjk5MjA3YTI2OWIxZDhiMTk3NjU5N2I5NjdiNmZhMmRjMDU2ZjU3YzEzNjNiOTMwOWFiYzFjOTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMwMDI5NzM3MGM3NTIxY2I5NTZhNDMwNjc1OGQ3MmE4NzVkODg1MTk1NDNlYzg3YmQyNDdmZGNlYzFlZmU2NzQifQ"
+        },
+        {
+          "resource": "repo://packages/gateway-stripe/src/modules/gateway_stripe/index.ts",
+          "version": "repo-file-v1:sha256:e08acd59574c652a4e39ab9d0f27565fca8f00c77371e1ae4fed8badce274348"
+        },
+        {
+          "resource": "repo://packages/storage-s3/package.json",
+          "version": "repo-file-v1:sha256:1276c8b3ea241512617eff9980c141656292e23e88269f2212929aacecaaa99d"
+        },
+        {
+          "resource": "repo://packages/sync-akeneo/package.json#L1-L7",
+          "version": "repo-lines-v1:sha256:0ea760fbd5f03c6be3b8549ae44a09691a081b42501e20cc43772adfb6a1986c:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYTZmYjA4ZmRhMWFjYjk1N2I2MTE2YmQzNzgxMWExZmU0MWEwMTYxMWMwNjMxZWRiZjc4NmQ2ODg5YTI3YTU1YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMzQ4MzNkNTk0OWMwM2E0MGNhOTUyNDkxNjEwYTY2NTk2NDRiM2FhNDY2MzYyZjc5OTAyMGRiZjE5ODE1NDdkYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDQzZTZiNDFmOTc3YTM5MWQwYWM2ZDI3YjYyMTg5NmI1Mzk4YjlhN2IwZjM2NmUyOTI0OTY0MTUzNDllMGRiNSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_3fe1c45283684a13b01f57b37533664e",
+      "statement": "`packages/documents` (`@open-mercato/documents`) is the collaborative internal-documents module (TipTap + Yjs) with a Hocuspocus WebSocket sidecar at `server/documents-collab-server.ts` (started by `yarn documents:collab` / `collab:prod`), requiring `auth`, `directory`, and `attachments` and enabled in `modules.ts` from `@open-mercato/documents`.",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/modules.ts#L123-L123",
+          "version": "repo-lines-v1:sha256:205e5b3f63d793fd7c11bd3a7d7449c43c28faadb6baac8b1c88bef15d99c499:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMjA1ZTViM2Y2M2Q3OTNmZDdjMTFiZDNhN2Q3NDQ5YzQzYzI4ZmFhZGI2YmFhYzhiMWM4OGJlZjE1ZDk5YzQ5OSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMjA1ZTViM2Y2M2Q3OTNmZDdjMTFiZDNhN2Q3NDQ5YzQzYzI4ZmFhZGI2YmFhYzhiMWM4OGJlZjE1ZDk5YzQ5OSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYmFhMzVhM2FlMjg2MzAwMGY2MDNlNDNjYTRhMDMwYTg2ODQ4NGY1ZmU3NDQ2NGQ1MjA0ZjM0MmI0NmMyMTM2MiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOGJlNGQ3M2VmYzkwMzUzOGQ5OGFiZDdmZGQ5YzBlYzkxNzIwOGQyZjNjYjMwN2ViNTc4YWU1OTdjYjE2ZGViMSJ9"
+        },
+        {
+          "resource": "repo://packages/documents/package.json#L9-L20",
+          "version": "repo-lines-v1:sha256:04775abe1c0ad15ef5f766f951534029e12944a6de2bb8e07da9255cc9a35020:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZkYjIyNjYwZThiYTJkMGEyN2YzMjQ0OTQ5YjBiNDJhMWM3YWI1ZjVkODRkNDVjOTIzM2ZiMjc4Y2MxM2UxMjEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY3MWZiMWRjYjI3MDEwNDJjYjViOTEzMTg3MmI4NWEzN2NhZTM2NDdlNjE4YzQ2ZmUwYjJkMjU1MzQxNjdhODAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEwMDY0ZmRkY2JiNjIwZTk2OWY0OTgxMTE5NjU2ZjdjZGYzYmNiN2U0YjU2ZjY2NmQ1Zjc3YmI1NjU2NDI0ZWMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMzOTliMzVjNTAzYmNkYTY3YzUyZDUyZjliNjNmOWZhYjA2NGUwMjBiZmRlNjg4YjdjODdlMDliN2Y2NzYwZTMifQ"
+        },
+        {
+          "resource": "repo://packages/documents/server/documents-collab-server.ts#L1-L31",
+          "version": "repo-lines-v1:sha256:55b17c201d9e280abb8878bdea0d64203009d3ec82accc49cc14cb100475250d:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUwZjE1NGI2MjJjMTU5MDE0YjlmY2U2NmMxNGFlZDRhZTIyOWM3MDBkM2ExOWU2ZDdhOTQ1N2Y1MDJkNjRiOGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwNzdjY2UyNjc0ZDNkOGEwZmNmYjAxMzA1OGY2YTBiZjdlMjFmOGI1NzlhMTdhNDQyNzBlZjMwOTY1NzU1ZmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI1MmQzNjM0MmE2M2M0MTkxOGY4OTY5MWRhN2IwNjJhNjdiYWIyM2FhMGI1YzE1NzE5ZTIzMjBjMzg3YjhhMTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5208a45b0c2c472abec9e2bd9c94b527",
+      "statement": "`packages/webhooks` (`@open-mercato/webhooks`) implements outbound/inbound webhooks with Standard Webhooks signing/verification (from `@open-mercato/shared/lib/webhooks`), delivery queues/workers, and an adapter registry re-exported from `src/index.ts`.",
+      "evidence": [
+        {
+          "resource": "repo://packages/shared/src/lib/webhooks/index.ts#L1-L11",
+          "version": "repo-lines-v1:sha256:434f16c0008ce6d0a82615b88a8ab898592d63c48d44502e67e2178280450e77:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0MmNiYTU1ZWM5MDljMjQ0MGJjZjQzOWRhM2FjMGZmNzQ4YmI2M2M5NmM4YWI1ZTcyYmMwZjU2MWJkNjk3MmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNhOTBjODc1OTdlODI2Mjc4MGFkYTE0MTBiZmE0ODdjY2M3YWUwZTAwNDZhN2RhMmQ2MmM4YWI5ZDBhODlkMzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZkNTIxN2IwOWM3NGM5ZWRiYTZmODc5ZGVkZjRiYzk2MTE2ZDA2MzY3MDUxZDA0NjFkZjI0ZTA5ZjczNGFmNTEifQ"
+        },
+        {
+          "resource": "repo://packages/webhooks/src/index.ts",
+          "version": "repo-file-v1:sha256:fa23bdc20159fa051e3e9d568d71a9e9c8895c41f0f110b0f057ce1924251c99"
+        },
+        {
+          "resource": "repo://packages/webhooks/src/modules/webhooks/index.ts",
+          "version": "repo-file-v1:sha256:b2c96418a768acdebc73d0bb02358dcf09e3f282c8a0d0d928d96ffe7a0bf963"
+        }
+      ]
+    },
+    {
+      "id": "claim_6ce8fc874164424da504f7538a6ad4aa",
+      "statement": "`packages/enterprise` (`@open-mercato/enterprise`) is commercial proprietary software with its own license (`LICENSE.md`/`TERMS.md`) that accepts no external PRs (per `CONTRIBUTING.md`); its modules (`record_locks`, `system_status_overlays`, `sso`, `security`) are activated only via the env flags in `modules.ts`.",
+      "evidence": [
+        {
+          "resource": "repo://packages/enterprise/LICENSE.md",
+          "version": "repo-file-v1:sha256:1fda1929ee28814ec363dfa5ecda733e14358235c3568b08f63a3a86167ee8c6"
+        },
+        {
+          "resource": "repo://packages/enterprise/TERMS.md",
+          "version": "repo-file-v1:sha256:f667f9502dd0f9033297daaca58de7855a3055cd78d8f20901c9ebafbafac309"
+        },
+        {
+          "resource": "repo://packages/enterprise/src/modules/record_locks/index.ts",
+          "version": "repo-file-v1:sha256:10c00c5b14274f30ddbbcb889e6af873ada2b74f620b8fa1266956e71ef768ec"
+        }
+      ]
+    },
+    {
+      "id": "claim_25519e2a1a4240529cacca905229884c",
+      "statement": "The `external/official-modules` git submodule (configured in `official-modules.json` and wired as a Yarn workspace `external/official-modules/packages/*`) is managed by `yarn official-modules`; activated entries are generated into the versioned `apps/mercato/src/official-modules.generated.ts` and appended to `enabledModules` in `modules.ts` (deduped by id).",
+      "evidence": [
+        {
+          "resource": "repo://apps/mercato/src/modules.ts#L172-L176",
+          "version": "repo-lines-v1:sha256:83470fecf3af3b42ad4d4fd112fac610eb76530fea276759784655f2131a389c:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzMxNGZjYjlkYjI2ZTc2ZmIwMmExZDc0ZDBjN2JmZDM4NjRhOGNlOTgwZjI4MDlkOTc0MTVmMjhjOTYyNjc3NiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiNDEyY2EzNDVjY2Y3NWJmOWMwODA2YmNlNjk1YmU4ZGU4MDhiNzk5ODQyNTFhN2E1NGQyMDJjZjYxMDFkZDQ1MSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZGE5NGIyZjIzOWY3NTAwNjc3ZGE5YTQ5YzkzNjcwMmYyMGFiY2QzNTZlMjI2YzVmNmIwYjg0N2E5ZWY0YjUyOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTYwZWI4NjcxMmE3NDhlZTQ4OTQzMGIyZjMyYTY3MWFjYjhkNWUzN2VmZTc3YTUzMjhhZTc4NmU0MzI5ZDUxYiJ9"
+        },
+        {
+          "resource": "repo://apps/mercato/src/official-modules.generated.ts#L1-L13",
+          "version": "repo-lines-v1:sha256:b3ccb8ee0f2cb6f234e27b64bf02330dd96251c2b36638b437c05a771df0f14b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjMyNmFiMWQzODVlNjQ2N2M2OWEyZmEzYzhlODQwNDQwMTM0NGJiMzgxNzFjNTIwZTQxMTk2MTQ2YzgyMzI1ZTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU5OGQxYjgzYjRkOWFiMTIwYmJjNzIzZTNjNDRhM2U1ZmM5MjljYTU4MzNlZmNhZWJhNTMyNWUxNGZmODc0YzIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY5NDE2ZTA5Zjc4YmEzMTZjMDMyNTY4MjEzYjg1NWVlNzU2ZTQxNTY1ZDkxOGYwOTUxOWM4MWZkNjIwZjQwNjAifQ"
+        },
+        {
+          "resource": "repo://official-modules.json",
+          "version": "repo-file-v1:sha256:b38fed5d43fdb2e094fb56e904ed2bae90ecf8ffa297584e15bfe5b7c4bb863b"
+        },
+        {
+          "resource": "repo://package.json#L107-L108",
+          "version": "repo-lines-v1:sha256:b6402bda6c96f6bbb1446562b44f47a8e29d37f8bb7a6bae20da544356233e7f:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOTM2ZWRhYzYxYjA1NDgyZWI0OWU4ODIyY2ZlYWM1OTZhNWJlMzRjMzMyNmEyZjg4YTY2OTQ2MjhkZWQ4ZmMxMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiOTkyZjI1ZDNkZGQwMGI4Zjc3M2M3MWRlZTE5MDM5OWViNjM5YzFhZjM0YWFiNTk1OTYxMmNjZmUwZDQ4N2M2ZSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2QzNDkyYzdkZDdhMTBmZjQyMmJkZjZhMWUxOWVhMWYxMGJkY2M1NmNmMDZkM2Q4NDk2ZDcxNDRkYWEzN2ZiNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTZlMTMxNGE0NDk3YWIyNThkNGMwMWFkMzliODQ3MmM0MTRkNTcwYzJkNDg2MDBiOTA2M2EzNjJjYTAwNzY1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_301e8d8a00e14350bba8542fcb612607",
+      "statement": "Root configuration governs the monorepo: `package.json` (Yarn 4 workspaces, Node 24, root scripts), `turbo.json` (task pipeline build/dev/watch/test/lint/typecheck/generate/db:*), `tsconfig.base.json` (shared TS config), `jest.config.base.cjs` (maxWorkers:2, workerIdleMemoryLimit:512MB), `eslint.config.mjs`/`eslint.ds.config.mjs`, `.yarnrc.yml`, `.nvmrc` (24), and Docker compose files (`docker-compose.yml`, `docker-compose.fullapp.yml`, `docker-compose.fullapp.dev.yml`).",
+      "evidence": [
+        {
+          "resource": "repo://jest.config.base.cjs#L16-L27",
+          "version": "repo-lines-v1:sha256:b0a38dedc9d105e9070c6307bd8bdd0aece34a907d9e08c2bc26022a721f4c9f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM4ZTYxZmRmMjAyOGEzOTQxMGYwNTFmOTdiZTBkYjU4MGMzZWZiYWJmNWE3ZjI3Yjc2ZDQ4N2U1ZDA5OWZiMzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY2MDQzZGVhYWVmOWVkYmE5YTJmZTdmNGE4MzJiN2E4ZWI4ZTlhNzEyMWEzZGE5YTMzNGI1MjYwZjM4OTA4MWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU4ZGViZjE0MDhkMWQ1NzM5MTliZmIxZGNiY2JlNjgwNTBkZjg0ZTg5MTZiMGIzOWMwMjQwMmI4YThiYzY1NzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMmNhMzQ1Y2NmNzViZjljMDgwNmJjZTY5NWJlOGRlODA4Yjc5OTg0MjUxYTdhNTRkMjAyY2Y2MTAxZGQ0NTEifQ"
+        },
+        {
+          "resource": "repo://package.json#L32-L47",
+          "version": "repo-lines-v1:sha256:d343c48ba932261bea6a82f50e9aeb1c87a9fdf05e5730f44e3db7df46024b87:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg3ZmYxOTY1MTAyNmVkN2I0YjE1YjdhNzY2ZWU1OTE5ZTkxZTJiM2VlZGIzZDMwZWE5MmM1YTMzMDU4OGQ3ZDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwYjY0YmE1OWNhOTVlZmM2MDBhMTNlMTIxMjgxOTViZjgzOWZjYTdkNjY4MzUyYWVhNTI0NjQ1ZjIwODU3ZTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE0NWUxMzZmNzY5ZTQ3OTQ2OGYwNjJhNWY2Nzc3NTgwNDlmM2ZiMWRjYzA5YmMxMTBlNmY3MTk4ZGZjZTAzOTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJiODdkYzZlNTUxODhkN2I5YzI2NjRhZWYzYzE1YTk5YzA1NDFhZmZkZWFjNGQ3MmVmYzI4MDE0N2ZhNDU1YmEifQ"
+        },
+        {
+          "resource": "repo://tsconfig.base.json",
+          "version": "repo-file-v1:sha256:f83d7c41c05356620817d700a5ebebc05a4be694b14e07ca5f59d00939f74d24"
+        },
+        {
+          "resource": "repo://turbo.json",
+          "version": "repo-file-v1:sha256:9e7ef4bec808a4badb2d4063bd983b3ec95f3166b5235259e3c6dee7b645d8b4"
+        }
+      ]
+    },
+    {
+      "id": "claim_effb22c221f145a495b2be9c4abf6f57",
+      "statement": "`docker-compose.yml` runs base dev services (pgvector/pgvector:pg17-trixie PostgreSQL, Redis 7, Meilisearch v1.11, LocalStack); `docker-compose.fullapp.yml`/`docker-compose.fullapp.dev.yml` are full-app deployments including an `opencode`/MCP service wiring (`OPENCODE_MCP_URL=http://mcp:3001/mcp`); `Dockerfile` (node:24-alpine) and `railway.toml` cover production deployment.",
+      "evidence": [
+        {
+          "resource": "repo://Dockerfile#L1-L2",
+          "version": "repo-lines-v1:sha256:6a2e6f05ed843b4cc3a1a83e3351eca70437a1a19b6e47eb9983bfd5f4caffe9:eyJzZWxlY3RlZExpbmVDb3VudCI6MiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2MxNWY3NTBkNGUzMzRhMDliMGNhMGEwZjgxYTQ2MzZmZWI4NjQ2MWYyZjFiMjlhZjYwOWQ5MDBmMTQwYjViNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDFiYTQ3MTljODBiNmZlOTExYjA5MWE3YzA1MTI0YjY0ZWVlY2U5NjRlMDljMDU4ZWY4Zjk4MDVkYWNhNTQ2YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYzRhYjNlMTNjZWMxMGRiYWQ4MWJkZWEyODI2M2JjNjVlMmUwOWYzODQyNGZiODJmY2U5YWIzZTg5YTE0ZjYzMyJ9"
+        },
+        {
+          "resource": "repo://docker-compose.fullapp.yml#L1-L40",
+          "version": "repo-lines-v1:sha256:6981cf6d4dce0a793dc6c4546c79536eb734753b6c8709ba28d120be56278450:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAxYmE0NzE5YzgwYjZmZTkxMWIwOTFhN2MwNTEyNGI2NGVlZWNlOTY0ZTA5YzA1OGVmOGY5ODA1ZGFjYTU0NmIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2ZmJmNzRhNDQ1M2MwZDIwNGFhMDkwZmZkMTMzOTNjMjZlNzg1ODQ1Yzk5MDVjNzhlM2EwZGMwOWNkZTcyYmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI3YTRhZmVjZjI0ZDliMzUzMjFjNGZmMDIyZmI1YjRkYmJmOWQ3YjNiNWIxYTk5YzkxNDYyZDkyMmY3OGFkZGIifQ"
+        },
+        {
+          "resource": "repo://docker-compose.yml#L33-L88",
+          "version": "repo-lines-v1:sha256:d69c6a3619225d001d7ba42d7201957feb18acaa93cd53cc907b297796a9f87a:eyJzZWxlY3RlZExpbmVDb3VudCI6NTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwZjhkYzgzYTlkMTA3NzQxZTUzNjRhZTBjZjZmNDg1OTU3MDIyMDkwMzExMjIwYWFmOTAxOGI4NzcwZmUxNjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlNGQxOTRiNjA4YjVhNWFkNzkwYjdiMzIwNzdiZGM2Yjk3YWY1OTAxOWU5OWMyODEyMmE0NjhkZmJhOTBhMWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJlMjM1ZjA0YzUyZjNkMDQ2YWUwMTAwMzIxODE5Nzg2YmZiY2E1YzQ0N2NlODk0OGU5NWI1Mzk1Y2VhOGU2YjMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY4OWE3NDg5YTdmYzVlMDQwNzk2MTQ0NDFmYjg5ZWNhYWRkMmU4MTkyMDQyNjM0ZTgwNmQ2ZmEyOWNjMWNmM2EifQ"
+        },
+        {
+          "resource": "repo://railway.toml",
+          "version": "repo-file-v1:sha256:2c962d1e59ec447995dbbffca7dcc5cd3348e5fd63c8ddede070eaa52bb737ee"
+        }
+      ]
+    },
+    {
+      "id": "claim_5550da5a5f2b44038acecbabdcbf14d5",
+      "statement": "AI/agent infrastructure lives under `.ai/` — `specs/` (spec-first development), `skills/` (repo-local `om-*` skills), `agentic.config.json` (base branch `develop`, validation commands, pipeline labels, QA gate), lessons/review-checklist/ds-rules — plus root and per-package `AGENTS.md` guides, with the agentic harness config pinned by `.ai/agentic.config.json`.",
+      "evidence": [
+        {
+          "resource": "repo://.ai/agentic.config.json",
+          "version": "repo-file-v1:sha256:d89ecf329d8f598d079d99b7cde0d698304c876167baf38987835c67f814a0d4"
+        },
+        {
+          "resource": "repo://.ai/specs/README.md",
+          "version": "repo-file-v1:sha256:25d199df49622ff5db1e8cac232383e69e88e23f1795122fe98ded7ff25e7816"
+        },
+        {
+          "resource": "repo://AGENTS.md",
+          "version": "repo-file-v1:sha256:1e88db6307e4a92dcb23a0e5ff3b2c9dfdce3dc6b61468b31be19d4883c69acd"
+        },
+        {
+          "resource": "repo://packages/ai-assistant/AGENTS.md",
+          "version": "repo-file-v1:sha256:8d1cf1fd317668c8977f5fba2a34b91d6dc47445323999a49466f44e8e30d2a1"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.4.3",
+    "at": "2026-08-29T13:33:16.246Z"
+  }
+}

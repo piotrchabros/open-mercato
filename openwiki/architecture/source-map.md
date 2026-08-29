@@ -2,6 +2,166 @@
 type: "Reference"
 title: "Source Map"
 description: "Package-by-package reference for the Open Mercato monorepo — apps, core packages, integration providers, configuration, and AI/agent infrastructure."
+tags: [architecture, monorepo, packages, source-map, reference]
+verified:
+  - by: openwiki/0.4.3
+    at: 2026-08-29T13:33:16.246Z
+sources:
+  - id: openwiki-source-3537b13e58b3a0970bd84cd9
+    resource: repo://.ai/agentic.config.json
+  - id: openwiki-source-1d19a69bb64098791d959f1d
+    resource: repo://.ai/specs/README.md
+  - id: openwiki-source-8037e2358a2c4f9b2c722a11
+    resource: repo://AGENTS.md
+  - id: openwiki-source-cf80a01707fa1021778537fb
+    resource: repo://apps/docs/docusaurus.config.ts
+  - id: openwiki-source-7fa745b10019186c10e57d04
+    resource: repo://apps/docs/package.json
+  - id: openwiki-source-a2a9721dbf0c9ee8a3ec1557
+    resource: repo://apps/docs/vercel.json
+  - id: openwiki-source-8dff45710087b99fc687541e
+    resource: repo://apps/mercato/src/bootstrap-common.ts
+  - id: openwiki-source-0e73c1d023fea96a18c13a57
+    resource: repo://apps/mercato/src/bootstrap.ts
+  - id: openwiki-source-a847eff36367c745786f373b
+    resource: repo://apps/mercato/src/modules.ts
+  - id: openwiki-source-a64477a381558b363da99b74
+    resource: repo://apps/mercato/src/official-modules.generated.ts
+  - id: openwiki-source-9b6e444a59996fcc26afd848
+    resource: repo://docker-compose.fullapp.yml
+  - id: openwiki-source-b79fbbd921df689b4bbdc82f
+    resource: repo://docker-compose.yml
+  - id: openwiki-source-bb1ebe868e35e9e500714501
+    resource: repo://Dockerfile
+  - id: openwiki-source-78088633059b6bf644c2fdb9
+    resource: repo://eslint.ds.config.mjs
+  - id: openwiki-source-650734f7450baa50e69654f4
+    resource: repo://jest.config.base.cjs
+  - id: openwiki-source-7addaeef9f590f6938ab5423
+    resource: repo://official-modules.json
+  - id: openwiki-source-5b54a58d1b51cd490b0e7162
+    resource: repo://package.json
+  - id: openwiki-source-6cf1cf7edb17b80a6e6cdffd
+    resource: repo://packages/ai-assistant/AGENTS.md
+  - id: openwiki-source-f2b57d8693be5f28dd52eaf9
+    resource: repo://packages/ai-assistant/package.json
+  - id: openwiki-source-0a75ff275c72b5002de75e39
+    resource: repo://packages/ai-assistant/src/index.ts
+  - id: openwiki-source-86f5b22f1e6be9201974502c
+    resource: repo://packages/ai-assistant/src/modules/ai_assistant/cli.ts
+  - id: openwiki-source-aaa203a9bf25ac19f43fe44b
+    resource: repo://packages/cache/src/index.ts
+  - id: openwiki-source-840eefb302dcab0eeaae31a3
+    resource: repo://packages/cache/src/service.ts
+  - id: openwiki-source-57d5951b7f2a504551def310
+    resource: repo://packages/cache/src/strategies/memory.ts
+  - id: openwiki-source-5f9c6dab93316cd464f9c8c4
+    resource: repo://packages/channel-apns/src/modules/channel_apns/index.ts
+  - id: openwiki-source-45ddd5287b99d12a208f8f62
+    resource: repo://packages/channel-apns/src/modules/channel_apns/lib/adapter.ts
+  - id: openwiki-source-5a986bfa175f17261bd84899
+    resource: repo://packages/channel-apns/src/modules/channel_apns/setup.ts
+  - id: openwiki-source-92450a7065eb85e0f30b5461
+    resource: repo://packages/cli/package.json
+  - id: openwiki-source-eafd48756558745daa5f3c1b
+    resource: repo://packages/cli/src/bin.ts
+  - id: openwiki-source-038a6999aceded68b68e67d0
+    resource: repo://packages/cli/src/mercato.ts
+  - id: openwiki-source-fc2490d168483bbe124adee8
+    resource: repo://packages/content/src/modules/content/index.ts
+  - id: openwiki-source-d2eb6dc9129e16405aecc8e1
+    resource: repo://packages/core/src/modules/auth/index.ts
+  - id: openwiki-source-b28743ce3869e0fb53ba924d
+    resource: repo://packages/core/src/modules/customers/index.ts
+  - id: openwiki-source-b8cbea1b09e969b01b924812
+    resource: repo://packages/create-app/bin/create-mercato-app
+  - id: openwiki-source-a3c71ee732511eb5f495dc67
+    resource: repo://packages/create-app/package.json
+  - id: openwiki-source-be6affba9603d47aac2865c9
+    resource: repo://packages/documents/package.json
+  - id: openwiki-source-98cd2b9bb4fcc3d2f362af0e
+    resource: repo://packages/documents/server/documents-collab-server.ts
+  - id: openwiki-source-68018b81bfb34dbaf56e6bda
+    resource: repo://packages/enterprise/LICENSE.md
+  - id: openwiki-source-8c5161c77f8e8ed31a5899ae
+    resource: repo://packages/enterprise/src/index.ts
+  - id: openwiki-source-ff6d080eb27484175db522a4
+    resource: repo://packages/enterprise/src/modules/record_locks/index.ts
+  - id: openwiki-source-132ea381d5b8d378a59203cf
+    resource: repo://packages/enterprise/TERMS.md
+  - id: openwiki-source-bdafbbe8904326318345d396
+    resource: repo://packages/eslint-plugin-ds/index.js
+  - id: openwiki-source-16bec4be57be3f454c8d2e7d
+    resource: repo://packages/events/package.json
+  - id: openwiki-source-90b84dedaeb9338518bb9bce
+    resource: repo://packages/events/src/bridge.ts
+  - id: openwiki-source-1c236261de32984e3ab24c00
+    resource: repo://packages/events/src/bus.ts
+  - id: openwiki-source-a47377d1dcf0b5a3f358a057
+    resource: repo://packages/gateway-stripe/src/modules/gateway_stripe/index.ts
+  - id: openwiki-source-186781b6a64cc5e0670743d6
+    resource: repo://packages/onboarding/src/modules/onboarding/index.ts
+  - id: openwiki-source-bb9b13d59b358e7043862d15
+    resource: repo://packages/onboarding/src/modules/onboarding/lib/deferred-provisioning.ts
+  - id: openwiki-source-13a0e00bba89e9c299dba33b
+    resource: repo://packages/onboarding/src/modules/onboarding/lib/ready-email.ts
+  - id: openwiki-source-7ba0b8223850dc26f83bfae1
+    resource: repo://packages/queue/AGENTS.md
+  - id: openwiki-source-dab09be3a9cb3cb47a7b09bc
+    resource: repo://packages/queue/src/index.ts
+  - id: openwiki-source-a8c9eb4c3df3a31b1d54b5a2
+    resource: repo://packages/queue/src/strategies/async.ts
+  - id: openwiki-source-42467af885d696cdc392d517
+    resource: repo://packages/queue/src/strategies/local.ts
+  - id: openwiki-source-466d7bd9c370e29208953aa4
+    resource: repo://packages/scheduler/src/index.ts
+  - id: openwiki-source-f6a3c73826895e210c5bf2d3
+    resource: repo://packages/scheduler/src/modules/scheduler/data/entities.ts
+  - id: openwiki-source-7393e3bb6653859c4cb1c122
+    resource: repo://packages/search/src/index.ts
+  - id: openwiki-source-e2a15f84b6ed77ff9494801b
+    resource: repo://packages/search/src/service.ts
+  - id: openwiki-source-7039efd2d1bbc26e813d419e
+    resource: repo://packages/search/src/strategies/index.ts
+  - id: openwiki-source-d05c1d1eef28b957db83fee6
+    resource: repo://packages/shared/src/lib/crud/factory.ts
+  - id: openwiki-source-250e6eb46ba8aa9fcc6f0a6e
+    resource: repo://packages/shared/src/lib/di/container.ts
+  - id: openwiki-source-e8dcb975051196057c4f3dbd
+    resource: repo://packages/shared/src/lib/encryption/find.ts
+  - id: openwiki-source-8221e8c4b4b14aa4f605afa6
+    resource: repo://packages/shared/src/lib/url-safety.ts
+  - id: openwiki-source-87295e21c2f03c75247a9754
+    resource: repo://packages/shared/src/lib/webhooks/index.ts
+  - id: openwiki-source-0bfdf0368acb87b8a77e28a0
+    resource: repo://packages/shared/src/modules/events/factory.ts
+  - id: openwiki-source-703c822c7e89b330e9fb60b1
+    resource: repo://packages/storage-s3/package.json
+  - id: openwiki-source-18b681f92a6ccf6ab1db3b80
+    resource: repo://packages/sync-akeneo/package.json
+  - id: openwiki-source-b88d2a7b123b354c206c7485
+    resource: repo://packages/telemetry/src/env.ts
+  - id: openwiki-source-bdab35ee930dc7fb00d4d811
+    resource: repo://packages/telemetry/src/index.ts
+  - id: openwiki-source-4b71ebe300ab3cd820d9bee1
+    resource: repo://packages/telemetry/src/init.ts
+  - id: openwiki-source-157f84d273b8760f568e5175
+    resource: repo://packages/telemetry/src/provider/otlp-provider.ts
+  - id: openwiki-source-85aa6c361ff961fa93e3b81f
+    resource: repo://packages/ui/src/backend/AppShell.tsx
+  - id: openwiki-source-ebec531f50ff51fc3f00a24e
+    resource: repo://packages/ui/src/index.ts
+  - id: openwiki-source-170a23354c760364356ceec4
+    resource: repo://packages/webhooks/src/index.ts
+  - id: openwiki-source-410a63332f27c472ded7d287
+    resource: repo://packages/webhooks/src/modules/webhooks/index.ts
+  - id: openwiki-source-0f7600e0d2d7c91e381ed675
+    resource: repo://railway.toml
+  - id: openwiki-source-df1e4d0dc0a35c64fd0e652b
+    resource: repo://tsconfig.base.json
+  - id: openwiki-source-440ae1e215cb02721dda855c
+    resource: repo://turbo.json
+generated: { by: "openwiki/0.4.3", at: "2026-08-29T13:33:16.246Z" }
 ---
 
 # Source Map
@@ -13,7 +173,7 @@ Package-by-package reference for the Open Mercato monorepo. Use this to find whe
 | App | Path | What it does |
 |-----|------|-------------|
 | **Mercato** | `apps/mercato/` | Main Next.js App Router application. Contains catch-all route dispatchers (`app/api/[...slug]/route.ts`, `app/(backend)/backend/[...slug]/page.tsx`, `app/(frontend)/[...slug]/page.tsx`), module enablement (`src/modules.ts`), `.env.example`, and `next.config.ts`. User-created modules go in `src/modules/`. App-only modules: `example` (reference module, **disabled by default** — uncomment its `modules.ts` entry to re-enable), `example_customers_sync` (auto-enabled only while `example` is on), `ratelimit_probe` (lightweight rate-limit endpoint probe). |
-| **Docs** | `apps/docs/` | Docusaurus documentation site published to docs.openmercato.com. Contains framework guides, installation instructions, and user guides. |
+| **Docs** | `apps/docs/` | Docusaurus documentation site (package `open-mercato-docs`, published to `docs.open-mercato.dev`). Uses `@docusaurus/theme-mermaid` for diagrams and `@easyops-cn/docusaurus-search-local` for search; configured by `docusaurus.config.ts` and `sidebars.ts`, deployed via `vercel.json`. Contains framework guides, installation instructions, and user guides. |
 
 ## Core Packages
 
@@ -99,7 +259,7 @@ Vendor-neutral spans, metrics, error reporting, and a remote sink for the canoni
 - `AGENTS.md` + `README.md` — provider contract, redaction rules, and validation
 
 ### `packages/eslint-plugin-ds/` — `@open-mercato/eslint-plugin-ds`
-Private structural ESLint plugin enforcing the Open Mercato design system. Six rules, all at `warn` during rollout: `require-empty-state`, `require-page-wrapper`, `no-raw-table`, `require-loading-state`, `require-status-badge`, `no-hardcoded-status-colors`. Wired by `eslint.ds.config.mjs` and invoked via `yarn lint:ds` against `packages/core/src/modules`, `packages/enterprise/src/modules`, and `packages/ui/src/backend`. Severity escalates per-rule to `error` once the corresponding design-system health metric allows it.
+Private structural ESLint plugin enforcing the Open Mercato design system. Seven rules, all at `warn` during rollout: `require-empty-state`, `require-page-wrapper`, `no-raw-table`, `require-loading-state`, `require-status-badge`, `no-hardcoded-status-colors`, and `no-legacy-alert-variant`. Wired by `eslint.ds.config.mjs` and invoked via `yarn lint:ds` against the positional paths `packages apps`. The six backend-structural rules are scoped to backend globs (`packages/core/src/modules/**/backend/**`, `packages/enterprise/src/modules/**/backend/**`, `packages/ui/src/backend/**`); `no-legacy-alert-variant` alone gets a wider scope across `packages/*/src/**/*.tsx` and `apps/*/src/**/*.tsx` because legacy Alert usages live outside the backend globs. Severity escalates per-rule × module to `error` (terminal state) once the corresponding design-system health counter reads zero in two consecutive rolling reports.
 
 ### `packages/cli/` — `@open-mercato/cli`
 Code generators and CLI tooling:
@@ -164,7 +324,7 @@ Each provider is a dedicated npm workspace package. Provider modules MUST NOT be
 | `docker-compose.fullapp.dev.yml` | Dev-mode Docker with hot reload |
 | `Dockerfile` | Production Docker image |
 | `railway.toml` | Railway deployment config |
-| `official-modules.json` | Official module activation config (committed) |
+| `official-modules.json` | Official module activation config (committed) — drives the `external/official-modules` git submodule via `yarn official-modules`; activated entries are emitted into `apps/mercato/src/official-modules.generated.ts` and appended to `enabledModules` in `modules.ts` |
 | `.ai/agentic.config.json` | Agentic workflow config — base branch, validation commands, labels, QA gate |
 
 ## AI/Agent Infrastructure
