@@ -11,9 +11,11 @@ import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import {
   isWebhookTimestampWithinTolerance,
   readBoundedRequestBody,
+  resolveWebhookBodyLimitBytes,
   WEBHOOK_SIGNATURE_TOLERANCE_SECONDS,
   WebhookBodyTooLargeError,
   type InboundWebhookRequest,
+  type WebhookSourceConfig,
 } from '@open-mercato/shared/lib/webhooks'
 import { emitWebhooksEvent } from '../../../events'
 import { getWebhookEndpointAdapter } from '../../../lib/adapter-registry'
@@ -83,7 +85,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
 
   let body: string
   try {
-    body = await readBoundedRequestBody(request)
+    body = await readBoundedRequestBody(request, { maxBytes: resolveInboundBodyLimitBytes(source) })
   } catch (error) {
     if (error instanceof WebhookBodyTooLargeError) {
       return json({ error: 'Webhook payload too large' }, { status: 413 })
@@ -290,6 +292,13 @@ export const openApi: OpenApiRouteDoc = {
       ],
     },
   },
+}
+
+export function resolveInboundBodyLimitBytes(source: WebhookSourceConfig | undefined): number {
+  const globalLimit = resolveWebhookBodyLimitBytes()
+  const sourceLimit = source?.maxBodyBytes
+  if (typeof sourceLimit !== 'number' || !Number.isSafeInteger(sourceLimit) || sourceLimit <= 0) return globalLimit
+  return Math.max(globalLimit, sourceLimit)
 }
 
 function tryResolve<T>(container: { resolve: (name: string) => unknown }, name: string): T | null {

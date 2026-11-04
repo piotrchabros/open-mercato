@@ -93,6 +93,7 @@ COPY packages/web-research-model/package.json ./packages/web-research-model/
 COPY packages/web-research-searxng/package.json ./packages/web-research-searxng/
 COPY packages/web-research-serp/package.json ./packages/web-research-serp/
 COPY packages/web-research-tavily/package.json ./packages/web-research-tavily/
+COPY packages/webhook-calcom/package.json ./packages/webhook-calcom/
 COPY packages/webhooks/package.json ./packages/webhooks/
 COPY scripts/official-modules-setup.mjs ./scripts/
 COPY scripts/lib/official-modules.mjs ./scripts/lib/
@@ -210,6 +211,7 @@ COPY packages/web-research-model/package.json ./packages/web-research-model/
 COPY packages/web-research-searxng/package.json ./packages/web-research-searxng/
 COPY packages/web-research-serp/package.json ./packages/web-research-serp/
 COPY packages/web-research-tavily/package.json ./packages/web-research-tavily/
+COPY packages/webhook-calcom/package.json ./packages/webhook-calcom/
 COPY packages/webhooks/package.json ./packages/webhooks/
 COPY scripts/official-modules-setup.mjs ./scripts/
 COPY scripts/lib/official-modules.mjs ./scripts/lib/
@@ -402,6 +404,7 @@ COPY --from=builder /app/packages/web-research-model/package.json ./packages/web
 COPY --from=builder /app/packages/web-research-searxng/package.json ./packages/web-research-searxng/
 COPY --from=builder /app/packages/web-research-serp/package.json ./packages/web-research-serp/
 COPY --from=builder /app/packages/web-research-tavily/package.json ./packages/web-research-tavily/
+COPY --from=builder /app/packages/webhook-calcom/package.json ./packages/webhook-calcom/
 COPY --from=builder /app/packages/webhooks/package.json ./packages/webhooks/
 
 # Install only production dependencies

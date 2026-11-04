@@ -1,0 +1,121 @@
+{
+  "triggerEvent": "RECORDING_TRANSCRIPTION_GENERATED",
+  "createdAt": "2026-11-10T11:00:00.000Z",
+  "payload": {
+    "type": "discovery-call",
+    "title": "Discovery call between Piotr and Anna",
+    "description": "Intro call",
+    "additionalNotes": "Please share the deck",
+    "customInputs": {},
+    "startTime": "2026-11-10T10:00:00Z",
+    "endTime": "2026-11-10T10:30:00Z",
+    "organizer": {
+      "name": "Piotr Host",
+      "email": "host@example.com",
+      "timeZone": "Europe/Warsaw",
+      "language": {
+        "locale": "en"
+      },
+      "utcOffset": 60
+    },
+    "responses": {
+      "name": {
+        "label": "your_name",
+        "value": "Anna Kowalska"
+      }
+    },
+    "attendees": [
+      {
+        "name": "Anna Kowalska",
+        "email": "anna@example.com",
+        "timeZone": "Europe/Warsaw",
+        "language": {
+          "locale": "en"
+        },
+        "utcOffset": 60
+      },
+      {
+        "name": "Ben Nowak",
+        "email": "ben@example.com",
+        "timeZone": "Europe/Warsaw",
+        "language": {
+          "locale": "en"
+        },
+        "utcOffset": 60
+      }
+    ],
+    "location": "integrations:daily",
+    "uid": "bk-uid-1",
+    "bookingId": 1234,
+    "eventTypeId": 77,
+    "length": 30,
+    "status": "ACCEPTED",
+    "metadata": {
+      "videoCallUrl": "https://cal.example.com/video/bk-uid-1"
+    },
+    "videoCallData": {
+      "type": "daily_video",
+      "url": "https://cal.example.com/video/bk-uid-1"
+    },
+    "notetaker": {
+      "version": 1,
+      "sessionId": "11111111-1111-4111-8111-111111111111",
+      "transcriptId": "22222222-2222-4222-8222-222222222222",
+      "language": "en",
+      "completeness": "COMPLETE",
+      "durationMs": 1800000,
+      "speakerNamesAvailable": true,
+      "passages": [
+        {
+          "index": 0,
+          "speakerKey": "s1",
+          "speakerName": "Piotr Host",
+          "unknownSpeakerNumber": null,
+          "startMs": 0,
+          "endMs": 4200,
+          "text": "Hi Anna, thanks for joining."
+        },
+        {
+          "index": 1,
+          "speakerKey": "s2",
+          "speakerName": "Anna Kowalska",
+          "unknownSpeakerNumber": null,
+          "startMs": 4300,
+          "endMs": 9000,
+          "text": "Happy to be here, let's talk about pricing."
+        },
+        {
+          "index": 2,
+          "speakerKey": "s3",
+          "speakerName": null,
+          "unknownSpeakerNumber": 1,
+          "startMs": 9100,
+          "endMs": 12000,
+          "text": "Sorry to interrupt, quick question about onboarding."
+        }
+      ],
+      "summary": {
+        "status": "READY",
+        "language": "en",
+        "overview": "Intro call about pricing and onboarding.",
+        "keyPoints": [
+          "Pricing discussed",
+          "Onboarding timeline"
+        ],
+        "decisions": [
+          "Send proposal by Friday"
+        ],
+        "actionItems": [
+          {
+            "text": "Send proposal",
+            "assignee": "Piotr"
+          }
+        ],
+        "topics": [
+          "pricing",
+          "onboarding"
+        ]
+      }
+    }
+  }
+}

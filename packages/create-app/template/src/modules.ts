@@ -223,6 +223,7 @@ export const enabledModules: ModuleEntry[] = [
   // { id: 'carrier_inpost', from: '@open-mercato/carrier-inpost' },
   { id: 'eudr', from: '@open-mercato/core' },
   { id: 'webhooks', from: '@open-mercato/webhooks' },
+  { id: 'webhook_calcom', from: '@open-mercato/webhook-calcom' },
   // Same-origin OTLP proxy for browser RUM spans; inert unless
   // TELEMETRY_BROWSER_ENABLED is set alongside an active telemetry backend.
   { id: 'telemetry', from: '@open-mercato/telemetry' },

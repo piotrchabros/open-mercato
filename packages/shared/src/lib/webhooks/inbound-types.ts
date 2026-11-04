@@ -58,6 +58,11 @@ export interface WebhookSourceConfig {
   ) => { tenantId?: string; organizationId?: string }
   /** Credential fields this source needs; used by the source-credential admin UI. */
   credentialFields?: WebhookSourceCredentialField[]
+  /**
+   * Optional maximum accepted request body size in bytes for this source.
+   * Can only raise the global limit (`OM_WEBHOOK_MAX_BODY_BYTES`), never lower it.
+   */
+  maxBodyBytes?: number
 }
 
 /** Metadata exported by every `webhook-handlers/*.ts` file. */
