@@ -36,7 +36,7 @@ jest.mock('../../../../lib/queue', () => ({
   enqueueInboundDispatch: (...args: unknown[]) => enqueueInboundDispatch(...args),
 }))
 
-import { POST } from '../route'
+import { POST, resolveInboundBodyLimitBytes } from '../route'
 import { clearWebhookSources, registerWebhookSource } from '../../../../lib/inbound-registry'
 
 function makeSource(overrides: Partial<WebhookSourceConfig> = {}): WebhookSourceConfig {
@@ -131,6 +131,47 @@ it('rejects an oversized source webhook before verification or persistence', asy
   expect(findWithDecryption).not.toHaveBeenCalled()
   expect(persist).not.toHaveBeenCalled()
   expect(enqueueInboundDispatch).not.toHaveBeenCalled()
+})
+
+it('accepts a source webhook above the global limit when the source raises maxBodyBytes', async () => {
+  registerWebhookSource(makeSource({ maxBodyBytes: 2 * 1024 * 1024 }))
+  const padding = 'x'.repeat(1024 * 1024 + 512)
+  const res = await postTo('stripe', JSON.stringify({ type: 'payment_intent.succeeded', id: 'evt_big', padding }))
+  expect(res.status).toBe(200)
+  expect(enqueueInboundDispatch).toHaveBeenCalledTimes(1)
+})
+
+it('still rejects a source webhook above its own maxBodyBytes', async () => {
+  const verifier = jest.fn(async () => true)
+  registerWebhookSource(makeSource({ verifier, maxBodyBytes: 2 * 1024 * 1024 }))
+  const res = await postTo('stripe', '{}', { 'content-length': String(2 * 1024 * 1024 + 1) })
+  expect(res.status).toBe(413)
+  expect(verifier).not.toHaveBeenCalled()
+})
+
+describe('resolveInboundBodyLimitBytes', () => {
+  const originalEnv = process.env.OM_WEBHOOK_MAX_BODY_BYTES
+
+  afterEach(() => {
+    if (originalEnv === undefined) delete process.env.OM_WEBHOOK_MAX_BODY_BYTES
+    else process.env.OM_WEBHOOK_MAX_BODY_BYTES = originalEnv
+  })
+
+  it('uses the global limit when the source declares none or an invalid value', () => {
+    delete process.env.OM_WEBHOOK_MAX_BODY_BYTES
+    expect(resolveInboundBodyLimitBytes(undefined)).toBe(1024 * 1024)
+    expect(resolveInboundBodyLimitBytes(makeSource())).toBe(1024 * 1024)
+    expect(resolveInboundBodyLimitBytes(makeSource({ maxBodyBytes: 0 }))).toBe(1024 * 1024)
+    expect(resolveInboundBodyLimitBytes(makeSource({ maxBodyBytes: 1.5 }))).toBe(1024 * 1024)
+  })
+
+  it('lets a source raise but never lower the global limit', () => {
+    delete process.env.OM_WEBHOOK_MAX_BODY_BYTES
+    expect(resolveInboundBodyLimitBytes(makeSource({ maxBodyBytes: 2 * 1024 * 1024 }))).toBe(2 * 1024 * 1024)
+    expect(resolveInboundBodyLimitBytes(makeSource({ maxBodyBytes: 1024 }))).toBe(1024 * 1024)
+    process.env.OM_WEBHOOK_MAX_BODY_BYTES = String(4 * 1024 * 1024)
+    expect(resolveInboundBodyLimitBytes(makeSource({ maxBodyBytes: 2 * 1024 * 1024 }))).toBe(4 * 1024 * 1024)
+  })
 })
 
 it('rejects with 401 when no candidate scope verifies', async () => {

@@ -6,7 +6,7 @@ import { StorageDriverFactory } from './drivers'
 import { assertAttachmentStoragePartitionExists } from './drivers/storageValidation'
 import { ensureDefaultPartitions, resolveDefaultPartitionCode } from './partitions'
 import { buildAttachmentFileUrl } from './imageUrls'
-import { mergeAttachmentMetadata, upsertAssignment } from './metadata'
+import { mergeAttachmentMetadata, upsertAssignment, type AttachmentAssignment } from './metadata'
 import { assertAttachmentScopeInvariant } from './access'
 import { attachmentCrudEvents, attachmentCrudIndexer } from './crud'
 import { ensureAttachmentPartitionProtection } from './access-protection'
@@ -28,6 +28,8 @@ export type CreateAttachmentFromBufferInput = {
   buffer: Buffer
   /** Storage partition; defaults to the entity's default partition. */
   partitionCode?: string | null
+  /** Extra domain records to link alongside the primary `entityId`/`recordId` assignment (deduped). */
+  additionalAssignments?: AttachmentAssignment[]
 }
 
 export type CreatedAttachment = {
@@ -76,7 +78,10 @@ export async function createAttachmentFromBuffer(input: CreateAttachmentFromBuff
   })
 
   const metadata = mergeAttachmentMetadata(null, {
-    assignments: upsertAssignment([], { type: input.entityId, id: input.recordId }),
+    assignments: (input.additionalAssignments ?? []).reduce<AttachmentAssignment[]>(
+      (acc, entry) => upsertAssignment(acc, entry),
+      upsertAssignment([], { type: input.entityId, id: input.recordId }),
+    ),
   })
   const attachmentId = randomUUID()
   assertAttachmentScopeInvariant({ tenantId: input.tenantId, organizationId: input.organizationId })

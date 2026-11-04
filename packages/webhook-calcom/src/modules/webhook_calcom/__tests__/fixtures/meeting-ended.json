@@ -1,0 +1,47 @@
+{
+  "triggerEvent": "MEETING_ENDED",
+  "id": 1234,
+  "uid": "bk-uid-1",
+  "title": "Discovery call between Piotr and Anna",
+  "description": "Intro call",
+  "startTime": "2026-11-10T10:00:00.000Z",
+  "endTime": "2026-11-10T10:30:00.000Z",
+  "location": "integrations:daily",
+  "metadata": {
+    "videoCallUrl": "https://cal.example.com/video/bk-uid-1"
+  },
+  "userId": 5,
+  "eventTypeId": 77,
+  "status": "ACCEPTED",
+  "createdAt": "2026-11-04T08:00:00.000Z",
+  "user": {
+    "email": "host@example.com",
+    "name": "Piotr Host",
+    "username": "piotr",
+    "timeZone": "Europe/Warsaw"
+  },
+  "attendees": [
+    {
+      "id": 1,
+      "email": "anna@example.com",
+      "name": "Anna Kowalska",
+      "timeZone": "Europe/Warsaw",
+      "locale": "en",
+      "bookingId": 1234
+    },
+    {
+      "id": 2,
+      "email": "ben@example.com",
+      "name": "Ben Nowak",
+      "timeZone": "Europe/Warsaw",
+      "locale": "en",
+      "bookingId": 1234
+    }
+  ],
+  "responses": {
+    "name": {
+      "label": "your_name",
+      "value": "Anna Kowalska"
+    }
+  }
+}

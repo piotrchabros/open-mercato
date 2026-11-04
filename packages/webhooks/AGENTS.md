@@ -55,6 +55,10 @@ yarn workspace @open-mercato/webhooks build
 6. Keep provider-specific business logic in `adapter.processInbound()`
 7. Add unit coverage for adapter verification and inbound processing behavior
 
+### Per-source body limit (`maxBodyBytes`)
+
+Source-flow webhooks (`webhook-sources.ts`) may set `WebhookSourceConfig.maxBodyBytes` when payloads exceed the global inbound limit (e.g. Cal.com transcripts, 2 MiB). The route uses `max(global limit, maxBodyBytes)` via `resolveInboundBodyLimitBytes()`; it can only raise the limit, and invalid values fall back to the global one. Oversized bodies get 413.
+
 ## When You Need Admin UI Changes
 
 1. Keep webhook list/detail/create flows under `src/modules/webhooks/backend/webhooks/`
