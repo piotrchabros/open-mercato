@@ -1,0 +1,104 @@
+---
+title: Set up Meta Lead Ads
+description: Import Facebook and Instagram Lead Ads form submissions into the CRM automatically — Meta app prerequisites, connecting Pages, form mapping, monitoring, backfill and privacy.
+sidebar_label: Meta Lead Ads
+---
+
+# Set up Meta Lead Ads
+
+The Meta Lead Ads integration delivers every Instant Form submission from your Facebook and Instagram ads into the CRM within seconds. For each lead it creates or updates a person (and a company when the form asks for one), adds a **Lead from Meta** activity with all answers and campaign details, and can optionally create a deal and notify the assigned sales rep.
+
+## What it does
+
+- Receives lead notifications from Meta through a webhook and fetches the full lead from the Graph API.
+- Matches existing people in the same organization by email, then by phone, so repeated submissions do not create duplicates.
+- Records the answers, campaign, ad set, ad, form and platform on the person's activity history.
+- Retries failed imports automatically and lets you retry or backfill manually.
+- Reconciles the last 48 hours against Meta every night to catch missed leads.
+
+## Prerequisites on Meta's side
+
+Do these once in [Meta for Developers](https://developers.facebook.com):
+
+1. Create a **Business** type app and add **Facebook Login for Business**. Create a login configuration and note its **Configuration ID**.
+2. Add the **Webhooks** product, choose the **Page** object and subscribe to the **`leadgen`** field (see [Webhook](#webhook)).
+3. Request these permissions: `leads_retrieval`, `pages_manage_metadata`, `pages_show_list`, `pages_read_engagement` and `ads_management`.
+4. Complete **App Review** and Business Verification so the app works for accounts that are not app testers.
+5. Make sure the connecting Facebook user has **Leads Access** for each Page: in Meta Business Suite open **Business settings → Integrations → Leads Access** and grant your CRM app access to the Page.
+
+## Configure the app in Open Mercato
+
+Set these environment variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `OM_META_LEAD_ADS_APP_ID` | Meta app ID |
+| `OM_META_LEAD_ADS_APP_SECRET` | Meta app secret (also verifies webhook signatures) |
+| `OM_META_LEAD_ADS_VERIFY_TOKEN` | Token Meta echoes when you subscribe the webhook |
+| `OM_META_LEAD_ADS_LOGIN_CONFIG_ID` | Facebook Login for Business configuration ID |
+| `OM_META_LEAD_ADS_GRAPH_VERSION` | Optional Graph API version (default `v24.0`) |
+
+Then copy them into every organization's encrypted credentials:
+
+```bash
+yarn mercato meta_lead_ads configure-from-env
+```
+
+Use `--tenant <tenantId>` to limit the run to one tenant and `--force` to overwrite credentials that already exist. You can also enter the values under **Settings → Integrations → Meta Lead Ads**.
+
+## Webhook
+
+In the Meta app open **Webhooks → Page** and set:
+
+- **Callback URL**: `https://<your-domain>/api/meta_lead_ads/webhook`
+- **Verify token**: the value of `OM_META_LEAD_ADS_VERIFY_TOKEN`
+
+Subscribe the app to the **`leadgen`** field. Every notification is verified with the app secret before it is accepted. For local development expose the app through an HTTPS tunnel (for example `ngrok http 3000`) and use that URL.
+
+## Connect a Page
+
+1. Open **Meta Lead Ads** in the backend (**Connections**).
+2. Click **Connect Meta account** and log in with Facebook. Grant all requested permissions.
+3. Under **Pages**, assign each Page you want to the current organization. A Page can belong to only one organization across the whole installation.
+4. The Page is subscribed to lead notifications automatically and shows a status: active, missing permissions, token expired or no leads access.
+
+Users need the **Manage Meta Lead Ads** permission to connect and configure, and **View Meta Lead Ads logs** to see the leads log.
+
+## Forms, field mapping and deal rules
+
+Open a Page's forms and select a form to configure it:
+
+- **Enable** the form so its leads are imported.
+- **Field mapping**: email, phone, name and company are mapped by default. Map any custom question to a person or company custom field. Consent checkboxes are stored on the person as separate attributes.
+- **Create a deal**: turn it on and choose the pipeline and stage.
+- **Owner**: none, a fixed user, or round-robin across several users. The owner receives an in-app notification.
+
+If Meta changes a form's questions, the form is flagged as needing attention until you review the mapping. A failed deal step (for example a deleted pipeline stage) flags it too; the person and activity are still saved.
+
+## Monitor leads
+
+Open **Recent leads** to see each lead event with its status (received, processed, duplicate, skipped, retrying, failed, dead-lettered, unrouted), source and error. Select failed or dead-lettered rows and choose **Retry**.
+
+You can send a **test lead** for a form to check the full path end to end.
+
+## Backfill and reconciliation
+
+- **Backfill**: from a form, choose a date range (at most **90 days**) to import leads that arrived while the integration was off. Imported leads are deduplicated, so re-running is safe.
+- **Nightly reconciliation**: every night the last 48 hours of Meta leads are compared with imported ones and any gap is filled. Runs are listed under sync runs.
+- A daily token check marks connections as expired or invalid and alerts administrators.
+
+## Privacy
+
+- Raw lead payloads are deleted after **30 days** by default. Change the retention (1–365 days) in **Meta Lead Ads → Settings**.
+- Deleting a person in the CRM also deletes that person's lead events.
+- Meta's **data deletion callback URL** is `https://<your-domain>/api/meta_lead_ads/data-deletion`. Enter it in the app's settings under **Data deletion request URL**; Meta users who remove your app then have their data removed and receive a status link.
+
+## Troubleshooting
+
+| Symptom | What to do |
+|---------|------------|
+| Page status **no_leads_access** | Grant the CRM app **Leads Access** for the Page in Meta Business Suite (Business settings → Integrations → Leads Access), then run **Check** on the Page. |
+| Connection **token_expired** | The Facebook login expired or was revoked. Reconnect the Meta account; Pages stay assigned. |
+| Lead **dead-lettered** | Five automatic attempts (after 1 min, 5 min, 15 min and 40 min) failed. Read the error code in the leads log, fix the cause (token, access, mapping), then retry the event. |
+| No leads arrive | Check that the Page is active, the form is enabled, the `leadgen` field is subscribed and the callback URL and verify token match. |
+| Status **unrouted** | The lead's Page is not assigned to any organization. Assign the Page. |

@@ -65,6 +65,10 @@ const COMMAND_GUARD_ALLOWLIST: Record<string, string> = {
     'OSS-only — task reassignment is an administrative one-shot move of ownership (workflows.user_task), gated on `workflows.tasks.reassign` and already refused for a terminal task; `UserTask` is not in the curated editable-entity list and the coverage guard only matches PUT/PATCH/DELETE, so the synchronous OSS floor is what makes the stale-modal race a structured 409 at all. Enterprise record_locks migration deferred.',
   'packages/core/src/modules/messages/commands/actions.ts':
     'OSS-only — message action execute (messages.message) enforces the synchronous OSS updated_at floor before the terminal-action claim; the action also has its own actionTaken idempotency guard. Enterprise record_locks migration deferred.',
+  'packages/meta-lead-ads/src/modules/meta_lead_ads/api/connections/[id]/route.ts':
+    'OSS-only — DELETE of a meta_lead_ads connection (updated_at-versioned, user-editable entity) in a hand-written route enforces the synchronous OSS updated_at floor from the optimistic-lock header; the connection is single-admin integration config, not a collaborative merge-dialog target. Enterprise record_locks migration deferred.',
+  'packages/meta-lead-ads/src/modules/meta_lead_ads/api/pages/[id]/route.ts':
+    'OSS-only — DELETE of a meta_lead_ads page subscription (updated_at-versioned, user-editable entity) in a hand-written route enforces the synchronous OSS updated_at floor from the optimistic-lock header; single-admin integration config, not a collaborative merge-dialog target. Enterprise record_locks migration deferred.',
   // agent_orchestrator (enterprise) — terminal one-shot state transitions, not
   // collaborative merge-dialog edit surfaces; the synchronous updated_at floor
   // guards the stale-modal race on each. Promoting them to the

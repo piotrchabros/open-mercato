@@ -8656,6 +8656,7 @@ __metadata:
     "@open-mercato/gateway-autopay": "workspace:*"
     "@open-mercato/gateway-stripe": "workspace:*"
     "@open-mercato/gateway-tpay": "workspace:*"
+    "@open-mercato/meta-lead-ads": "workspace:*"
     "@open-mercato/onboarding": "workspace:*"
     "@open-mercato/queue": "workspace:*"
     "@open-mercato/scheduler": "workspace:*"
@@ -9365,6 +9366,32 @@ __metadata:
   peerDependencies:
     "@mikro-orm/postgresql": ^7.0.14
     "@open-mercato/shared": "workspace:*"
+  languageName: unknown
+  linkType: soft
+
+"@open-mercato/meta-lead-ads@workspace:*, @open-mercato/meta-lead-ads@workspace:packages/meta-lead-ads":
+  version: 0.0.0-use.local
+  resolution: "@open-mercato/meta-lead-ads@workspace:packages/meta-lead-ads"
+  dependencies:
+    "@open-mercato/core": "workspace:*"
+    "@open-mercato/queue": "workspace:*"
+    "@open-mercato/shared": "workspace:*"
+    "@open-mercato/ui": "workspace:*"
+    "@types/jest": "npm:^30.0.0"
+    "@types/react": "npm:^19.2.18"
+    "@types/react-dom": "npm:^19.2.5"
+    esbuild: "npm:^0.28.2"
+    glob: "npm:^14.0.3"
+    jest: "npm:^30.4.2"
+    react: "npm:19.2.8"
+    react-dom: "npm:19.2.8"
+    ts-jest: "npm:^29.4.12"
+    typescript: "npm:7.0.2"
+  peerDependencies:
+    "@mikro-orm/postgresql": ^7.0.14
+    "@open-mercato/shared": "workspace:*"
+    react: ^19.0.0
+    react-dom: ^19.0.0
   languageName: unknown
   linkType: soft
 

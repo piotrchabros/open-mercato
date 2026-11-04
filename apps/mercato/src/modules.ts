@@ -166,6 +166,7 @@ export const enabledModules: ModuleEntry[] = [
   // optional AI auto-reply subscriber.
   { id: 'channel_discord', from: '@open-mercato/channel-discord' },
   { id: 'sync_akeneo', from: '@open-mercato/sync-akeneo' },
+  { id: 'meta_lead_ads', from: '@open-mercato/meta-lead-ads' },
   { id: 'tillio', from: '@open-mercato/tillio' },
   { id: 'shipping_carriers', from: '@open-mercato/core' },
   { id: 'carrier_inpost', from: '@open-mercato/carrier-inpost' },

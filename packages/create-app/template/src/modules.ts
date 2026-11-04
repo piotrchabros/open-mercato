@@ -210,6 +210,7 @@ export const enabledModules: ModuleEntry[] = [
   // intact'), and #4983 for the discussion.
   // { id: 'channel_discord', from: '@open-mercato/channel-discord' },
   { id: 'sync_akeneo', from: '@open-mercato/sync-akeneo' },
+  { id: 'meta_lead_ads', from: '@open-mercato/meta-lead-ads' },
   { id: 'tillio', from: '@open-mercato/tillio' },
   { id: 'shipping_carriers', from: '@open-mercato/core' },
   // InPost shipping carrier provider for the shipping_carriers hub. It stays

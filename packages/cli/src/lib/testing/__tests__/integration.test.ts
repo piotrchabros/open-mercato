@@ -17,6 +17,7 @@ import {
   resolveAppReadyTimeoutMs,
   resolveEphemeralPostgresImage,
   resolveEphemeralJwtSecret,
+  resolveEphemeralOAuthStateKey,
   ephemeralPostgresInitSql,
   shouldReuseBuildArtifacts,
   acquireEphemeralRuntimeLock,
@@ -500,6 +501,20 @@ describe('integration cache and options', () => {
     } finally {
       warnSpy.mockRestore()
     }
+  })
+
+  it('returns an inherited OAuth state key trimmed', () => {
+    expect(resolveEphemeralOAuthStateKey({ OM_HUB_OAUTH_STATE_KEY: '  inherited-state-key  ' })).toBe(
+      'inherited-state-key',
+    )
+  })
+
+  it('generates a 64-character hex OAuth state key when none is inherited', () => {
+    expect(resolveEphemeralOAuthStateKey({})).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('reuses the generated OAuth state key across calls', () => {
+    expect(resolveEphemeralOAuthStateKey({})).toBe(resolveEphemeralOAuthStateKey({}))
   })
 
   it('keeps a safe operator-provided JWT secret for the ephemeral environment', () => {

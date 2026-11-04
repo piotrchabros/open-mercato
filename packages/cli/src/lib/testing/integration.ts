@@ -202,6 +202,15 @@ export function resolveEphemeralJwtSecret(env: NodeJS.ProcessEnv = process.env):
   }
   return DEFAULT_EPHEMERAL_JWT_SECRET
 }
+
+let generatedEphemeralOAuthStateKey: string | null = null
+
+export function resolveEphemeralOAuthStateKey(env: NodeJS.ProcessEnv = process.env): string {
+  const inherited = env.OM_HUB_OAUTH_STATE_KEY?.trim()
+  if (inherited) return inherited
+  generatedEphemeralOAuthStateKey ??= randomBytes(32).toString('hex')
+  return generatedEphemeralOAuthStateKey
+}
 const PLAYWRIGHT_ENV_UNAVAILABLE_PATTERNS: RegExp[] = [
   /net::ERR_CONNECTION_REFUSED/i,
   /Failed to connect to .* (localhost|127\.0\.0\.1)/i,
@@ -2179,6 +2188,7 @@ function buildReusableEnvironment(
     CACHE_STRATEGY: 'sqlite',
     CACHE_SQLITE_PATH: EPHEMERAL_CACHE_DB_PATH,
     JWT_SECRET: resolveEphemeralJwtSecret(),
+    OM_HUB_OAUTH_STATE_KEY: resolveEphemeralOAuthStateKey(),
     OM_SECURITY_MFA_SETUP_SECRET: process.env.OM_SECURITY_MFA_SETUP_SECRET ?? 'om-ephemeral-integration-mfa-setup-secret',
     // The forms module refuses its DEV-ONLY deterministic KMS adapter under
     // NODE_ENV=production (which is how this app runs), so without a master key
@@ -3570,6 +3580,7 @@ export async function startEphemeralEnvironment(options: EphemeralRuntimeOptions
       NEXT_PUBLIC_APP_URL: applicationBaseUrl,
       PLATFORM_PORTAL_BASE_URL: applicationBaseUrl,
       JWT_SECRET: resolveEphemeralJwtSecret(),
+      OM_HUB_OAUTH_STATE_KEY: resolveEphemeralOAuthStateKey(),
       OM_SECURITY_MFA_SETUP_SECRET: process.env.OM_SECURITY_MFA_SETUP_SECRET ?? 'om-ephemeral-integration-mfa-setup-secret',
     // The forms module refuses its DEV-ONLY deterministic KMS adapter under
     // NODE_ENV=production (which is how this app runs), so without a master key

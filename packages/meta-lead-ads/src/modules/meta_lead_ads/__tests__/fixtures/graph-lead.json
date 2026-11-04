@@ -1,0 +1,23 @@
+{
+  "id": "724501983112233",
+  "created_time": "2026-11-04T10:19:58+0000",
+  "ad_id": "238800119900554",
+  "ad_name": "Carousel v2",
+  "adset_id": "238800119900500",
+  "adset_name": "Warsaw 25-45",
+  "campaign_id": "120210000000000123",
+  "campaign_name": "Autumn apartments PL",
+  "form_id": "551200347890123",
+  "platform": "ig",
+  "is_organic": false,
+  "field_data": [
+    { "name": "email", "values": ["jan.nowak@example.com"] },
+    { "name": "phone_number", "values": ["+48600100200"] },
+    { "name": "full_name", "values": ["Jan Nowak"] },
+    { "name": "company_name", "values": ["Nowak Development"] },
+    { "name": "job_title", "values": ["Project manager"] },
+    { "name": "city", "values": ["Warszawa"] },
+    { "name": "budget", "values": ["500k-1M"] },
+    { "name": "consent_marketing", "values": ["I agree to marketing contact"] }
+  ]
+}
