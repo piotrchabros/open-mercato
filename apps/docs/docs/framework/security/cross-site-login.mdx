@@ -66,3 +66,26 @@ A sign-in form on a sibling subdomain (for example `www.example.com` posting to
 `APP_ALLOWED_ORIGINS` cannot re-enable a sign-in form hosted on a different site. The browser marks
 that request `Sec-Fetch-Site: cross-site`, which is always rejected. Sign in on the application's
 own origin, or call the API from a server.
+
+## Per-organization address
+
+Each organization may have its own address (Directory → Organizations → edit → "Organization
+address"). The field is editable only with the `directory.organizations.manage_app_url` feature,
+which superadmin has by default.
+
+- The address must be one of the allowed origins (`APP_URL`, `NEXT_PUBLIC_APP_URL` or an entry of
+  `APP_ALLOWED_ORIGINS`) and must be unique across organizations.
+- Organizations without an address use `APP_URL`.
+
+The organization's address is used for:
+
+- links in password reset and invitation emails;
+- links in message, notification, form and quote emails;
+- OAuth redirect URIs for communication channels (Gmail) and Meta Lead Ads.
+
+OAuth connections must be started from the organization's own address, and each organization's
+callback URL (for example `https://<org-host>/api/meta_lead_ads/oauth/callback`) must be registered
+with the provider. The Meta Lead Ads settings page shows the exact URL to register.
+
+Internal URLs (workflow `CALL_API`, portal, checkout) still use `APP_URL`. When
+`NOTIFICATIONS_APP_URL` is set, it still overrides notification links for all organizations.

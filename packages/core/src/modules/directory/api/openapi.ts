@@ -49,6 +49,7 @@ export const organizationNodeSchema: z.ZodType<unknown> = z.lazy(() =>
       childrenCount: z.number().int().nonnegative().optional(),
       descendantsCount: z.number().int().nonnegative().optional(),
       isActive: z.boolean().optional(),
+      appUrl: z.string().nullable().optional(),
       children: z.array(organizationNodeSchema).optional(),
     })
     .passthrough(),
@@ -62,6 +63,8 @@ export const organizationListResponseSchema = z.object({
   totalPages: z.number().int().min(1).optional(),
   error: z.string().optional(),
   isSuperAdmin: z.boolean().optional(),
+  canManageAppUrl: z.boolean().optional(),
+  appUrlOptions: z.array(z.string()).optional(),
 })
 
 export const organizationSwitcherNodeSchema: z.ZodType<unknown> = z.lazy(() =>

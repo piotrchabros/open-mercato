@@ -20,6 +20,7 @@ import { quoteSendSchema } from '../../../data/validators'
 import { sendEmail } from '@open-mercato/shared/lib/email/send'
 import { resolveStatusEntryIdByValue } from '../../../lib/statusHelpers'
 import { QuoteSentEmail } from '../../../emails/QuoteSentEmail'
+import { resolveOrganizationAppUrl } from '@open-mercato/shared/lib/url'
 import { createLogger } from '@open-mercato/shared/lib/logger'
 
 const logger = createLogger('sales')
@@ -154,7 +155,8 @@ export async function POST(req: Request) {
       tx.persist(quote)
     })
 
-    const appUrl = process.env.APP_URL || ''
+    const ownAppUrl = await resolveOrganizationAppUrl({ container: ctx.container, organizationId: quote.organizationId })
+    const appUrl = ownAppUrl ?? (process.env.APP_URL || '')
     const url = appUrl ? `${appUrl.replace(/\/$/, '')}/quote/${rawAcceptanceToken}` : `/quote/${rawAcceptanceToken}`
 
     const locale = await detectLocale()

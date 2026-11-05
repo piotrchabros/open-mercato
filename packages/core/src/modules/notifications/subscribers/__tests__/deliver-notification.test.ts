@@ -9,7 +9,7 @@ const findOneWithDecryptionMock = jest.fn()
 const loadDictionaryMock = jest.fn()
 const sendEmailMock = jest.fn()
 const resolveNotificationDeliveryConfigMock = jest.fn()
-const resolveNotificationPanelUrlMock = jest.fn()
+const resolveNotificationPanelUrlForOrganizationMock = jest.fn()
 const getNotificationDeliveryStrategiesMock = jest.fn()
 const resolveEffectiveChannelsMock = jest.fn()
 const getNotificationTypeMock = jest.fn()
@@ -38,7 +38,7 @@ jest.mock('@open-mercato/shared/lib/email/send', () => ({
 jest.mock('../../lib/deliveryConfig', () => ({
   DEFAULT_NOTIFICATION_DELIVERY_CONFIG: { strategies: { email: { enabled: false }, custom: {} } },
   resolveNotificationDeliveryConfig: (...args: unknown[]) => resolveNotificationDeliveryConfigMock(...args),
-  resolveNotificationPanelUrl: (...args: unknown[]) => resolveNotificationPanelUrlMock(...args),
+  resolveNotificationPanelUrlForOrganization: (...args: unknown[]) => resolveNotificationPanelUrlForOrganizationMock(...args),
 }))
 
 jest.mock('../../lib/deliveryStrategies', () => ({
@@ -101,7 +101,7 @@ describe('deliver-notification subscriber', () => {
     resolveNotificationDeliveryConfigMock.mockResolvedValue({
       strategies: { email: { enabled: false }, custom: {} },
     })
-    resolveNotificationPanelUrlMock.mockReturnValue(null)
+    resolveNotificationPanelUrlForOrganizationMock.mockReturnValue(null)
     getNotificationDeliveryStrategiesMock.mockReturnValue([])
     // Default: a null-channels row recomputes to every registered channel (no opt-out), preserving
     // pre-Phase-7 "deliver everywhere" behavior. Opt-out tests override this.
@@ -155,12 +155,16 @@ describe('deliver-notification subscriber', () => {
         custom: {},
       },
     })
-    resolveNotificationPanelUrlMock.mockReturnValue('https://app.example.com/notifications')
+    resolveNotificationPanelUrlForOrganizationMock.mockReturnValue('https://app.example.com/notifications')
     getNotificationDeliveryStrategiesMock.mockReturnValue([emailDeliveryStrategy])
     sendEmailMock.mockRejectedValue(new Error('SMTP connection refused'))
 
     await expect(handle(basePayload, buildCtx() as never)).resolves.toBeUndefined()
     expect(sendEmailMock).toHaveBeenCalledTimes(1)
+    expect(resolveNotificationPanelUrlForOrganizationMock).toHaveBeenCalledWith(
+      expect.anything(),
+      { container: expect.anything(), organizationId: 'org-1' },
+    )
   })
 
   describe('null channels snapshot (legacy / pre-bootstrap rows)', () => {

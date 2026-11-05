@@ -1,6 +1,8 @@
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { enforceCommandOptimisticLockWithGuards } from '@open-mercato/shared/lib/crud/optimistic-lock-command'
 import type { ActionLogService } from '@open-mercato/core/modules/audit_logs/services/actionLogService'
+import { resolveOAuthRedirectUriForOrganization } from '@open-mercato/core/modules/integrations/lib/oauth/redirect'
+import { OAUTH_CALLBACK_PATH } from '../../lib/constants'
 import { settingsSchema } from '../../data/validators'
 import { getOrgSettings, ensureSettingsRow } from '../../lib/settings'
 import { serializeSettings } from '../../lib/serializers'
@@ -11,6 +13,7 @@ import {
   resolveRouteContext,
   runGuards,
   tryResolve,
+  type RouteContext,
 } from '../../lib/http'
 import { errorBodySchema, optimisticLockConflictSchema, settingsDtoSchema, type SettingsDto } from '../openapi'
 
@@ -19,6 +22,18 @@ const SETTINGS_RESOURCE_KIND = 'meta_lead_ads.meta_settings'
 export const metadata = {
   GET: { requireAuth: true, requireFeatures: ['meta_lead_ads.view_logs'] },
   PUT: { requireAuth: true, requireFeatures: ['meta_lead_ads.manage'] },
+}
+
+async function resolveCallbackUri(ctx: RouteContext): Promise<string | null> {
+  try {
+    const { redirectUri } = await resolveOAuthRedirectUriForOrganization(undefined, OAUTH_CALLBACK_PATH, {
+      container: ctx.container,
+      organizationId: ctx.organizationId,
+    })
+    return redirectUri
+  } catch {
+    return null
+  }
 }
 
 export async function GET(req: Request) {
@@ -31,6 +46,7 @@ export async function GET(req: Request) {
       retentionDays: settings.retentionDays,
       defaultCountry: settings.defaultCountry,
       updatedAt: settings.updatedAt ? settings.updatedAt.toISOString() : null,
+      oauthRedirectUri: await resolveCallbackUri(ctx),
     }
     return jsonResponse(body)
   } catch (err) {
@@ -95,7 +111,7 @@ export const openApi: OpenApiRouteDoc = {
   methods: {
     GET: {
       summary: 'Get Meta Lead Ads settings',
-      description: 'Returns the retention and default country settings of the active organization. Defaults are returned with a null id when no row exists.',
+      description: 'Returns the retention and default country settings of the active organization, plus the OAuth redirect URI to register in the Meta app. Defaults are returned with a null id when no row exists.',
       responses: [{ status: 200, description: 'Settings', schema: settingsDtoSchema }],
       errors: [
         { status: 400, description: 'Organization scope required', schema: errorBodySchema },

@@ -28,6 +28,7 @@ type OrganizationResponse = {
     id: string
     name: string
     slug?: string | null
+    appUrl?: string | null
     tenantId: string
     tenantName?: string | null
     parentId: string | null
@@ -39,6 +40,8 @@ type OrganizationResponse = {
     updatedAt?: string | null
     updated_at?: string | null
   } & Record<string, unknown>>
+  canManageAppUrl?: boolean
+  appUrlOptions?: string[]
 }
 
 const TREE_STEP = 16
@@ -59,6 +62,8 @@ export default function EditOrganizationPage({ params }: { params?: { id?: strin
   const [childSummary, setChildSummary] = React.useState<OrganizationTreeOption[]>([])
   const [originalChildIds, setOriginalChildIds] = React.useState<string[]>([])
   const [actorIsSuperAdmin, setActorIsSuperAdmin] = React.useState(false)
+  const [canManageAppUrl, setCanManageAppUrl] = React.useState(false)
+  const [appUrlOptions, setAppUrlOptions] = React.useState<string[]>([])
   const skipTenantEffectRef = React.useRef(true)
 
   React.useEffect(() => {
@@ -131,6 +136,8 @@ export default function EditOrganizationPage({ params }: { params?: { id?: strin
           if (!cancelled) setIsNotFound(true)
           return
         }
+        setCanManageAppUrl(result?.canManageAppUrl === true)
+        setAppUrlOptions(Array.isArray(result?.appUrlOptions) ? result.appUrlOptions : [])
         const resolvedTenantId = record.tenantId || null
         setTenantId(resolvedTenantId)
         setTenantName(record.tenantName ?? null)
@@ -148,6 +155,7 @@ export default function EditOrganizationPage({ params }: { params?: { id?: strin
           id: record.id,
           name: record.name,
           slug: record.slug ?? '',
+          appUrl: record.appUrl ?? '',
           parentId: record.parentId || '',
           isActive: record.isActive,
           tenantId: resolvedTenantId,
@@ -194,6 +202,8 @@ export default function EditOrganizationPage({ params }: { params?: { id?: strin
     setOriginalChildIds([])
   }, [actorIsSuperAdmin, loadParentTree, orgId, tenantId])
 
+  const currentAppUrl = typeof initialValues?.appUrl === 'string' ? initialValues.appUrl : ''
+
   const fields = React.useMemo<CrudField[]>(() => [
     ...(actorIsSuperAdmin ? [
       {
@@ -217,6 +227,31 @@ export default function EditOrganizationPage({ params }: { params?: { id?: strin
       type: 'text',
       description: t('directory.organizations.form.field.slug.description', 'URL-safe identifier used for the customer portal (lowercase letters, numbers, hyphens, underscores).'),
     },
+    canManageAppUrl
+      ? {
+        id: 'appUrl',
+        label: t('directory.organizations.form.field.appUrl', 'Organization address'),
+        type: 'select',
+        options: [
+          { value: '', label: t('directory.organizations.form.field.appUrl.default', 'Use installation default') },
+          ...(currentAppUrl && !appUrlOptions.includes(currentAppUrl) ? [currentAppUrl] : []).concat(appUrlOptions)
+            .map((origin) => ({ value: origin, label: origin })),
+        ],
+        description: t('directory.organizations.form.field.appUrl.description', 'Email links and service connections for this organization use this address.'),
+      } as CrudField
+      : {
+        id: 'appUrl',
+        label: t('directory.organizations.form.field.appUrl', 'Organization address'),
+        type: 'custom',
+        component: () => (
+          <div>
+            <p className="text-sm">{currentAppUrl || t('directory.organizations.form.field.appUrl.default', 'Use installation default')}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {t('directory.organizations.form.field.appUrl.description', 'Email links and service connections for this organization use this address.')}
+            </p>
+          </div>
+        ),
+      } as CrudField,
     {
       id: 'parentId',
       label: t('directory.organizations.form.field.parent', 'Parent'),
@@ -256,12 +291,12 @@ export default function EditOrganizationPage({ params }: { params?: { id?: strin
       },
     },
     { id: 'isActive', label: t('directory.organizations.form.field.isActive', 'Active'), type: 'checkbox' },
-  ], [actorIsSuperAdmin, childSummary, parentTree, t, tenantId, tenantName])
+  ], [actorIsSuperAdmin, appUrlOptions, canManageAppUrl, childSummary, currentAppUrl, parentTree, t, tenantId, tenantName])
 
   const detailFields = React.useMemo(() => (
     actorIsSuperAdmin
-      ? ['tenantId', 'name', 'slug', 'parentId', 'childrenInfo', 'isActive']
-      : ['name', 'slug', 'parentId', 'childrenInfo', 'isActive']
+      ? ['tenantId', 'name', 'slug', 'appUrl', 'parentId', 'childrenInfo', 'isActive']
+      : ['name', 'slug', 'appUrl', 'parentId', 'childrenInfo', 'isActive']
   ), [actorIsSuperAdmin])
 
   const groups: CrudFormGroup[] = React.useMemo(() => ([
@@ -348,6 +383,7 @@ export default function EditOrganizationPage({ params }: { params?: { id?: strin
               orgId: orgId ?? '',
               tenantId,
               originalChildIds,
+              includeAppUrl: canManageAppUrl,
               messages: {
                 orgIdRequired: t('directory.organizations.errors.orgIdRequired', 'Organization identifier is required'),
               },
@@ -369,6 +405,7 @@ type UpdateOrganizationPayload = {
   id: string
   name: string
   slug?: string | null
+  appUrl?: string | null
   isActive: boolean
   parentId: string | null
   childIds: string[]
@@ -387,6 +424,7 @@ export async function submitUpdateOrganization(options: {
   orgId: string
   tenantId: string | null
   originalChildIds: string[]
+  includeAppUrl?: boolean
   updateOrganization?: UpdateOrganizationRequest
   messages?: {
     orgIdRequired?: string
@@ -397,6 +435,7 @@ export async function submitUpdateOrganization(options: {
     orgId,
     tenantId,
     originalChildIds,
+    includeAppUrl = false,
     updateOrganization = defaultUpdateOrganizationRequest,
     messages,
   } = options
@@ -428,6 +467,11 @@ export async function submitUpdateOrganization(options: {
   if (typeof values.slug === 'string') {
     const trimmedSlug = values.slug.trim()
     payload.slug = trimmedSlug.length ? trimmedSlug : null
+  }
+
+  if (includeAppUrl) {
+    const trimmedAppUrl = typeof values.appUrl === 'string' ? values.appUrl.trim() : ''
+    payload.appUrl = trimmedAppUrl.length ? trimmedAppUrl : null
   }
 
   if (submittedTenantId !== undefined && submittedTenantId !== null) {

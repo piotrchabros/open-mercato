@@ -321,3 +321,86 @@ export function mapSecurityEmailUrlError(
   }
   return null
 }
+
+export const ORGANIZATION_APP_URL_RESOLVER_DI_KEY = 'organizationAppUrlResolver'
+
+export type OrganizationAppUrlResolver = {
+  resolveOwn(organizationId: string | null | undefined): Promise<string | null>
+  resolve(organizationId: string | null | undefined): Promise<string>
+  invalidate(organizationId: string): Promise<void>
+}
+
+export type AppUrlScope = {
+  container?: { resolve(name: string): unknown } | null
+  organizationId?: string | null
+}
+
+type AppUrlResolutionScope = AppUrlScope & { req?: RequestInput; env?: EnvLike }
+
+export function normalizeAppOrigin(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const value = raw.trim()
+  if (!value) return null
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+  if (url.username || url.password) return null
+  if (url.pathname !== '/' && url.pathname !== '') return null
+  if (url.search || url.hash) return null
+  return url.origin
+}
+
+export function isAllowedAppOrigin(origin: string, env: EnvLike = process.env): boolean {
+  const allowedOrigins = readAllowedOrigins(env)
+  return allowedOrigins.has(origin) || shouldAllowLoopbackOrigin(origin, allowedOrigins, env)
+}
+
+export function readAllowedRequestOrigin(req: Request, env: EnvLike = process.env): string | null {
+  let parsedUrl: URL
+  try {
+    parsedUrl = new URL(req.url)
+  } catch {
+    return null
+  }
+  const forwardedProto = readFirstHeaderValue(req.headers.get('x-forwarded-proto')) ?? parsedUrl.protocol.replace(/:$/, '')
+  const protocol = forwardedProto.endsWith(':') ? forwardedProto : `${forwardedProto}:`
+  const candidate =
+    originFromHost(protocol, req.headers.get('x-forwarded-host')) ??
+    originFromHost(protocol, req.headers.get('host')) ??
+    normalizeOrigin(parsedUrl.origin)
+  if (!candidate) return null
+  return isAllowedAppOrigin(candidate, env) ? candidate : null
+}
+
+export async function resolveOrganizationAppUrl(scope: AppUrlScope): Promise<string | null> {
+  if (!scope.container || !scope.organizationId) return null
+  let resolver: unknown
+  try {
+    resolver = scope.container.resolve(ORGANIZATION_APP_URL_RESOLVER_DI_KEY)
+  } catch {
+    return null
+  }
+  if (!resolver || typeof resolver !== 'object') return null
+  const resolveOwn = (resolver as Partial<OrganizationAppUrlResolver>).resolveOwn
+  if (typeof resolveOwn !== 'function') return null
+  try {
+    const own = await resolveOwn.call(resolver, scope.organizationId)
+    return typeof own === 'string' && own.length > 0 ? own : null
+  } catch {
+    return null
+  }
+}
+
+export async function resolveAppBaseUrl(scope: AppUrlResolutionScope): Promise<string> {
+  const fallback = getSecurityEmailBaseUrl(scope.req, scope.env ?? process.env)
+  return (await resolveOrganizationAppUrl(scope)) ?? fallback
+}
+
+export async function toAppUrl(scope: AppUrlResolutionScope, path: string): Promise<string> {
+  const base = await resolveAppBaseUrl(scope)
+  return `${base}/${path.replace(/^\/+/, '')}`
+}

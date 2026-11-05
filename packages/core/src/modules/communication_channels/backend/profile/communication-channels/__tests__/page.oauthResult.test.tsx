@@ -100,6 +100,16 @@ describe('profile communication channels — OAuth connect result', () => {
     })
   })
 
+  it('shows the organization-address hint for an ?oauth=error&code=origin_mismatch result', async () => {
+    await mountPageAt('oauth=error&code=origin_mismatch&provider=gmail')
+
+    expect(flashMock).toHaveBeenCalledTimes(1)
+    expect(flashMock).toHaveBeenCalledWith(
+      "Connect from your organization's address to finish the connection.",
+      'error',
+    )
+  })
+
   // A link from another site can set ?code= and ?provider= freely, and the
   // toast is not covered by the ?flash= referrer check, so neither value may
   // reach the toast text verbatim (QA S1 on #6521, #7103).

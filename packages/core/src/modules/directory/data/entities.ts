@@ -46,6 +46,9 @@ export class Organization {
   @Property({ name: 'logo_preserve_aspect_ratio', type: 'boolean', default: false })
   logoPreserveAspectRatio: boolean = false
 
+  @Property({ name: 'app_url', type: 'text', nullable: true })
+  appUrl?: string | null
+
   @Property({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean = true
 

@@ -52,7 +52,7 @@ import { emitAuthEvent } from '@open-mercato/core/modules/auth/events'
 import { sendEmail } from '@open-mercato/shared/lib/email/send'
 import InviteUserEmail from '@open-mercato/core/modules/auth/emails/InviteUserEmail'
 import { INVITE_TOKEN_TTL_MS } from '@open-mercato/core/modules/auth/lib/inviteToken'
-import { getSecurityEmailBaseUrl } from '@open-mercato/shared/lib/url'
+import { getSecurityEmailBaseUrl, resolveOrganizationAppUrl } from '@open-mercato/shared/lib/url'
 import { generateAuthToken, hashAuthToken } from '@open-mercato/core/modules/auth/lib/tokenHash'
 import { normalizeDisplayNameInput } from '@open-mercato/core/modules/auth/lib/displayName'
 import { createLogger } from '@open-mercato/shared/lib/logger'
@@ -377,7 +377,7 @@ const createUserCommand: CommandHandler<Record<string, unknown>, CreateUserResul
 
     let inviteEmailSent = false
     if (parsed.sendInviteEmail) {
-      const inviteResult = await sendInviteToUser(em, user)
+      const inviteResult = await sendInviteToUser(em, user, ctx.container)
       inviteEmailSent = inviteResult.emailSent
     }
 
@@ -624,6 +624,7 @@ const createUserCommand: CommandHandler<Record<string, unknown>, CreateUserResul
 async function sendInviteToUser(
   em: EntityManager,
   user: User,
+  container: { resolve(name: string): unknown },
 ): Promise<{ emailSent: boolean }> {
   const rawToken = generateAuthToken()
   const tokenHash = hashAuthToken(rawToken)
@@ -631,7 +632,11 @@ async function sendInviteToUser(
   const row = em.create(PasswordReset, { user, token: tokenHash, expiresAt, createdAt: new Date() })
   await em.persist(row).flush()
 
-  const base = getSecurityEmailBaseUrl()
+  const base =
+    (await resolveOrganizationAppUrl({
+      container,
+      organizationId: user.organizationId ? String(user.organizationId) : null,
+    })) ?? getSecurityEmailBaseUrl()
   const inviteUrl = `${base}/reset/${rawToken}`
 
   const { translate } = await resolveTranslations()

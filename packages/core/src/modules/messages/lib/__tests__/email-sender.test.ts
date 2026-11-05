@@ -119,6 +119,52 @@ describe('messages email sender', () => {
     )
   })
 
+  const recipientParams = (extra: Record<string, unknown> = {}) => ({
+    em: createEm() as never,
+    message: { ...(baseMessage as object), organizationId: 'org-1' } as never,
+    recipientUserId: 'user-2',
+    recipientEmail: 'user2@example.com',
+    sender: { name: 'Alice', email: 'alice@example.com' },
+    objects: [],
+    attachments: [],
+    ...extra,
+  })
+
+  it('prefers the organization app url when the container resolves one', async () => {
+    const resolveOwn = jest.fn(async () => 'https://org.example.com')
+    const container = { resolve: jest.fn(() => ({ resolveOwn })) }
+
+    await sendMessageEmailToRecipient(recipientParams({ container }))
+
+    expect(resolveOwn).toHaveBeenCalledWith('org-1')
+    expect(messageEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        viewUrl: expect.stringMatching(/^https:\/\/org\.example\.com\/messages\/view\//),
+      }),
+    )
+  })
+
+  it('falls back to APP_URL when the organization has no own url', async () => {
+    const container = { resolve: jest.fn(() => ({ resolveOwn: async () => null })) }
+
+    await sendMessageEmailToRecipient(recipientParams({ container }))
+
+    expect(messageEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        viewUrl: expect.stringMatching(/^https:\/\/mercato\.test\/messages\/view\//),
+      }),
+    )
+  })
+
+  it('omits the link when APP_URL is missing', async () => {
+    delete process.env.APP_URL
+    const container = { resolve: jest.fn(() => ({ resolveOwn: async () => 'https://org.example.com' })) }
+
+    await sendMessageEmailToRecipient(recipientParams({ container }))
+
+    expect(messageEmailMock).toHaveBeenCalledWith(expect.objectContaining({ viewUrl: null }))
+  })
+
   it('sends external email without view url', async () => {
     await sendMessageEmailToExternal({
       message: baseMessage,

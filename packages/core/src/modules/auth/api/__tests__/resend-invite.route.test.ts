@@ -21,9 +21,12 @@ const mockEm: any = {
 }
 mockPersist.mockImplementation(function persist(this: any) { return mockEm })
 
+const mockResolveOwn = jest.fn()
+
 const mockContainer = {
   resolve: jest.fn((token: string) => {
     if (token === 'em') return mockEm
+    if (token === 'organizationAppUrlResolver') return { resolveOwn: mockResolveOwn }
     if (token === 'rbacService') return { loadAcl: mockLoadAcl }
     return null
   }),
@@ -145,6 +148,7 @@ describe('POST /api/auth/users/resend-invite', () => {
     mockFlush.mockResolvedValue(undefined)
     mockNativeUpdate.mockResolvedValue(undefined)
     mockSendEmail.mockResolvedValue(undefined)
+    mockResolveOwn.mockResolvedValue(null)
   })
 
   afterAll(() => {
@@ -337,5 +341,24 @@ describe('POST /api/auth/users/resend-invite', () => {
     expect(mockNativeUpdate).toHaveBeenCalledTimes(1)
     expect(mockFlush).toHaveBeenCalledTimes(1)
     expect(mockSendEmail).toHaveBeenCalledTimes(1)
+  })
+
+  test('builds the invite link from the organization app address when set', async () => {
+    mockResolveOwn.mockResolvedValueOnce('https://crm.acme.example')
+
+    const res = await POST(makeRequest({ id: userId }))
+
+    expect(res.status).toBe(200)
+    expect(mockResolveOwn).toHaveBeenCalledWith(orgId)
+    const InviteUserEmail = jest.requireMock('@open-mercato/core/modules/auth/emails/InviteUserEmail').default
+    expect(InviteUserEmail.mock.calls[0][0].inviteUrl).toMatch(/^https:\/\/crm\.acme\.example\/reset\/.+/)
+  })
+
+  test('falls back to the default base url when the organization has no address', async () => {
+    const res = await POST(makeRequest({ id: userId }))
+
+    expect(res.status).toBe(200)
+    const InviteUserEmail = jest.requireMock('@open-mercato/core/modules/auth/emails/InviteUserEmail').default
+    expect(InviteUserEmail.mock.calls[0][0].inviteUrl).toMatch(/^http:\/\/localhost:3000\/reset\/.+/)
   })
 })

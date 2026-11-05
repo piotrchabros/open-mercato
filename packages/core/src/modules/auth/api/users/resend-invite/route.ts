@@ -13,7 +13,7 @@ import { readEndpointRateLimitConfig } from '@open-mercato/shared/lib/ratelimit/
 import { checkAuthRateLimit } from '@open-mercato/core/modules/auth/lib/rateLimitCheck'
 import { validateCrudMutationGuard, runCrudMutationGuardAfterSuccess } from '@open-mercato/shared/lib/crud/mutation-guard'
 import { INVITE_TOKEN_TTL_MS } from '@open-mercato/core/modules/auth/lib/inviteToken'
-import { getSecurityEmailBaseUrl, mapSecurityEmailUrlError } from '@open-mercato/shared/lib/url'
+import { getSecurityEmailBaseUrl, mapSecurityEmailUrlError, resolveOrganizationAppUrl } from '@open-mercato/shared/lib/url'
 import { generateAuthToken, hashAuthToken } from '@open-mercato/core/modules/auth/lib/tokenHash'
 import { assertActorCanAccessUserTarget } from '@open-mercato/core/modules/auth/lib/grantChecks'
 import type { RbacService } from '@open-mercato/core/modules/auth/services/rbacService'
@@ -148,6 +148,10 @@ export async function POST(req: Request) {
     if (mapped) return NextResponse.json(mapped.body, { status: mapped.status })
     throw error
   }
+  base = (await resolveOrganizationAppUrl({
+    container,
+    organizationId: user.organizationId ? String(user.organizationId) : null,
+  })) ?? base
 
   await em.nativeUpdate(
     PasswordReset,

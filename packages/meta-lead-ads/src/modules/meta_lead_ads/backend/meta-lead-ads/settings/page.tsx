@@ -8,6 +8,8 @@ import { readApiResultOrThrow } from '@open-mercato/ui/backend/utils/apiCall'
 import { updateCrud } from '@open-mercato/ui/backend/utils/crud'
 import { LoadingMessage, ErrorMessage } from '@open-mercato/ui/backend/detail'
 import { flash } from '@open-mercato/ui/backend/FlashMessages'
+import { Button } from '@open-mercato/ui/primitives/button'
+import { Label } from '@open-mercato/ui/primitives/label'
 import { useBackendChrome } from '@open-mercato/ui/backend/BackendChromeProvider'
 import { useOrganizationScopeVersion } from '@open-mercato/shared/lib/frontend/useOrganizationScope'
 import { useT } from '@open-mercato/shared/lib/i18n/context'
@@ -77,6 +79,14 @@ export default function MetaLeadAdsSettingsPage() {
     [canManage, t],
   )
 
+  const oauthRedirectUri = settings?.oauthRedirectUri ?? null
+
+  const handleCopyRedirectUri = React.useCallback(async () => {
+    if (!oauthRedirectUri) return
+    await navigator.clipboard.writeText(oauthRedirectUri)
+    flash(t('meta_lead_ads.settings.oauthRedirectUri.copied', 'Redirect URI copied.'), 'success')
+  }, [oauthRedirectUri, t])
+
   const initialValues = React.useMemo<Partial<SettingsFormValues> | undefined>(
     () =>
       settings
@@ -112,18 +122,37 @@ export default function MetaLeadAdsSettingsPage() {
         ) : failed || !initialValues ? (
           <ErrorMessage label={t('meta_lead_ads.settings.loadError', 'Failed to load settings.')} />
         ) : (
-          <CrudForm<SettingsFormValues>
-            key={settings?.updatedAt ?? 'new'}
-            title={t('meta_lead_ads.settings.title', 'Meta Lead Ads settings')}
-            backHref="/backend/meta-lead-ads"
-            fields={fields}
-            initialValues={initialValues}
-            schema={settingsFormSchema}
-            readOnly={!canManage}
-            hideFooterActions={!canManage}
-            submitLabel={t('meta_lead_ads.settings.save', 'Save')}
-            onSubmit={handleSubmit}
-          />
+          <div className="space-y-4">
+            {oauthRedirectUri ? (
+              <section className="space-y-2 rounded-lg border bg-card p-4">
+                <Label>{t('meta_lead_ads.settings.oauthRedirectUri.label', 'OAuth redirect URI')}</Label>
+                <p className="text-sm text-muted-foreground">
+                  {t(
+                    'meta_lead_ads.settings.oauthRedirectUri.description',
+                    'Add this address to Valid OAuth Redirect URIs in your Meta app settings.',
+                  )}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <code className="break-all font-mono text-sm text-foreground">{oauthRedirectUri}</code>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void handleCopyRedirectUri()}>
+                    {t('meta_lead_ads.settings.oauthRedirectUri.copy', 'Copy')}
+                  </Button>
+                </div>
+              </section>
+            ) : null}
+            <CrudForm<SettingsFormValues>
+              key={settings?.updatedAt ?? 'new'}
+              title={t('meta_lead_ads.settings.title', 'Meta Lead Ads settings')}
+              backHref="/backend/meta-lead-ads"
+              fields={fields}
+              initialValues={initialValues}
+              schema={settingsFormSchema}
+              readOnly={!canManage}
+              hideFooterActions={!canManage}
+              submitLabel={t('meta_lead_ads.settings.save', 'Save')}
+              onSubmit={handleSubmit}
+            />
+          </div>
         )}
       </PageBody>
     </Page>

@@ -3,6 +3,7 @@ import { registerCommand } from '@open-mercato/shared/lib/commands'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { CommandHandler } from '@open-mercato/shared/lib/commands'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
+import { resolveOrganizationAppUrl, type AppUrlScope } from '@open-mercato/shared/lib/url'
 import { findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { FormDistribution, FormInvitation } from '../data/entities'
 import {
@@ -70,10 +71,11 @@ function resolveAppUrl(): string | null {
   return raw.replace(/\/$/, '')
 }
 
-function buildPersonalLink(rawToken: string): string | null {
+async function buildPersonalLink(rawToken: string, scope: AppUrlScope): Promise<string | null> {
   const base = resolveAppUrl()
   if (!base) return null
-  return `${base}/i/${rawToken}`
+  const ownBase = await resolveOrganizationAppUrl(scope)
+  return `${ownBase ?? base}/i/${rawToken}`
 }
 
 async function findDistributionInScope(
@@ -191,7 +193,10 @@ const createInvitationCommand: CommandHandler<FormInvitationCreateCommandInput, 
     for (const entry of created) {
       const email = entry.invitation.recipientEmail?.trim()
       if (!email || !entry.rawToken) continue
-      const link = buildPersonalLink(entry.rawToken)
+      const link = await buildPersonalLink(entry.rawToken, {
+        container: ctx.container,
+        organizationId: parsed.organizationId,
+      })
       const delivered = await enqueueInvitationEmail({
         em,
         invitation: entry.invitation,

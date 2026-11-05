@@ -33,6 +33,8 @@ import { isCrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import { findWithDecryption, findOneWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { parseCommaSeparatedList } from '@open-mercato/shared/lib/string'
+import { readConfiguredAppOrigins } from '@open-mercato/shared/lib/url'
+import { canManageOrganizationAppUrl } from '@open-mercato/core/modules/directory/lib/organizationAppUrl'
 
 type CrudInput = Record<string, unknown>
 const rawBodySchema = z.object({}).passthrough()
@@ -359,11 +361,13 @@ export async function GET(req: Request) {
     const slugByOrgId = new Map<string, string | null>()
     const updatedAtByOrgId = new Map<string, string | null>()
     const logoUrlByOrgId = new Map<string, string | null>()
+    const appUrlByOrgId = new Map<string, string | null>()
     const logoPreserveAspectRatioByOrgId = new Map<string, boolean>()
     for (const org of allOrgs) {
       slugByOrgId.set(String(org.id), org.slug ?? null)
       updatedAtByOrgId.set(String(org.id), org.updatedAt instanceof Date ? org.updatedAt.toISOString() : null)
       logoUrlByOrgId.set(String(org.id), org.logoUrl ?? null)
+      appUrlByOrgId.set(String(org.id), org.appUrl ?? null)
       logoPreserveAspectRatioByOrgId.set(String(org.id), !!org.logoPreserveAspectRatio)
     }
 
@@ -450,6 +454,7 @@ export async function GET(req: Request) {
         slug: slugByOrgId.get(recordId) ?? null,
         updatedAt: updatedAtByOrgId.get(recordId) ?? null,
         logoUrl: logoUrlByOrgId.get(recordId) ?? null,
+        appUrl: appUrlByOrgId.get(recordId) ?? null,
         logoPreserveAspectRatio: logoPreserveAspectRatioByOrgId.get(recordId) ?? false,
         tenantId: tid,
         tenantName: tenantNameMap[tid] ?? tid,
@@ -481,7 +486,9 @@ export async function GET(req: Request) {
       query,
       accessType: ids && ids.length === 1 ? 'read:item' : undefined,
     })
-    return NextResponse.json({ items, total, page, pageSize, totalPages, isSuperAdmin })
+    const canManageAppUrl = await canManageOrganizationAppUrl({ container, auth })
+    const appUrlOptions = canManageAppUrl ? readConfiguredAppOrigins() : []
+    return NextResponse.json({ items, total, page, pageSize, totalPages, isSuperAdmin, canManageAppUrl, appUrlOptions })
   }
 
   if (!tenantId) {
@@ -493,11 +500,13 @@ export async function GET(req: Request) {
   const hierarchy = computeHierarchyForOrganizations(orgs, tenantId)
   const slugByOrgId = new Map<string, string | null>()
   const logoUrlByOrgId = new Map<string, string | null>()
+  const appUrlByOrgId = new Map<string, string | null>()
   const logoPreserveAspectRatioByOrgId = new Map<string, boolean>()
   const updatedAtByOrgId = new Map<string, string | null>()
   for (const org of orgs) {
     slugByOrgId.set(String(org.id), org.slug ?? null)
     logoUrlByOrgId.set(String(org.id), org.logoUrl ?? null)
+    appUrlByOrgId.set(String(org.id), org.appUrl ?? null)
     logoPreserveAspectRatioByOrgId.set(String(org.id), !!org.logoPreserveAspectRatio)
     updatedAtByOrgId.set(String(org.id), org.updatedAt instanceof Date ? org.updatedAt.toISOString() : null)
   }
@@ -563,6 +572,7 @@ export async function GET(req: Request) {
       name: node.name,
       slug: slugByOrgId.get(recordId) ?? null,
       logoUrl: logoUrlByOrgId.get(recordId) ?? null,
+      appUrl: appUrlByOrgId.get(recordId) ?? null,
       logoPreserveAspectRatio: logoPreserveAspectRatioByOrgId.get(recordId) ?? false,
       updatedAt: updatedAtByOrgId.get(recordId) ?? null,
       tenantId: node.tenantId,
@@ -595,7 +605,9 @@ export async function GET(req: Request) {
     query,
     accessType: ids && ids.length === 1 ? 'read:item' : undefined,
   })
-  return NextResponse.json({ items, total, page, pageSize, totalPages, isSuperAdmin })
+  const canManageAppUrl = await canManageOrganizationAppUrl({ container, auth })
+  const appUrlOptions = canManageAppUrl ? readConfiguredAppOrigins() : []
+  return NextResponse.json({ items, total, page, pageSize, totalPages, isSuperAdmin, canManageAppUrl, appUrlOptions })
 }
 
 export const POST = crud.POST
@@ -658,7 +670,9 @@ const organizationsPutDoc: OpenApiMethodDoc = {
   errors: [
     { status: 400, description: 'Validation failed', schema: directoryErrorSchema },
     { status: 401, description: 'Authentication required', schema: directoryErrorSchema },
-    { status: 403, description: 'Missing directory.organizations.manage feature', schema: directoryErrorSchema },
+    { status: 403, description: 'Missing directory.organizations.manage feature, or directory.organizations.manage_app_url when changing appUrl', schema: directoryErrorSchema },
+    { status: 409, description: 'Another organization already uses this appUrl, or the record was changed concurrently', schema: directoryErrorSchema },
+    { status: 422, description: 'appUrl is not one of the configured app origins', schema: directoryErrorSchema },
   ],
 }
 

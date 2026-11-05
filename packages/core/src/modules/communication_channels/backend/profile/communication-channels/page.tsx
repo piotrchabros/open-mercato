@@ -130,7 +130,12 @@ export default function ProfileCommunicationChannelsPage() {
                     'communication_channels.profile.flash.stateStoreUnavailable',
                     'A server error prevented completing the connection. Please try again in a moment.',
                   )
-                : t('communication_channels.profile.flash.error', 'Failed to connect channel.'),
+                : flashCode === 'origin_mismatch'
+                  ? t(
+                      'communication_channels.profile.flash.originMismatch',
+                      "Connect from your organization's address to finish the connection.",
+                    )
+                  : t('communication_channels.profile.flash.error', 'Failed to connect channel.'),
         'error',
       )
     } else {

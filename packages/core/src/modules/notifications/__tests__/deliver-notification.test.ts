@@ -5,7 +5,7 @@ import type { NotificationDeliveryStrategy } from '../lib/deliveryStrategies'
 const sendEmail = jest.fn()
 const getNotificationDeliveryStrategies = jest.fn()
 const resolveNotificationDeliveryConfig = jest.fn()
-const resolveNotificationPanelUrl = jest.fn()
+const resolveNotificationPanelUrlForOrganization = jest.fn()
 const findOneWithDecryption = jest.fn()
 const NotificationEmail = jest.fn(() => 'notification-email')
 const resolveEffectiveChannels = jest.fn()
@@ -50,7 +50,7 @@ jest.mock('../lib/deliveryConfig', () => ({
     },
   },
   resolveNotificationDeliveryConfig: (...args: unknown[]) => resolveNotificationDeliveryConfig(...args),
-  resolveNotificationPanelUrl: (...args: unknown[]) => resolveNotificationPanelUrl(...args),
+  resolveNotificationPanelUrlForOrganization: (...args: unknown[]) => resolveNotificationPanelUrlForOrganization(...args),
 }))
 
 jest.mock('@open-mercato/shared/lib/i18n/server', () => ({
@@ -135,7 +135,7 @@ describe('deliver notification subscriber', () => {
 
   it('sends email notifications when enabled', async () => {
     resolveNotificationDeliveryConfig.mockResolvedValue(baseConfig)
-    resolveNotificationPanelUrl.mockReturnValue('https://app.example.com/backend/notifications')
+    resolveNotificationPanelUrlForOrganization.mockReturnValue('https://app.example.com/backend/notifications')
     getNotificationDeliveryStrategies.mockReturnValue([emailDeliveryStrategy])
     findOneWithDecryption
       .mockResolvedValueOnce(notification)
@@ -191,7 +191,7 @@ describe('deliver notification subscriber', () => {
         },
       },
     })
-    resolveNotificationPanelUrl.mockReturnValue('https://app.example.com/backend/notifications')
+    resolveNotificationPanelUrlForOrganization.mockReturnValue('https://app.example.com/backend/notifications')
     getNotificationDeliveryStrategies.mockReturnValue([customStrategy])
     findOneWithDecryption
       .mockResolvedValueOnce(notification)
@@ -237,7 +237,7 @@ describe('deliver notification subscriber', () => {
     } as Notification
 
     resolveNotificationDeliveryConfig.mockResolvedValue(baseConfig)
-    resolveNotificationPanelUrl.mockReturnValue('https://app.example.com/backend/notifications')
+    resolveNotificationPanelUrlForOrganization.mockReturnValue('https://app.example.com/backend/notifications')
     getNotificationDeliveryStrategies.mockReturnValue([emailDeliveryStrategy])
     findOneWithDecryption
       .mockResolvedValueOnce(notificationWithActionHref)
@@ -287,7 +287,7 @@ describe('deliver notification subscriber', () => {
     } as Notification
 
     resolveNotificationDeliveryConfig.mockResolvedValue(baseConfig)
-    resolveNotificationPanelUrl.mockReturnValue('https://app.example.com/backend/notifications')
+    resolveNotificationPanelUrlForOrganization.mockReturnValue('https://app.example.com/backend/notifications')
     getNotificationDeliveryStrategies.mockReturnValue([emailDeliveryStrategy])
     findOneWithDecryption
       .mockResolvedValueOnce(notificationWithUnsafeHref)
@@ -336,7 +336,7 @@ describe('deliver notification subscriber', () => {
     }
 
     resolveNotificationDeliveryConfig.mockResolvedValue(configWithoutAppUrl)
-    resolveNotificationPanelUrl.mockReturnValue(null)
+    resolveNotificationPanelUrlForOrganization.mockReturnValue(null)
     getNotificationDeliveryStrategies.mockReturnValue([emailDeliveryStrategy])
     findOneWithDecryption
       .mockResolvedValueOnce(notification)

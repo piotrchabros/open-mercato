@@ -2,9 +2,15 @@ import type { CommandHandler, CommandRuntimeContext } from '@open-mercato/shared
 import { registerCommand } from '@open-mercato/shared/lib/commands'
 import { CrudHttpError } from '@open-mercato/shared/lib/crud/errors'
 import type { EntityManager, FilterQuery } from '@mikro-orm/postgresql'
+import { UniqueConstraintViolationException } from '@mikro-orm/core'
 import type { DataEngine } from '@open-mercato/shared/lib/data/engine'
 import { Organization, Tenant } from '@open-mercato/core/modules/directory/data/entities'
-import { organizationCreateSchema, organizationUpdateSchema } from '@open-mercato/core/modules/directory/data/validators'
+import {
+  normalizeOrganizationAppUrl,
+  organizationCreateSchema,
+  organizationUpdateSchema,
+} from '@open-mercato/core/modules/directory/data/validators'
+import { canManageOrganizationAppUrl } from '@open-mercato/core/modules/directory/lib/organizationAppUrl'
 import {
   findOrganizationParentCycle,
   lockOrganizationHierarchyForTenant,
@@ -33,10 +39,11 @@ import {
   requireId,
   buildChanges,
 } from '@open-mercato/shared/lib/commands/helpers'
-import { findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
+import { findOneWithDecryption, findWithDecryption } from '@open-mercato/shared/lib/encryption/find'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { toOptionalString } from '@open-mercato/shared/lib/string/coerce'
 import { slugify } from '@open-mercato/shared/lib/slugify'
+import { ORGANIZATION_APP_URL_RESOLVER_DI_KEY, type OrganizationAppUrlResolver } from '@open-mercato/shared/lib/url'
 
 export const organizationCrudEvents: CrudEventsConfig = {
   module: 'directory',
@@ -208,6 +215,7 @@ function serializeOrganization(entity: Organization, custom?: Record<string, unk
     slug: entity.slug ?? null,
     logoUrl: entity.logoUrl ?? null,
     logoPreserveAspectRatio: !!entity.logoPreserveAspectRatio,
+    appUrl: entity.appUrl ?? null,
     isActive: !!entity.isActive,
     parentId: entity.parentId ?? null,
     ancestorIds: Array.isArray(entity.ancestorIds) ? [...entity.ancestorIds] : [],
@@ -296,6 +304,77 @@ async function restoreChildParents(em: EntityManager, tenantId: string, snapshot
 }
 
 const REPLAY_CYCLE_ERROR_KEY = 'directory.organizations.errors.replayCycle'
+
+const APP_URL_UNIQUE_CONSTRAINT = 'organizations_app_url_uniq'
+
+const APP_URL_ERRORS = {
+  invalid: {
+    key: 'directory.organizations.errors.appUrlInvalid',
+    fallback: 'Enter an address such as https://crm.example.com, without a path.',
+  },
+  notAllowed: {
+    key: 'directory.organizations.errors.appUrlNotAllowed',
+    fallback: 'This address is not served by this installation. Ask the operator to add it to the allowed origins.',
+  },
+  taken: {
+    key: 'directory.organizations.errors.appUrlTaken',
+    fallback: 'Another organization already uses this address.',
+  },
+  forbidden: {
+    key: 'directory.organizations.errors.appUrlForbidden',
+    fallback: 'Only a super administrator can change the organization address.',
+  },
+} as const
+
+type AppUrlErrorKind = keyof typeof APP_URL_ERRORS
+
+async function throwAppUrlError(status: number, kind: AppUrlErrorKind): Promise<never> {
+  const { key, fallback } = APP_URL_ERRORS[kind]
+  const { translate } = await resolveTranslations()
+  const message = translate(key, fallback)
+  if (kind === 'forbidden') throw new CrudHttpError(status, { error: message, code: key })
+  throw new CrudHttpError(status, { error: message, fieldErrors: { appUrl: message }, code: key })
+}
+
+async function resolveRequestedAppUrl(value: string | null | undefined): Promise<string | null | undefined> {
+  if (value === undefined) return undefined
+  const check = normalizeOrganizationAppUrl(value)
+  if (!check.ok) return throwAppUrlError(422, check.reason)
+  return check.value
+}
+
+async function assertOrganizationAppUrlAvailable(
+  em: EntityManager,
+  appUrl: string,
+  organizationId: string,
+): Promise<void> {
+  const conflict = await findOneWithDecryption(
+    em,
+    Organization,
+    { appUrl, deletedAt: null, id: { $ne: organizationId } } as FilterQuery<Organization>,
+    undefined,
+    { tenantId: null, organizationId: null },
+  )
+  if (conflict) await throwAppUrlError(409, 'taken')
+}
+
+function isAppUrlUniqueViolation(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const shape = error as { code?: unknown; message?: unknown; constraint?: unknown }
+  const message = typeof shape.message === 'string' ? shape.message : ''
+  const namesConstraint = shape.constraint === APP_URL_UNIQUE_CONSTRAINT || message.includes(APP_URL_UNIQUE_CONSTRAINT)
+  if (!namesConstraint) return false
+  return error instanceof UniqueConstraintViolationException || shape.code === '23505'
+}
+
+async function invalidateOrganizationAppUrl(ctx: CommandRuntimeContext, organizationId: string): Promise<void> {
+  try {
+    const resolver = ctx.container.resolve(ORGANIZATION_APP_URL_RESOLVER_DI_KEY) as Partial<OrganizationAppUrlResolver> | null
+    if (typeof resolver?.invalidate === 'function') await resolver.invalidate(organizationId)
+  } catch {
+    return
+  }
+}
 
 async function assertReplayKeepsHierarchyAcyclic(
   em: EntityManager,
@@ -665,101 +744,119 @@ const updateOrganizationCommand: CommandHandler<Record<string, unknown>, Organiz
   async execute(rawInput, ctx) {
     const { parsed, custom } = parseWithCustomFields(organizationUpdateSchema, rawInput)
     const em = (ctx.container.resolve('em') as EntityManager)
-    const { tenantId } = await loadAuthorizedOrganizationTarget(em, parsed.id, ctx)
+    const { organization: current, tenantId } = await loadAuthorizedOrganizationTarget(em, parsed.id, ctx)
+
+    const requestedAppUrl = await resolveRequestedAppUrl(parsed.appUrl)
+    const appUrlChanged = requestedAppUrl !== undefined && requestedAppUrl !== (current.appUrl ?? null)
+    if (appUrlChanged) {
+      const allowed = await canManageOrganizationAppUrl({
+        container: ctx.container,
+        auth: ctx.auth,
+        systemActor: ctx.systemActor,
+      })
+      if (!allowed) await throwAppUrlError(403, 'forbidden')
+      if (requestedAppUrl) await assertOrganizationAppUrlAvailable(em, requestedAppUrl, parsed.id)
+    }
 
     const parentProvided = parsed.parentId !== undefined
     const childrenProvided = parsed.childIds !== undefined
     const de = (ctx.container.resolve('dataEngine') as DataEngine)
 
     let resolvedOrganization!: Organization
-    await withAtomicFlush(em, [
-      async () => {
-        await lockOrganizationHierarchyForTenant(em, tenantId)
-        const existing = await em.findOne(
-          Organization,
-          buildOrganizationMutationFilter(parsed.id, tenantId),
-          { refresh: true },
-        )
-        if (!existing) throw new CrudHttpError(404, { error: 'Not found' })
+    try {
+      await withAtomicFlush(em, [
+        async () => {
+          await lockOrganizationHierarchyForTenant(em, tenantId)
+          const existing = await em.findOne(
+            Organization,
+            buildOrganizationMutationFilter(parsed.id, tenantId),
+            { refresh: true },
+          )
+          if (!existing) throw new CrudHttpError(404, { error: 'Not found' })
 
-        const parentId = parentProvided ? parsed.parentId ?? null : existing.parentId ?? null
-        if (parentProvided && parentId) {
-          if (parentId === parsed.id) throw new CrudHttpError(400, { error: 'Organization cannot be its own parent' })
-          if (Array.isArray(existing.descendantIds) && existing.descendantIds.includes(parentId)) {
-            throw new CrudHttpError(400, { error: 'Cannot assign descendant as parent' })
+          const parentId = parentProvided ? parsed.parentId ?? null : existing.parentId ?? null
+          if (parentProvided && parentId) {
+            if (parentId === parsed.id) throw new CrudHttpError(400, { error: 'Organization cannot be its own parent' })
+            if (Array.isArray(existing.descendantIds) && existing.descendantIds.includes(parentId)) {
+              throw new CrudHttpError(400, { error: 'Cannot assign descendant as parent' })
+            }
+            await ensureParentExists(em, tenantId, parentId)
           }
-          await ensureParentExists(em, tenantId, parentId)
-        }
 
-        const normalizedChildIds = normalizeChildIds(parsed.childIds ?? [], [parsed.id, parentProvided ? parentId ?? '' : ''])
-        if (normalizedChildIds.some((id) => id === parentId)) throw new CrudHttpError(400, { error: 'Child cannot equal parent' })
-        if (Array.isArray(existing.ancestorIds) && normalizedChildIds.some((id) => existing.ancestorIds.includes(id))) {
-          throw new CrudHttpError(400, { error: 'Cannot assign ancestor as child' })
-        }
+          const normalizedChildIds = normalizeChildIds(parsed.childIds ?? [], [parsed.id, parentProvided ? parentId ?? '' : ''])
+          if (normalizedChildIds.some((id) => id === parentId)) throw new CrudHttpError(400, { error: 'Child cannot equal parent' })
+          if (Array.isArray(existing.ancestorIds) && normalizedChildIds.some((id) => existing.ancestorIds.includes(id))) {
+            throw new CrudHttpError(400, { error: 'Cannot assign ancestor as child' })
+          }
 
-        if (normalizedChildIds.length) {
-          await ensureChildrenValid(em, tenantId, normalizedChildIds)
-          const childFilter = {
-            tenant: tenantId,
-            deletedAt: null,
-            id: { $in: normalizedChildIds },
-          } as unknown as FilterQuery<Organization>
-          const children = await em.find(Organization, childFilter)
-          for (const child of children) {
-            if (Array.isArray(child.descendantIds) && child.descendantIds.includes(parsed.id)) {
-              throw new CrudHttpError(400, { error: 'Cannot assign descendant cycle' })
+          if (normalizedChildIds.length) {
+            await ensureChildrenValid(em, tenantId, normalizedChildIds)
+            const childFilter = {
+              tenant: tenantId,
+              deletedAt: null,
+              id: { $in: normalizedChildIds },
+            } as unknown as FilterQuery<Organization>
+            const children = await em.find(Organization, childFilter)
+            for (const child of children) {
+              if (Array.isArray(child.descendantIds) && child.descendantIds.includes(parsed.id)) {
+                throw new CrudHttpError(400, { error: 'Cannot assign descendant cycle' })
+              }
             }
           }
-        }
 
-        const combinedChildIds = new Set<string>([
-          ...normalizedChildIds.map(String),
-          ...(Array.isArray(existing.childIds) ? existing.childIds.map(String) : []),
-        ])
-        const childParentsBefore = await loadChildParentSnapshots(em, tenantId, combinedChildIds)
+          const combinedChildIds = new Set<string>([
+            ...normalizedChildIds.map(String),
+            ...(Array.isArray(existing.childIds) ? existing.childIds.map(String) : []),
+          ])
+          const childParentsBefore = await loadChildParentSnapshots(em, tenantId, combinedChildIds)
 
-        let resolvedSlug: string | null | undefined
-        if (parsed.slug !== undefined) {
-          resolvedSlug = parsed.slug ? await resolveUniqueSlug(em, tenantId, parsed.slug, parsed.id) : parsed.slug
-        }
+          let resolvedSlug: string | null | undefined
+          if (parsed.slug !== undefined) {
+            resolvedSlug = parsed.slug ? await resolveUniqueSlug(em, tenantId, parsed.slug, parsed.id) : parsed.slug
+          }
 
-        const organization = await de.updateOrmEntity({
-          entity: Organization,
-          where: buildOrganizationMutationFilter(parsed.id, tenantId),
-          apply: (entity) => {
-            if (parsed.name !== undefined) entity.name = parsed.name
-            if (resolvedSlug !== undefined) entity.slug = resolvedSlug
-            if (parsed.logoUrl !== undefined) entity.logoUrl = parsed.logoUrl ?? null
-            if (parsed.logoPreserveAspectRatio !== undefined) entity.logoPreserveAspectRatio = parsed.logoPreserveAspectRatio
-            if (parsed.isActive !== undefined) entity.isActive = parsed.isActive
-            if (parentProvided) entity.parentId = parentId
-          },
-        })
-        if (!organization) throw new CrudHttpError(404, { error: 'Not found' })
-        setInternalTenantId(organization, tenantId)
+          const organization = await de.updateOrmEntity({
+            entity: Organization,
+            where: buildOrganizationMutationFilter(parsed.id, tenantId),
+            apply: (entity) => {
+              if (parsed.name !== undefined) entity.name = parsed.name
+              if (resolvedSlug !== undefined) entity.slug = resolvedSlug
+              if (parsed.logoUrl !== undefined) entity.logoUrl = parsed.logoUrl ?? null
+              if (parsed.logoPreserveAspectRatio !== undefined) entity.logoPreserveAspectRatio = parsed.logoPreserveAspectRatio
+              if (requestedAppUrl !== undefined) entity.appUrl = requestedAppUrl
+              if (parsed.isActive !== undefined) entity.isActive = parsed.isActive
+              if (parentProvided) entity.parentId = parentId
+            },
+          })
+          if (!organization) throw new CrudHttpError(404, { error: 'Not found' })
+          setInternalTenantId(organization, tenantId)
 
-        const recordId = String(organization.id)
-        const desiredChildIds = new Set(normalizedChildIds.filter((id) => id !== recordId))
-        if (childrenProvided) {
-          await clearRemovedChildren(em, tenantId, recordId, desiredChildIds)
-          await assignChildren(em, tenantId, recordId, desiredChildIds)
-        }
-        const childParentsAfter = await loadChildParentSnapshots(em, tenantId, combinedChildIds)
-        setUndoMeta(organization, { childParentsBefore, childParentsAfter })
+          const recordId = String(organization.id)
+          const desiredChildIds = new Set(normalizedChildIds.filter((id) => id !== recordId))
+          if (childrenProvided) {
+            await clearRemovedChildren(em, tenantId, recordId, desiredChildIds)
+            await assignChildren(em, tenantId, recordId, desiredChildIds)
+          }
+          const childParentsAfter = await loadChildParentSnapshots(em, tenantId, combinedChildIds)
+          setUndoMeta(organization, { childParentsBefore, childParentsAfter })
 
-        await setCustomFieldsIfAny({
-          dataEngine: de,
-          entityId: E.directory.organization,
-          recordId,
-          tenantId,
-          organizationId: recordId,
-          values: custom,
-        })
+          await setCustomFieldsIfAny({
+            dataEngine: de,
+            entityId: E.directory.organization,
+            recordId,
+            tenantId,
+            organizationId: recordId,
+            values: custom,
+          })
 
-        await rebuildHierarchyForTenant(em, tenantId)
-        resolvedOrganization = organization
-      },
-    ], { transaction: true })
+          await rebuildHierarchyForTenant(em, tenantId)
+          resolvedOrganization = organization
+        },
+      ], { transaction: true })
+    } catch (error) {
+      if (isAppUrlUniqueViolation(error)) await throwAppUrlError(409, 'taken')
+      throw error
+    }
 
     const recordId = String(resolvedOrganization.id)
     const identifiers = { id: recordId, organizationId: recordId, tenantId }
@@ -771,6 +868,7 @@ const updateOrganizationCommand: CommandHandler<Record<string, unknown>, Organiz
       events: organizationCrudEvents,
       indexer: organizationCrudIndexer,
     })
+    if (appUrlChanged) await invalidateOrganizationAppUrl(ctx, recordId)
 
     return resolvedOrganization
   },
@@ -799,7 +897,7 @@ const updateOrganizationCommand: CommandHandler<Record<string, unknown>, Organiz
       organizationId: String(result.id),
     })
     const after = serializeOrganization(result, custom)
-    const changes = buildChanges(beforeRecord, after as Record<string, unknown>, ['name', 'slug', 'logoUrl', 'logoPreserveAspectRatio', 'isActive', 'parentId'])
+    const changes = buildChanges(beforeRecord, after as Record<string, unknown>, ['name', 'slug', 'logoUrl', 'logoPreserveAspectRatio', 'appUrl', 'isActive', 'parentId'])
     const customDiff = diffCustomFieldChanges(beforeRecord?.custom, custom)
     for (const [key, diff] of Object.entries(customDiff)) {
       changes[`cf_${key}`] = diff
@@ -956,6 +1054,7 @@ const deleteOrganizationCommand: CommandHandler<{ body: any; query: Record<strin
       events: organizationCrudEvents,
       indexer: organizationCrudIndexer,
     })
+    await invalidateOrganizationAppUrl(ctx, id)
 
     return resolvedDeleted
   },

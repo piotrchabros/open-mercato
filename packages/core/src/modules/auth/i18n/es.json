@@ -181,6 +181,7 @@
   "auth.acl.features.dictionaries.manage": "Manage shared dictionaries",
   "auth.acl.features.dictionaries.view": "View shared dictionaries",
   "auth.acl.features.directory.organizations.manage": "Manage organizations",
+  "auth.acl.features.directory.organizations.manage_app_url": "Gestionar la dirección de la organización",
   "auth.acl.features.directory.organizations.view": "View organizations",
   "auth.acl.features.directory.tenants.manage": "Manage tenants",
   "auth.acl.features.directory.tenants.view": "View tenants",

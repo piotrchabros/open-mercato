@@ -204,6 +204,7 @@ export const settingsDtoSchema = z.object({
   retentionDays: z.number().int(),
   defaultCountry: z.string(),
   updatedAt: nullableIsoDateTime,
+  oauthRedirectUri: z.string().nullable().optional(),
 })
 export type SettingsDto = z.infer<typeof settingsDtoSchema>
 

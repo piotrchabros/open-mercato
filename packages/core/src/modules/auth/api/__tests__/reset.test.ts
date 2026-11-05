@@ -4,6 +4,7 @@ const mockRequestPasswordReset = jest.fn()
 const mockSendEmail = jest.fn()
 const mockCheckAuthRateLimit = jest.fn()
 const mockResetPasswordEmail = jest.fn((props: { resetUrl: string }) => props)
+const mockResolveOrganizationAppUrl = jest.fn(async (_scope: { organizationId?: string | null }): Promise<string | null> => null)
 const mockEmitAuthEvent = jest.fn(async (_eventId: string, _payload: Record<string, unknown>, _options?: Record<string, unknown>) => undefined)
 
 const mockContainer = {
@@ -19,6 +20,11 @@ const mockContainer = {
 
 jest.mock('@open-mercato/shared/lib/di/container', () => ({
   createRequestContainer: jest.fn(async () => mockContainer),
+}))
+
+jest.mock('@open-mercato/shared/lib/url', () => ({
+  ...jest.requireActual('@open-mercato/shared/lib/url'),
+  resolveOrganizationAppUrl: (scope: { organizationId?: string | null }) => mockResolveOrganizationAppUrl(scope),
 }))
 
 jest.mock('@open-mercato/shared/lib/email/send', () => ({
@@ -100,6 +106,7 @@ describe('POST /api/auth/reset', () => {
       token: 'reset-token-1',
     })
     mockSendEmail.mockResolvedValue(undefined)
+    mockResolveOrganizationAppUrl.mockResolvedValue(null)
   })
 
   afterAll(() => {
@@ -309,6 +316,47 @@ describe('POST /api/auth/reset', () => {
       expect(res.status).toBe(200)
       expect(await res.json()).toEqual({ ok: true })
       expect(mockSendEmail).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('per-organization app url', () => {
+    test('uses the organization app url for the reset link when the resolver returns one', async () => {
+      mockResolveOrganizationAppUrl.mockResolvedValueOnce('https://crm.acme.example')
+      mockRequestPasswordReset.mockResolvedValueOnce({
+        user: { id: 'user-1', email: 'staff@example.com', tenantId: 'tenant-1', organizationId: 'org-1' },
+        token: 'reset-token-1',
+      })
+
+      await POST(makeResetRequest('https://app.example.com/api/auth/reset'))
+
+      expect(mockResolveOrganizationAppUrl).toHaveBeenCalledWith(
+        expect.objectContaining({ container: mockContainer, organizationId: 'org-1' }),
+      )
+      expect(mockResetPasswordEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resetUrl: 'https://crm.acme.example/reset/reset-token-1?tenant=tenant-1',
+        }),
+      )
+    })
+
+    test('falls back to the default origin when the resolver returns null', async () => {
+      await POST(makeResetRequest('https://app.example.com/api/auth/reset'))
+
+      expect(mockResetPasswordEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          resetUrl: 'https://app.example.com/reset/reset-token-1',
+        }),
+      )
+    })
+
+    test('does not call the resolver for an unknown account and still answers ok', async () => {
+      mockRequestPasswordReset.mockResolvedValueOnce(null)
+
+      const res = await POST(makeResetRequest('https://app.example.com/api/auth/reset'))
+
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ ok: true })
+      expect(mockResolveOrganizationAppUrl).not.toHaveBeenCalled()
     })
   })
 })

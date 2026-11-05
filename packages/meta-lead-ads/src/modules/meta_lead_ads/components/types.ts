@@ -222,6 +222,7 @@ export type SettingsDto = {
   retentionDays: number
   defaultCountry: string
   updatedAt: string | null
+  oauthRedirectUri?: string | null
 }
 
 export type SettingsInput = {

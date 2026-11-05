@@ -13,6 +13,7 @@ import { generateAuthToken, hashAuthToken } from '../../auth/lib/tokenHash'
 import type { MessageEmailAttachment } from './attachments'
 import { renderMarkdownEmailBody } from './markdownEmailBody'
 import { createLogger } from '@open-mercato/shared/lib/logger'
+import { resolveOrganizationAppUrl, type AppUrlScope } from '@open-mercato/shared/lib/url'
 
 const logger = createLogger('messages').child({ component: 'email-sender' })
 
@@ -152,10 +153,14 @@ export async function sendMessageEmailToRecipient(params: {
   sender: SenderIdentity
   objects: MessageObject[]
   attachments: MessageEmailAttachment[]
+  container?: AppUrlScope['container']
 }): Promise<void> {
-  const { em, message, recipientUserId, recipientEmail, sender, objects, attachments } = params
+  const { em, message, recipientUserId, recipientEmail, sender, objects, attachments, container } = params
   const token = await createMessageAccessToken(em, message.id, recipientUserId)
-  const appUrl = resolveAppUrl()
+  const envAppUrl = resolveAppUrl()
+  const appUrl = envAppUrl
+    ? (await resolveOrganizationAppUrl({ container, organizationId: message.organizationId })) ?? envAppUrl
+    : null
   const viewUrl = appUrl ? `${appUrl}/messages/view/${token}` : null
   if (!appUrl) {
     logDebug('APP_URL missing - email link omitted', { messageId: message.id })

@@ -1,6 +1,7 @@
 import type { ModuleConfigService } from '@open-mercato/core/modules/configs/lib/module-config-service'
 import { parseBooleanWithDefault } from '@open-mercato/shared/lib/boolean'
 import { resolveDefaultEmailFromAddress } from '@open-mercato/shared/lib/email/config'
+import { resolveOrganizationAppUrl, type AppUrlScope } from '@open-mercato/shared/lib/url'
 import { notificationDeliveryConfigSchema, type NotificationDeliveryConfigInput } from '../data/validators'
 
 export const NOTIFICATIONS_DELIVERY_CONFIG_KEY = 'delivery_strategies'
@@ -192,4 +193,18 @@ export function resolveNotificationPanelUrl(config: NotificationDeliveryConfig):
     return null
   }
   return `${base.replace(/\/$/, '')}${config.panelPath}`
+}
+
+export async function resolveNotificationPanelUrlForOrganization(
+  config: NotificationDeliveryConfig,
+  scope: AppUrlScope
+): Promise<string | null> {
+  if (envString(process.env.NOTIFICATIONS_APP_URL)) {
+    return resolveNotificationPanelUrl(config)
+  }
+  const own = await resolveOrganizationAppUrl(scope)
+  if (own) {
+    return `${own.replace(/\/$/, '')}${config.panelPath}`
+  }
+  return resolveNotificationPanelUrl(config)
 }

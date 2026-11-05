@@ -7,6 +7,7 @@ jest.mock('@open-mercato/shared/lib/logger', () => ({
 }))
 
 import {
+  assertOAuthStateRedirectOrigin,
   COMMUNICATION_CHANNELS_OAUTH_STATE_COOKIE_NAME,
   COMMUNICATION_CHANNELS_OAUTH_STATE_TTL_MS,
   consumeOAuthStateOnce,
@@ -412,5 +413,45 @@ describe('OAuth return URL validation', () => {
   ])('rejects unsafe return URL %s', (value) => {
     expect(isSafeOAuthReturnUrl(value)).toBe(false)
     expect(normalizeOAuthReturnUrl(value)).toBe(DEFAULT_OAUTH_RETURN_URL)
+  })
+})
+
+describe('OAuth state redirect origin', () => {
+  const baseParams = { userId: 'u1', tenantId: 't1', providerKey: 'gmail' }
+  beforeEach(() => {
+    process.env.OM_HUB_OAUTH_STATE_KEY = SECRET
+    process.env.APP_ALLOWED_ORIGINS = 'https://org-a.example.com,https://org-b.example.com'
+  })
+
+  afterEach(() => {
+    delete process.env.APP_ALLOWED_ORIGINS
+  })
+
+  const requestFor = (origin: string) => new Request(`${origin}/api/communication_channels/oauth/callback`)
+
+  it('round-trips redirectOrigin through encrypt and decrypt', () => {
+    const { cookie } = createOAuthState({ ...baseParams, redirectOrigin: 'https://org-a.example.com' })
+    expect(decryptOAuthState(cookie)?.redirectOrigin).toBe('https://org-a.example.com')
+    const verified = verifyOAuthState({ cookie, expectedUserId: 'u1' })
+    expect(verified.redirectOrigin).toBe('https://org-a.example.com')
+  })
+
+  it('still verifies legacy payloads without redirectOrigin and skips the check', () => {
+    const { cookie } = createOAuthState(baseParams)
+    const verified = verifyOAuthState({ cookie, expectedUserId: 'u1' })
+    expect(verified.redirectOrigin).toBeUndefined()
+    expect(() => assertOAuthStateRedirectOrigin(verified, requestFor('https://org-a.example.com'))).not.toThrow()
+  })
+
+  it('passes when the callback origin matches', () => {
+    const { payload } = createOAuthState({ ...baseParams, redirectOrigin: 'https://org-a.example.com' })
+    expect(() => assertOAuthStateRedirectOrigin(payload, requestFor('https://org-a.example.com'))).not.toThrow()
+  })
+
+  it('throws origin_mismatch when the callback origin differs', () => {
+    const { payload } = createOAuthState({ ...baseParams, redirectOrigin: 'https://org-a.example.com' })
+    const err = captureError(() => assertOAuthStateRedirectOrigin(payload, requestFor('https://org-b.example.com')))
+    expect(err).toBeInstanceOf(OAuthStateError)
+    expect((err as OAuthStateError).code).toBe('origin_mismatch')
   })
 })

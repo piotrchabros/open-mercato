@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import { createLogger } from '@open-mercato/shared/lib/logger'
+import { readAllowedRequestOrigin } from '@open-mercato/shared/lib/url'
 
 const oauthStateLogger = createLogger('communication_channels').child({ component: 'oauth-state' })
 
@@ -58,7 +59,8 @@ export class OAuthStateError extends Error {
       | 'expired'
       | 'user_mismatch'
       | 'decrypt_failed'
-      | 'replay',
+      | 'replay'
+      | 'origin_mismatch',
   ) {
     super(message)
   }
@@ -84,6 +86,8 @@ export interface OAuthStatePayload {
   providerKey: string
   /** Where to redirect on success. Defaults to the profile page in the route. */
   returnUrl?: string
+  /** Origin the flow was initiated from; the callback must arrive on the same origin. */
+  redirectOrigin?: string | null
   /** Wall-clock expiry (ms since epoch). */
   expiresAt: number
   /** Provider-specific extras (PKCE code_verifier, scopes, login_hint, …). */
@@ -237,6 +241,16 @@ export function verifyOAuthState(input: {
   return payload
 }
 
+export function assertOAuthStateRedirectOrigin(
+  payload: Pick<OAuthStatePayload, 'redirectOrigin'>,
+  req: Request,
+): void {
+  if (!payload.redirectOrigin) return
+  if (readAllowedRequestOrigin(req) !== payload.redirectOrigin) {
+    throw new OAuthStateError('[internal] OAuth callback origin mismatch', 'origin_mismatch')
+  }
+}
+
 /**
  * Mark a verified OAuth `state` as consumed in a short-TTL store.
  *
@@ -279,6 +293,7 @@ export function createOAuthState(params: {
   organizationId?: string | null
   providerKey: string
   returnUrl?: string
+  redirectOrigin?: string | null
   extra?: Record<string, unknown>
 }): { payload: OAuthStatePayload; cookie: string; stateParam: string } {
   const state = crypto.randomBytes(32).toString('base64url')
@@ -291,6 +306,7 @@ export function createOAuthState(params: {
     organizationId: params.organizationId ?? null,
     providerKey: params.providerKey,
     returnUrl: params.returnUrl,
+    redirectOrigin: params.redirectOrigin,
     extra: params.extra,
     expiresAt: Date.now() + COMMUNICATION_CHANNELS_OAUTH_STATE_TTL_MS,
   }

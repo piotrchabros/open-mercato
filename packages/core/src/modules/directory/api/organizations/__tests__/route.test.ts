@@ -225,6 +225,67 @@ describe('directory organizations GET — manage view exposes updatedAt for opti
     expect(body.items).toHaveLength(1)
     expect(body.items[0].updatedAt).toBe(orgUpdatedAt.toISOString())
   })
+
+  it('exposes appUrl, canManageAppUrl and appUrlOptions in the super-admin manage view', async () => {
+    const previousOrigins = process.env.APP_ALLOWED_ORIGINS
+    process.env.APP_ALLOWED_ORIGINS = 'https://crm.example.com'
+    try {
+      authMock.mockResolvedValue({ sub: superAdminUserId, tenantId: null, orgId: null })
+      resolveIsSuperAdminMock.mockResolvedValue(true)
+      findWithDecryptionMock.mockResolvedValue([
+        {
+          id: foreignOrgId,
+          name: 'Foreign Org',
+          slug: 'foreign-org',
+          parentId: null,
+          isActive: true,
+          updatedAt: orgUpdatedAt,
+          appUrl: 'https://crm.example.com',
+          tenant: { id: foreignTenantId },
+        },
+      ])
+      emFind.mockResolvedValue([{ id: foreignTenantId, name: 'Foreign Tenant' }])
+
+      const response = await GET(
+        new Request('http://localhost/api/directory/organizations?view=manage&page=1&pageSize=50'),
+      )
+
+      const body = await response.json()
+      expect(body.items[0].appUrl).toBe('https://crm.example.com')
+      expect(body.canManageAppUrl).toBe(true)
+      expect(Array.isArray(body.appUrlOptions)).toBe(true)
+    } finally {
+      if (previousOrigins === undefined) delete process.env.APP_ALLOWED_ORIGINS
+      else process.env.APP_ALLOWED_ORIGINS = previousOrigins
+    }
+  })
+
+  it('returns null appUrl and no options in the single-tenant manage view without the feature', async () => {
+    authMock.mockResolvedValue({ sub: superAdminUserId, tenantId: foreignTenantId, orgId: tenantOrgId })
+    resolveIsSuperAdminMock.mockResolvedValue(false)
+    emFind.mockResolvedValue([
+      {
+        id: tenantOrgId,
+        name: 'Tenant Org',
+        slug: 'tenant-org',
+        parentId: null,
+        isActive: true,
+        updatedAt: orgUpdatedAt,
+        tenantId: foreignTenantId,
+      },
+    ])
+
+    const response = await GET(
+      new Request(
+        `http://localhost/api/directory/organizations?view=manage&tenantId=${foreignTenantId}&page=1&pageSize=50`,
+      ),
+    )
+
+    const body = await response.json()
+    expect(body.items[0].appUrl).toBeNull()
+    expect(body.canManageAppUrl).toBe(false)
+    expect(body.appUrlOptions).toEqual([])
+  })
 })
 
 describe('directory organizations GET — pageSize honors the ≤100 platform cap (#3851)', () => {

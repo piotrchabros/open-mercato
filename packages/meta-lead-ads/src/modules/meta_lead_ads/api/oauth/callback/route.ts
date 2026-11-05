@@ -8,6 +8,7 @@ import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
 import { getTelemetryRuntime } from '@open-mercato/shared/lib/telemetry/runtime'
 import { getAppBaseUrl } from '@open-mercato/shared/lib/url'
 import {
+  assertOAuthStateRedirectOrigin,
   consumeOAuthStateOnce,
   OAuthStateError,
   verifyOAuthState,
@@ -79,8 +80,8 @@ function readCookie(req: Request, name: string): string | null {
   return null
 }
 
-function redirectWithResult(req: Request, result: ConnectResult): Response {
-  const target = new URL(BACKEND_PATH, getAppBaseUrl(req))
+function redirectWithResult(req: Request, result: ConnectResult, baseOrigin?: string | null): Response {
+  const target = new URL(BACKEND_PATH, baseOrigin ?? getAppBaseUrl(req))
   target.searchParams.set('connect', result)
   const clearCookie = [
     `${OAUTH_STATE_COOKIE}=`,
@@ -186,6 +187,7 @@ export async function GET(req: Request): Promise<Response> {
   const code = url.searchParams.get('code')
   if (!stateParam) return redirectWithResult(req, 'state_mismatch')
 
+  let baseOrigin: string | null = null
   try {
     const auth = await getAuthFromRequest(req)
     if (!auth?.sub || !auth.tenantId || actsInAnotherTenant(auth)) {
@@ -206,8 +208,14 @@ export async function GET(req: Request): Promise<Response> {
       }
       return redirectWithResult(req, 'state_mismatch')
     }
+    baseOrigin = payload.redirectOrigin ?? null
+    try {
+      assertOAuthStateRedirectOrigin(payload, req)
+    } catch {
+      return redirectWithResult(req, 'state_mismatch', baseOrigin)
+    }
     if (payload.tenantId !== auth.tenantId || !payload.organizationId) {
-      return redirectWithResult(req, 'state_mismatch')
+      return redirectWithResult(req, 'state_mismatch', baseOrigin)
     }
 
     const scope: MetaScope = { tenantId: payload.tenantId, organizationId: payload.organizationId }
@@ -224,18 +232,20 @@ export async function GET(req: Request): Promise<Response> {
       translate,
     }
 
-    if (!(await consumeState(ctx, payload))) return redirectWithResult(req, 'state_mismatch')
-    if (!(await callerHasFeature(ctx, MANAGE_FEATURE))) return redirectWithResult(req, 'state_mismatch')
-    if (!code) return redirectWithResult(req, 'exchange_failed')
+    if (!(await consumeState(ctx, payload))) return redirectWithResult(req, 'state_mismatch', baseOrigin)
+    if (!(await callerHasFeature(ctx, MANAGE_FEATURE))) return redirectWithResult(req, 'state_mismatch', baseOrigin)
+    if (!code) return redirectWithResult(req, 'exchange_failed', baseOrigin)
 
     const credentials = await resolveAppCredentials(container, scope)
-    if (!credentials.appId || !credentials.appSecret) return redirectWithResult(req, 'app_not_configured')
+    if (!credentials.appId || !credentials.appSecret) return redirectWithResult(req, 'app_not_configured', baseOrigin)
 
     let redirectUri: string
     try {
-      redirectUri = resolveOAuthRedirectUri(req, OAUTH_CALLBACK_PATH)
+      redirectUri = payload.redirectOrigin
+        ? `${payload.redirectOrigin}${OAUTH_CALLBACK_PATH}`
+        : resolveOAuthRedirectUri(req, OAUTH_CALLBACK_PATH)
     } catch (err) {
-      if (err instanceof OAuthGrantError) return redirectWithResult(req, 'app_not_configured')
+      if (err instanceof OAuthGrantError) return redirectWithResult(req, 'app_not_configured', baseOrigin)
       throw err
     }
 
@@ -268,19 +278,19 @@ export async function GET(req: Request): Promise<Response> {
       } else {
         reportFailure(err, 'meta_lead_ads.oauth_exchange_failed')
       }
-      return redirectWithResult(req, 'exchange_failed')
+      return redirectWithResult(req, 'exchange_failed', baseOrigin)
     }
 
-    if (findMissingScopes(oauth.grantedScopes).length > 0) return redirectWithResult(req, 'missing_scopes')
+    if (findMissingScopes(oauth.grantedScopes).length > 0) return redirectWithResult(req, 'missing_scopes', baseOrigin)
 
     const { connection, reconnect } = await upsertConnection(ctx, scope, oauth)
     await guard.runAfterSuccess()
     await writeAuditLog(ctx, connection, reconnect)
-    return redirectWithResult(req, 'ok')
+    return redirectWithResult(req, 'ok', baseOrigin)
   } catch (err) {
     logger.error('OAuth callback failed', { errorName: err instanceof Error ? err.name : 'unknown' })
     reportFailure(err, 'meta_lead_ads.oauth_callback_failed')
-    return redirectWithResult(req, 'exchange_failed')
+    return redirectWithResult(req, 'exchange_failed', baseOrigin)
   }
 }
 

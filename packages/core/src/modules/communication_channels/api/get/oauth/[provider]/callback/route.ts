@@ -8,6 +8,7 @@ import { getChannelAdapter } from '../../../../../lib/adapter-registry-singleton
 import { resolveOAuthClientCredentials } from '../../../../../lib/oauth-client-config'
 import {
   COMMUNICATION_CHANNELS_OAUTH_STATE_COOKIE_NAME,
+  assertOAuthStateRedirectOrigin,
   consumeOAuthStateOnce,
   DEFAULT_OAUTH_RETURN_URL,
   normalizeOAuthReturnUrl,
@@ -47,10 +48,11 @@ function redirectWithFlash(
   req: Request,
   returnUrl: string,
   flash: { type: 'connected' | 'error'; code?: string; provider?: string; channelId?: string },
+  baseOrigin?: string | null,
 ): Response {
   const base = new URL(
     normalizeOAuthReturnUrl(returnUrl, DEFAULT_OAUTH_RETURN_URL),
-    getAppBaseUrl(req),
+    baseOrigin ?? getAppBaseUrl(req),
   )
   base.searchParams.set(OAUTH_RESULT_QUERY_PARAM, flash.type)
   if (flash.code) base.searchParams.set('code', flash.code)
@@ -116,6 +118,7 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
       expectedProviderKey: provider,
       expectedState: stateParam,
     })
+    assertOAuthStateRedirectOrigin(statePayload, req)
   } catch (err) {
     const errCode = err instanceof OAuthStateError ? err.code : 'invalid_state'
     return redirectWithFlash(req, DEFAULT_OAUTH_RETURN_URL, {
@@ -138,6 +141,7 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
   }
 
   const returnUrl = normalizeOAuthReturnUrl(statePayload.returnUrl, DEFAULT_OAUTH_RETURN_URL)
+  const baseOrigin = statePayload.redirectOrigin ?? null
 
   // Exchange the code via the adapter.
   const container = await createRequestContainer()
@@ -149,7 +153,7 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
     typeof (resolved as OAuthStateConsumeStore).has !== 'function' ||
     typeof (resolved as OAuthStateConsumeStore).set !== 'function'
   ) {
-    return redirectWithFlash(req, returnUrl, { type: 'error', code: 'state_store_unavailable', provider })
+    return redirectWithFlash(req, returnUrl, { type: 'error', code: 'state_store_unavailable', provider }, baseOrigin)
   }
   const oauthStateStore = resolved as OAuthStateConsumeStore
   try {
@@ -160,7 +164,7 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
       type: 'error',
       code: errCode,
       provider,
-    })
+    }, baseOrigin)
   }
   const credentialsService = (() => {
     try {
@@ -182,13 +186,14 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
       type: 'error',
       code: 'oauth_client_not_configured',
       provider,
-    })
+    }, baseOrigin)
   }
 
   // Must byte-for-byte match the redirect_uri sent at authorize time (the
   // `initiate` route), including behind a reverse proxy — derive it from the
   // configured app origin rather than the raw request URL.
-  const redirectUri = toAbsoluteUrl(req, `/api/communication_channels/oauth/${provider}/callback`)
+  const callbackPath = `/api/communication_channels/oauth/${provider}/callback`
+  const redirectUri = baseOrigin ? `${baseOrigin}${callbackPath}` : toAbsoluteUrl(req, callbackPath)
 
   let exchange
   try {
@@ -211,7 +216,7 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
       type: 'error',
       code: 'exchange_failed',
       provider,
-    })
+    }, baseOrigin)
   }
 
   // Persist the encrypted credentials under a per-user `integration_credentials`
@@ -308,7 +313,7 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
         type: 'error',
         code: 'mailbox_already_connected',
         provider,
-      })
+      }, baseOrigin)
     }
     throw err
   }
@@ -349,7 +354,7 @@ export async function GET(req: Request, context: RouteContext): Promise<Response
     type: 'connected',
     provider,
     channelId: channel.id,
-  })
+  }, baseOrigin)
 }
 
 function parseCookie(header: string, name: string): string | null {

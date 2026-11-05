@@ -181,6 +181,7 @@
   "auth.acl.features.dictionaries.manage": "Zarządzaj współdzielonymi słownikami",
   "auth.acl.features.dictionaries.view": "Wyświetl współdzielone słowniki",
   "auth.acl.features.directory.organizations.manage": "Zarządzaj organizacjami",
+  "auth.acl.features.directory.organizations.manage_app_url": "Zarządzanie adresem organizacji",
   "auth.acl.features.directory.organizations.view": "Wyświetl organizacje",
   "auth.acl.features.directory.tenants.manage": "Zarządzaj najemcami",
   "auth.acl.features.directory.tenants.view": "Wyświetl najemców",

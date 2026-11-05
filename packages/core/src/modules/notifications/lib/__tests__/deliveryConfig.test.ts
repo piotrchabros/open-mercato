@@ -1,3 +1,10 @@
+const mockResolveOrganizationAppUrl = jest.fn()
+
+jest.mock('@open-mercato/shared/lib/url', () => ({
+  ...jest.requireActual('@open-mercato/shared/lib/url'),
+  resolveOrganizationAppUrl: (...args: unknown[]) => mockResolveOrganizationAppUrl(...args),
+}))
+
 type DeliveryConfigModule = typeof import('../deliveryConfig')
 
 const SENDER_ENV_KEYS = [
@@ -151,5 +158,69 @@ describe('notifications delivery config stored panelPath', () => {
 
     expect(config.appUrl).toBe(DEFAULT_NOTIFICATION_DELIVERY_CONFIG.appUrl)
     expect(config.strategies.email.enabled).toBe(DEFAULT_NOTIFICATION_DELIVERY_CONFIG.strategies.email.enabled)
+  })
+})
+
+describe('resolveNotificationPanelUrlForOrganization', () => {
+  const URL_ENV_KEYS = ['NOTIFICATIONS_APP_URL', 'APPLICATION_URL', 'NEXT_PUBLIC_APP_URL', 'APP_URL'] as const
+  const savedUrlEnv: Partial<Record<(typeof URL_ENV_KEYS)[number], string | undefined>> = {}
+  const scope = { container: null, organizationId: 'org-1' }
+
+  beforeEach(() => {
+    mockResolveOrganizationAppUrl.mockReset()
+    for (const key of URL_ENV_KEYS) {
+      savedUrlEnv[key] = process.env[key]
+      delete process.env[key]
+    }
+  })
+
+  afterEach(() => {
+    for (const key of URL_ENV_KEYS) {
+      if (savedUrlEnv[key] === undefined) delete process.env[key]
+      else process.env[key] = savedUrlEnv[key]
+    }
+  })
+
+  const buildConfig = (mod: DeliveryConfigModule, appUrl?: string) => ({
+    ...mod.DEFAULT_NOTIFICATION_DELIVERY_CONFIG,
+    appUrl,
+    panelPath: '/backend/notifications',
+  })
+
+  it('prefers NOTIFICATIONS_APP_URL over the organization address', async () => {
+    process.env.NOTIFICATIONS_APP_URL = 'https://env.test'
+    const mod = loadDeliveryConfig({})
+    mockResolveOrganizationAppUrl.mockResolvedValue('https://org.test')
+
+    const url = await mod.resolveNotificationPanelUrlForOrganization(buildConfig(mod, 'https://env.test'), scope)
+
+    expect(url).toBe('https://env.test/backend/notifications')
+    expect(mockResolveOrganizationAppUrl).not.toHaveBeenCalled()
+  })
+
+  it('uses the organization address when NOTIFICATIONS_APP_URL is unset', async () => {
+    const mod = loadDeliveryConfig({})
+    mockResolveOrganizationAppUrl.mockResolvedValue('https://org.test')
+
+    const url = await mod.resolveNotificationPanelUrlForOrganization(buildConfig(mod, 'https://cfg.test'), scope)
+
+    expect(url).toBe('https://org.test/backend/notifications')
+    expect(mockResolveOrganizationAppUrl).toHaveBeenCalledWith(scope)
+  })
+
+  it('falls back to the existing chain when the organization has no address', async () => {
+    const mod = loadDeliveryConfig({})
+    mockResolveOrganizationAppUrl.mockResolvedValue(null)
+
+    const url = await mod.resolveNotificationPanelUrlForOrganization(buildConfig(mod, 'https://cfg.test/'), scope)
+
+    expect(url).toBe('https://cfg.test/backend/notifications')
+  })
+
+  it('returns null when nothing is configured', async () => {
+    const mod = loadDeliveryConfig({})
+    mockResolveOrganizationAppUrl.mockResolvedValue(null)
+
+    expect(await mod.resolveNotificationPanelUrlForOrganization(buildConfig(mod), scope)).toBeNull()
   })
 })

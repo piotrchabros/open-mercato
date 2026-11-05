@@ -13,6 +13,12 @@ export const features = [
         module: 'directory',
         dependsOn: ['directory.organizations.view'],
     },
+    {
+        id: 'directory.organizations.manage_app_url',
+        title: 'Manage organization address',
+        module: 'directory',
+        dependsOn: ['directory.organizations.manage'],
+    },
 ]
 
 export default features

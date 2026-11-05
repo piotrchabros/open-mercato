@@ -8,12 +8,17 @@ import {
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import type { OpenApiRouteDoc } from '@open-mercato/shared/lib/openapi'
+import { readAllowedRequestOrigin } from '@open-mercato/shared/lib/url'
 import { createOAuthState } from '@open-mercato/core/modules/communication_channels/lib/oauth-state'
 import { resolveOrganizationScopeForRequest } from '@open-mercato/core/modules/directory/utils/organizationScope'
 import { OAuthGrantError } from '@open-mercato/core/modules/integrations/lib/oauth/descriptor'
-import { resolveOAuthRedirectUri } from '@open-mercato/core/modules/integrations/lib/oauth/redirect'
+import {
+  resolveOAuthRedirectUriForOrganization,
+  type OrganizationOAuthRedirect,
+} from '@open-mercato/core/modules/integrations/lib/oauth/redirect'
 import { errorBodySchema } from '../../openapi'
 import {
+  BACKEND_PATH,
   OAUTH_CALLBACK_PATH,
   OAUTH_PROVIDER_KEY,
   OAUTH_STATE_COOKIE,
@@ -87,12 +92,19 @@ export async function GET(req: Request): Promise<Response> {
     const credentials = await resolveAppCredentials(container, { tenantId: ctx.tenantId, organizationId })
     if (!credentials.appId || !credentials.loginConfigId) return appNotConfigured()
 
-    let redirectUri: string
+    let redirect: OrganizationOAuthRedirect
     try {
-      redirectUri = resolveOAuthRedirectUri(req, OAUTH_CALLBACK_PATH)
+      redirect = await resolveOAuthRedirectUriForOrganization(req, OAUTH_CALLBACK_PATH, { container, organizationId })
     } catch (err) {
       if (err instanceof OAuthGrantError) return appNotConfigured()
       throw err
+    }
+    const { redirectUri, redirectOrigin } = redirect
+    if (redirectOrigin && readAllowedRequestOrigin(req) !== redirectOrigin) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: `${redirectOrigin}${BACKEND_PATH}?connect=wrong_origin`, 'Cache-Control': 'no-store' },
+      })
     }
 
     const state = createOAuthState({
@@ -100,6 +112,7 @@ export async function GET(req: Request): Promise<Response> {
       tenantId: ctx.tenantId,
       organizationId,
       providerKey: OAUTH_PROVIDER_KEY,
+      redirectOrigin,
     })
     const dialogUrl = buildMetaLoginDialogUrl({
       appId: credentials.appId,
@@ -130,7 +143,13 @@ export const openApi: OpenApiRouteDoc = {
       summary: 'Redirect to the Facebook Login for Business dialog',
       description:
         'Sets the short-lived HttpOnly state cookie and redirects the browser to the Meta login dialog. Requires the organization app credentials or the env preset.',
-      responses: [{ status: 302, description: 'Redirect to the Facebook login dialog' }],
+      responses: [
+        {
+          status: 302,
+          description:
+            "Redirect to the Facebook login dialog, or to the organization's own address with connect=wrong_origin when started from another address",
+        },
+      ],
       errors: [
         { status: 400, description: 'Meta app not configured or no organization selected', schema: errorBodySchema },
         { status: 401, description: 'Unauthorized', schema: errorBodySchema },

@@ -46,4 +46,43 @@ describe('submitUpdateOrganization', () => {
       customFields: { custom: 'value' },
     })
   })
+
+  it('includes a trimmed appUrl when includeAppUrl is true', async () => {
+    const updateOrganization = jest.fn(async () => {})
+    await submitUpdateOrganization({
+      values: { id: 'org-1', name: 'Acme', appUrl: ' https://crm.example.com ' },
+      orgId: 'org-1',
+      tenantId: 'tenant-1',
+      originalChildIds: [],
+      includeAppUrl: true,
+      updateOrganization,
+    })
+    expect(updateOrganization).toHaveBeenCalledWith(expect.objectContaining({ appUrl: 'https://crm.example.com' }))
+  })
+
+  it('sends null appUrl when cleared and includeAppUrl is true', async () => {
+    const updateOrganization = jest.fn(async () => {})
+    await submitUpdateOrganization({
+      values: { id: 'org-1', name: 'Acme', appUrl: '' },
+      orgId: 'org-1',
+      tenantId: 'tenant-1',
+      originalChildIds: [],
+      includeAppUrl: true,
+      updateOrganization,
+    })
+    expect(updateOrganization).toHaveBeenCalledWith(expect.objectContaining({ appUrl: null }))
+  })
+
+  it('omits appUrl when includeAppUrl is false', async () => {
+    const updateOrganization = jest.fn(async () => {})
+    await submitUpdateOrganization({
+      values: { id: 'org-1', name: 'Acme', appUrl: 'https://crm.example.com' },
+      orgId: 'org-1',
+      tenantId: 'tenant-1',
+      originalChildIds: [],
+      includeAppUrl: false,
+      updateOrganization,
+    })
+    expect(updateOrganization.mock.calls[0][0]).not.toHaveProperty('appUrl')
+  })
 })

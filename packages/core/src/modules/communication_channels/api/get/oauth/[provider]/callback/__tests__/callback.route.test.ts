@@ -66,6 +66,7 @@ jest.mock('../../../../../../lib/oauth-client-config', () => ({
 jest.mock('@open-mercato/shared/lib/url', () => ({
   getAppBaseUrl: (_req: unknown) => 'https://app.example.com',
   toAbsoluteUrl: (_req: unknown, path: string) => `https://app.example.com${path}`,
+  readAllowedRequestOrigin: (req: Request) => new URL(req.url).origin,
 }))
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -238,5 +239,57 @@ describe('GET /api/communication_channels/oauth/[provider]/callback', () => {
     expect(location).toBeTruthy()
     expect(location).toContain('code=state_store_unavailable')
     expect(mockCreateConnectedChannelRow).not.toHaveBeenCalled()
+  })
+
+  // ── Per-organization app URL ────────────────────────────────────────────────
+
+  function mockHappyContainer() {
+    mockContainerResolve.mockImplementation((token: string) => {
+      if (token === 'cache') return createMemoryCache()
+      if (token === 'em') return { fork: () => ({ findOne: jest.fn() }) }
+      if (token === 'integrationCredentialsService') return null
+      return undefined
+    })
+  }
+
+  it('own origin: exchange redirectUri and flash redirect use the state redirectOrigin', async () => {
+    mockHappyContainer()
+    const cookie = makeStateCookie({ redirectOrigin: 'https://app.example.com' })
+    const req = buildRequest('?code=auth-code-own&state=test-state-nonce', cookie)
+    const res = await GET(req, { params: { provider: PROVIDER } })
+
+    expect(res.status).toBe(302)
+    expect(mockExchangeOAuthCode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirectUri: `https://app.example.com/api/communication_channels/oauth/${PROVIDER}/callback`,
+      }),
+    )
+    expect(res.headers.get('location')).toContain('oauth=connected')
+  })
+
+  it('origin mismatch: callback on another origin → code=origin_mismatch, no token exchange', async () => {
+    mockHappyContainer()
+    const cookie = makeStateCookie({ redirectOrigin: 'https://acme.example.org' })
+    const req = buildRequest('?code=auth-code-mismatch&state=test-state-nonce', cookie)
+    const res = await GET(req, { params: { provider: PROVIDER } })
+
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toContain('code=origin_mismatch')
+    expect(mockExchangeOAuthCode).not.toHaveBeenCalled()
+    expect(mockCreateConnectedChannelRow).not.toHaveBeenCalled()
+  })
+
+  it('legacy state without redirectOrigin: uses the default redirect uri', async () => {
+    mockHappyContainer()
+    const cookie = makeStateCookie()
+    const req = buildRequest('?code=auth-code-legacy&state=test-state-nonce', cookie)
+    const res = await GET(req, { params: { provider: PROVIDER } })
+
+    expect(res.headers.get('location')).toContain('oauth=connected')
+    expect(mockExchangeOAuthCode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        redirectUri: `https://app.example.com/api/communication_channels/oauth/${PROVIDER}/callback`,
+      }),
+    )
   })
 })

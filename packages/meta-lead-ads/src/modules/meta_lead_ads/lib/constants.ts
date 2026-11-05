@@ -188,6 +188,7 @@ export const CONNECT_FAILURE_CODES = [
   'exchange_failed',
   'missing_scopes',
   'app_not_configured',
+  'wrong_origin',
 ] as const
 export type MetaConnectFailureCode = (typeof CONNECT_FAILURE_CODES)[number]
 

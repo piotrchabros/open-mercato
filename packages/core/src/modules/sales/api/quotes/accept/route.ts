@@ -20,6 +20,7 @@ import { sendEmail } from '@open-mercato/shared/lib/email/send'
 import { resolveStatusEntryIdByValue } from '../../../lib/statusHelpers'
 import { resolveEffectiveTenantId } from '../../../lib/publicQuoteTenantScope'
 import { QuoteAcceptedAdminEmail } from '../../../emails/QuoteAcceptedAdminEmail'
+import { resolveOrganizationAppUrl } from '@open-mercato/shared/lib/url'
 import { createLogger } from '@open-mercato/shared/lib/logger'
 import { getCommandInterceptorHttpRejection } from '@open-mercato/shared/lib/commands/errors'
 
@@ -148,7 +149,8 @@ export async function POST(req: Request) {
     const adminEmail = process.env.ADMIN_EMAIL || ''
     if (adminEmail) {
       try {
-        const appUrl = process.env.APP_URL || ''
+        const ownAppUrl = await resolveOrganizationAppUrl({ container, organizationId: quote.organizationId })
+        const appUrl = ownAppUrl ?? (process.env.APP_URL || '')
         const orderUrl = appUrl ? `${appUrl.replace(/\/$/, '')}/backend/sales/orders/${orderId}` : `/backend/sales/orders/${orderId}`
 
         const copy = {

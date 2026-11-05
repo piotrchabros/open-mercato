@@ -137,6 +137,7 @@ For platform connectors with multiple integrations (e.g., MedusaJS):
 ## OAuth2 Grants
 
 Providers needing delegated OAuth2 access build on the public `lib/oauth/{token-endpoint,pkce,authorization,redirect,resource-challenge,descriptor,grant-service,health}` helpers, `lib/oauth/testing/fakeAuthorizationServer` and the DI `integrationOAuthGrantService` (the other `lib/oauth` files are `@internal`); contract, route rules and tests: `apps/docs/docs/framework/modules/integrations-oauth-grants.mdx`. The `__oauth_grant` id suffix is reserved for grant rows: no integration or bundle id may end in it, the credentials route answers 404 for it, and only the grant service writes those rows.
+- User-facing links and OAuth redirect URIs for an organization MUST use `resolveOrganizationAppUrl` / `resolveAppBaseUrl` / `toAppUrl` (`@open-mercato/shared/lib/url`) or `resolveOAuthRedirectUriForOrganization` (`lib/oauth/redirect`) with the organization id, and record `redirectOrigin` in OAuth state. Internal URLs (CALL_API, server-side lookups) stay on `APP_URL`.
 
 ## Per-User Credential Scoping
 

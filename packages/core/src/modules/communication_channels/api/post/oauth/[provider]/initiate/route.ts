@@ -3,7 +3,8 @@ import { z } from 'zod'
 import { getAuthFromRequest } from '@open-mercato/shared/lib/auth/server'
 import { createRequestContainer } from '@open-mercato/shared/lib/di/container'
 import { readJsonSafe } from '@open-mercato/shared/lib/http/readJsonSafe'
-import { toAbsoluteUrl } from '@open-mercato/shared/lib/url'
+import { readAllowedRequestOrigin, resolveOrganizationAppUrl, toAbsoluteUrl } from '@open-mercato/shared/lib/url'
+import { resolveTranslations } from '@open-mercato/shared/lib/i18n/server'
 import { createLogger } from '@open-mercato/shared/lib/logger'
 import { getTelemetryRuntime } from '@open-mercato/shared/lib/telemetry/runtime'
 import { getChannelAdapter } from '../../../../../lib/adapter-registry-singleton'
@@ -139,7 +140,27 @@ export async function POST(req: Request, context: RouteContext): Promise<Respons
     )
   }
 
-  const redirectUri = defaultRedirectUri(req, provider)
+  const ownAppUrl = await resolveOrganizationAppUrl({
+    container,
+    organizationId: (auth as { orgId?: string | null }).orgId ?? null,
+  })
+  if (ownAppUrl && readAllowedRequestOrigin(req) !== ownAppUrl) {
+    const { translate } = await resolveTranslations()
+    return NextResponse.json(
+      {
+        error: translate(
+          'communication_channels.oauth.errors.originMismatch',
+          "Start the connection from your organization's address: {origin}",
+          { origin: ownAppUrl },
+        ),
+        code: 'oauth_origin_mismatch',
+      },
+      { status: 409 },
+    )
+  }
+  const redirectUri = ownAppUrl
+    ? `${ownAppUrl}/api/communication_channels/oauth/${provider}/callback`
+    : defaultRedirectUri(req, provider)
   let stateEnvelope: ReturnType<typeof createOAuthState>
   try {
     stateEnvelope = createOAuthState({
@@ -148,6 +169,7 @@ export async function POST(req: Request, context: RouteContext): Promise<Respons
       organizationId: (auth as { orgId?: string | null }).orgId ?? null,
       providerKey: provider,
       returnUrl: normalizeOAuthReturnUrl(body.returnUrl, DEFAULT_OAUTH_RETURN_URL),
+      redirectOrigin: ownAppUrl ?? null,
     })
   } catch (err) {
     const response = oauthStateErrorResponse(err)
@@ -218,6 +240,7 @@ export const openApi = {
         { status: 200, description: 'Authorize URL + state cookie set' },
         { status: 400, description: 'Invalid provider or unsupported (no OAuth)' },
         { status: 401, description: 'Unauthorized' },
+        { status: 409, description: 'OAuth client not configured, or request origin differs from the organization app URL' },
         { status: 422, description: 'Invalid request body' },
         { status: 500, description: 'OAuth state secret missing or state encryption failed' },
         { status: 502, description: 'Adapter failed to build authorize URL' },

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { isAllowedAppOrigin, normalizeAppOrigin } from '@open-mercato/shared/lib/url'
 
 export const tenantCreateSchema = z.object({
   name: z.string().min(1).max(200),
@@ -44,9 +45,33 @@ export const organizationUpdateSchema = z.object({
   isActive: z.boolean().optional(),
   parentId: z.string().uuid().nullable().optional(),
   childIds: z.array(z.string().uuid()).optional(),
+  appUrl: z.string().trim().max(2048).nullable().optional(),
 })
 
 export type TenantCreateInput = z.infer<typeof tenantCreateSchema>
 export type TenantUpdateInput = z.infer<typeof tenantUpdateSchema>
 export type OrganizationCreateInput = z.infer<typeof organizationCreateSchema>
 export type OrganizationUpdateInput = z.infer<typeof organizationUpdateSchema>
+
+export type OrganizationAppUrlCheck =
+  | { ok: true; value: string | null }
+  | { ok: false; reason: 'invalid' | 'notAllowed' }
+
+const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]'])
+
+export function normalizeOrganizationAppUrl(
+  value: string | null,
+  env: Record<string, string | undefined> = process.env,
+): OrganizationAppUrlCheck {
+  if (value === null || value.trim() === '') return { ok: true, value: null }
+  const origin = normalizeAppOrigin(value)
+  if (!origin) return { ok: false, reason: 'invalid' }
+  if (env.NODE_ENV === 'production') {
+    const url = new URL(origin)
+    if (url.protocol === 'http:' && !LOOPBACK_HOSTNAMES.has(url.hostname)) {
+      return { ok: false, reason: 'invalid' }
+    }
+  }
+  if (!isAllowedAppOrigin(origin, env)) return { ok: false, reason: 'notAllowed' }
+  return { ok: true, value: origin }
+}

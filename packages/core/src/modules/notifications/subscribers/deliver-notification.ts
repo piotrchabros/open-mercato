@@ -1,7 +1,7 @@
 import type { EntityManager } from '@mikro-orm/postgresql'
 import { Notification } from '../data/entities'
 import { NOTIFICATION_EVENTS } from '../lib/events'
-import { DEFAULT_NOTIFICATION_DELIVERY_CONFIG, resolveNotificationDeliveryConfig, resolveNotificationPanelUrl } from '../lib/deliveryConfig'
+import { DEFAULT_NOTIFICATION_DELIVERY_CONFIG, resolveNotificationDeliveryConfig, resolveNotificationPanelUrlForOrganization } from '../lib/deliveryConfig'
 import { getNotificationDeliveryStrategies, type NotificationDeliveryContext } from '../lib/deliveryStrategies'
 import { resolveEffectiveChannels } from '../lib/shouldDeliver'
 import { getNotificationType } from '../lib/notification-type-registry'
@@ -125,7 +125,10 @@ export default async function handle(payload: NotificationCreatedPayload, ctx: R
       debug('recipient has no email', notification.recipientUserId)
     }
     const { title, body, t } = await resolveNotificationCopy(notification)
-    const panelUrl = resolveNotificationPanelUrl(deliveryConfig)
+    const panelUrl = await resolveNotificationPanelUrlForOrganization(deliveryConfig, {
+      container: ctx,
+      organizationId: notification.organizationId ?? null,
+    })
     if (!panelUrl) {
       debug('missing panelUrl; check appUrl/panelPath settings')
     }
