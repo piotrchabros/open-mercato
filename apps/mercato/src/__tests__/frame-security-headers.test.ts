@@ -74,6 +74,17 @@ describe.each(Object.entries(configFiles))('%s next.config frame headers', (_lab
     expect(findHeader(rules, '/:path*', 'X-Frame-Options')).toBe('SAMEORIGIN')
   })
 
+  it.each([PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD])('declares the offer render policy after the global entry in %s', async (phase) => {
+    const rules = await loadHeaderRules(configFile, phase, 'production')
+    const source = '/api/offer_generator/render/:path*'
+
+    expect(rules.findIndex((rule) => rule.source === source)).toBeGreaterThan(rules.findIndex((rule) => rule.source === '/:path*'))
+    expect(findHeader(rules, source, 'Content-Security-Policy')).toBe("default-src 'none'; style-src 'unsafe-inline' https:; font-src data: https:; img-src data: https:; script-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'")
+    expect(findHeader(rules, source, 'X-Frame-Options')).toBe('SAMEORIGIN')
+    expect(findHeader(rules, source, 'X-Content-Type-Options')).toBe('nosniff')
+    expect(findHeader(rules, source, 'Referrer-Policy')).toBe('no-referrer')
+  })
+
   it.each([PHASE_DEVELOPMENT_SERVER, PHASE_PRODUCTION_BUILD])('keeps the Autopay launch policy in %s', async (phase) => {
     const rules = await loadHeaderRules(configFile, phase, 'production')
 

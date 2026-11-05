@@ -61,6 +61,21 @@ function buildSecurityHeaders(allowLoopbackFraming: boolean) {
       ],
     },
     {
+      // The public offer render endpoint serves a full sanitized HTML document
+      // that is embedded in a same-origin iframe. It needs inline styles and
+      // https fonts/images, which the global style-src 'self' 'nonce-…' would
+      // block, and no scripts at all. Keep this value in step with the
+      // offer_generator render route; the Next.js config layer replaces a CSP
+      // set by the route handler, so it has to be declared here.
+      source: '/api/offer_generator/render/:path*',
+      headers: [
+        { key: 'Content-Security-Policy', value: "default-src 'none'; style-src 'unsafe-inline' https:; font-src data: https:; img-src data: https:; script-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'" },
+        { key: 'Referrer-Policy', value: 'no-referrer' },
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+      ],
+    },
+    {
       // Marker header consumed by the custom-domain DNS reverse-resolve check
       // (see SPEC 2026-04-08-portal-custom-domain-routing). Lets the verifier
       // tell "request reached our origin" from "request was answered by an

@@ -8657,6 +8657,7 @@ __metadata:
     "@open-mercato/gateway-stripe": "workspace:*"
     "@open-mercato/gateway-tpay": "workspace:*"
     "@open-mercato/meta-lead-ads": "workspace:*"
+    "@open-mercato/offer-generator": "workspace:*"
     "@open-mercato/onboarding": "workspace:*"
     "@open-mercato/queue": "workspace:*"
     "@open-mercato/scheduler": "workspace:*"
@@ -9388,6 +9389,38 @@ __metadata:
     react-dom: "npm:19.2.8"
     ts-jest: "npm:^29.4.12"
     typescript: "npm:7.0.2"
+  peerDependencies:
+    "@mikro-orm/postgresql": ^7.0.14
+    "@open-mercato/shared": "workspace:*"
+    react: ^19.0.0
+    react-dom: ^19.0.0
+  languageName: unknown
+  linkType: soft
+
+"@open-mercato/offer-generator@workspace:*, @open-mercato/offer-generator@workspace:packages/offer-generator":
+  version: 0.0.0-use.local
+  resolution: "@open-mercato/offer-generator@workspace:packages/offer-generator"
+  dependencies:
+    "@open-mercato/ai-assistant": "workspace:*"
+    "@open-mercato/core": "workspace:*"
+    "@open-mercato/documents": "workspace:*"
+    "@open-mercato/queue": "workspace:*"
+    "@open-mercato/shared": "workspace:*"
+    "@open-mercato/ui": "workspace:*"
+    "@types/jest": "npm:^30.0.0"
+    "@types/react": "npm:^19.2.18"
+    "@types/react-dom": "npm:^19.2.5"
+    "@types/sanitize-html": "npm:^2.16.0"
+    ai: "npm:^7.0.83"
+    esbuild: "npm:^0.28.2"
+    glob: "npm:^14.0.3"
+    jest: "npm:^30.4.2"
+    react: "npm:19.2.8"
+    react-dom: "npm:19.2.8"
+    sanitize-html: "npm:2.18.1"
+    ts-jest: "npm:^29.4.12"
+    typescript: "npm:7.0.2"
+    zod: "npm:^4.6.6"
   peerDependencies:
     "@mikro-orm/postgresql": ^7.0.14
     "@open-mercato/shared": "workspace:*"
@@ -15762,6 +15795,15 @@ __metadata:
   dependencies:
     htmlparser2: "npm:^10.1"
   checksum: 10/fba65c1b612f60cba07af2bb22791997f02b6774a2b68f16a40cb73e92b5f7086684fa6a947b5a24d200aae3607236eb24bfa3f2c56c40cd0e5209baf50bb12a
+  languageName: node
+  linkType: hard
+
+"@types/sanitize-html@npm:^2.16.0":
+  version: 2.16.2
+  resolution: "@types/sanitize-html@npm:2.16.2"
+  dependencies:
+    htmlparser2: "npm:^12.0"
+  checksum: 10/49ce36e749db428c99e9638996529245567bbea9803e0eeb4aed44fc70196e88ed0b4907eb23334a4deca11d36b3bcdb2cbd39d90c94d76ec7f48b911a2c1200
   languageName: node
   linkType: hard
 
@@ -24039,7 +24081,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"htmlparser2@npm:^12.0.0":
+"htmlparser2@npm:^12.0, htmlparser2@npm:^12.0.0":
   version: 12.0.0
   resolution: "htmlparser2@npm:12.0.0"
   dependencies:

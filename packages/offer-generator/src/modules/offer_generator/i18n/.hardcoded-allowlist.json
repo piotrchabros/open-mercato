@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "file": "lib/default-template.ts",
+      "reason": "Placeholder offer template HTML fed to the AI as a layout and style reference; it is document content, not UI chrome, and is replaced by the tenant template from settings."
+    }
+  ]
+}
