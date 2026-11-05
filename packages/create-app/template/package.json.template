@@ -139,7 +139,8 @@
     "@open-mercato/gateway-autopay": "{{PACKAGE_VERSION}}",
     "@open-mercato/gateway-tpay": "{{PACKAGE_VERSION}}",
     "@open-mercato/sync-akeneo": "{{PACKAGE_VERSION}}",
-    "@open-mercato/meta-lead-ads": "{{PACKAGE_VERSION}}"
+    "@open-mercato/meta-lead-ads": "{{PACKAGE_VERSION}}",
+    "@open-mercato/offer-generator": "{{PACKAGE_VERSION}}"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

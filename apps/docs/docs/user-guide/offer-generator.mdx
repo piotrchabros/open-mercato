@@ -1,0 +1,90 @@
+---
+title: Offer Generator
+description: Create AI-generated sales offers, refine and edit them, share a tracked public link, review viewer insights and export PDFs — all from the CRM.
+sidebar_label: Offer Generator
+---
+
+# Offer Generator
+
+The Offer Generator turns a short brief into a complete, branded HTML offer. You can refine it with plain-language feedback, edit it by hand, share it with the client through a public link, see how the client reads it and download it as a PDF.
+
+## Set up your template and defaults
+
+Open **Offers → Settings** (requires the *Manage offer generator settings* permission). Here you set:
+
+- **Company name** shown in generated offers.
+- **Template** — the HTML skeleton the AI fills in with content. A neutral default is provided; paste your own to match your brand.
+- **Extra instructions** — tone, structure or pricing rules added to every generation.
+- **Default language** (Polish or English) and **default currency**.
+- **Default model** and optional **alternate models** you can pick per generation. The **Model** picker on the offer page only appears for users with the *Manage offer generator settings* permission.
+
+If another person saved settings while you were editing, you are told about the conflict and can reload before saving again.
+
+## Create an offer
+
+1. Go to **Offers** and choose **New offer**.
+2. Enter a title, the client name and the language. Optionally write the brief for the AI, and link the offer to a person, company or deal (under **CRM**), plus a value, currency and validity date.
+3. Choose **Create offer**. The offer starts as a **draft**. If you have generate permission, tick **Generate the offer with AI right after saving** to start generation immediately; otherwise the offer is created with no content.
+
+You can also start from a CRM record: open a person, company or deal, go to the **Offers** tab and choose **New offer**. From a person or company the customer is prefilled; from a deal the deal is prefilled and the form looks up the deal's customer for you.
+
+## Generate and refine
+
+On the offer page, open the **Content** tab. In the **AI generation** panel, describe what the offer should contain (scope, prices, timeline, anything the client asked for) and choose **Generate with AI**. Generation runs in the background; the panel shows the elapsed time, progress is shown in the top bar, and you can leave the page.
+
+Once the offer has content, the panel offers two modes. **Refine**: write feedback such as "shorten the intro and add a second pricing option" and choose **Refine with AI**; the existing offer is kept and your feedback is applied, and fragments you edited by hand are preserved. **Regenerate**: choose **Regenerate with AI** to write the offer from scratch; the current version stays in the revision history. Only one generation can run per offer at a time.
+
+If a run fails (for example the model returned incomplete HTML or timed out), the offer keeps its previous content and the error is shown so you can try again.
+
+## Edit by hand
+
+On the **Content** tab choose **Edit text**, then click text in the preview and change it directly (a small toolbar offers bold, italic, underline and links). Choose **Save changes** to store a new revision, or **Discard changes** to cancel. Manually edited fragments are kept as they are when you later refine with AI. Scripts, forms and similar active content are removed automatically for security.
+
+## Revisions
+
+Every generation, refinement, manual edit and restore saves a revision (the latest 50 are kept). The **Revision history** list on the **Content** tab lets you preview an earlier version and **Restore** it; restoring itself creates a new revision, so nothing is lost.
+
+## Share the link
+
+Set the status from **draft** to **sent** yourself in the **Details** tab (this is not automatic), then copy the public link with **Copy public link** in the offer header (or open it with **Open public link**). The link looks like `/oferta/<name>-<token>` and works without logging in. Anyone with the full link can view the offer, so share it only with the client. Draft offers are not publicly accessible.
+
+The public page shows the offer in an embedded frame. Scripts cannot run in it: offer HTML is sanitized and the page is served with a strict content security policy.
+
+## Insights
+
+The **Insights** tab shows how the offer is being read: number of views, unique visitors, time actually spent reading, how far people scrolled and which sections held attention. Bots are filtered out. The first non-internal view automatically moves a **sent** offer to **viewed**.
+
+Viewer IP addresses are never stored in readable form.
+
+## Export PDF
+
+Choose **Download PDF** to get a paginated A4 version of the offer. If the button reports that PDF export is unavailable, ask your administrator to enable it (see below).
+
+## Offers in the CRM
+
+People, companies and deals show an **Offers** tab listing the offers linked to that record (most recently updated first). Each row shows the title, value, view count, last update and status, and opens the offer. Users with the manage permission also get a **New offer** button (see above for prefill); with no offers yet an empty state is shown.
+
+## Permissions
+
+| Permission | Allows |
+|------------|--------|
+| `offer_generator.view` | See offers, insights and revisions |
+| `offer_generator.manage` | Create, edit, delete offers, restore revisions, export PDF |
+| `offer_generator.generate` | Generate and refine with AI |
+| `offer_generator.settings.manage` | Change template and defaults |
+
+## For administrators
+
+- **AI provider:** the worker process needs a configured provider key (for example `GOOGLE_GENERATIVE_AI_API_KEY`). Without one, generation fails with an "AI not configured" message.
+- **PDF:** set `INSTALL_CHROMIUM=1` when building the image, or point `OM_OFFER_GENERATOR_PDF_CHROMIUM_PATH` at a Chromium binary.
+- After enabling the module run `yarn mercato configs cache structural --all-tenants`.
+
+| Variable | Purpose |
+|----------|---------|
+| `OM_AI_OFFER_GENERATOR_MODEL` | Model used for offers, for example `google/gemini-3.1-pro-preview` |
+| `OM_OFFER_GENERATOR_AI_TIMEOUT_MS` | Timeout for one AI request (default 300000) |
+| `OM_OFFER_GENERATOR_MAX_OUTPUT_TOKENS` | Output token limit for one request (default 65536) |
+| `OM_OFFER_GENERATOR_IP_HASH_SECRET` | Secret used to hash viewer IPs; set a long random value in production |
+| `OM_OFFER_GENERATOR_TEMPLATE_PATH` | File with a custom default template |
+| `OM_OFFER_GENERATOR_PDF_CHROMIUM_PATH` | Chromium executable for PDF export |
+| `OM_OFFER_GENERATOR_PDF_ASSET_HOSTS` | Comma-separated hosts PDFs may load images and fonts from |

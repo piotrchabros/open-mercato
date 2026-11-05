@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oferta BlueBee — Pakiety Marketingowe</title>
+  <link rel="icon" href="/img/logo/favicon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --theme:   #E3FF04;
+      --orange:  #FF7425;
+      --black:   #0E0E0E;
+      --bg:      #161616;
+      --bg2:     #1D1D1D;
+      --border:  rgba(255,255,255,0.10);
+      --white:   #ffffff;
+      --muted:   #BEBEBE;
+    }
+
+    /* ── BASE (web-first, scrollable) ── */
+    html, body {
+      min-height: 100vh;
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background: var(--black);
+      color: var(--white);
+      font-size: 13px;
+      line-height: 1.5;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* ── LAYOUT WRAPPER (centered card, grows with content) ── */
+    .page {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 32px 28px 40px;
+      display: flex;
+      flex-direction: column;
+      background: var(--black);
+      position: relative;
+    }
+
+    /* subtle glow top */
+    .page::before {
+      content: '';
+      position: absolute;
+      top: -80px; left: 50%;
+      transform: translateX(-50%);
+      width: 500px; height: 400px;
+      background: radial-gradient(circle, rgba(227,255,4,0.05) 0%, transparent 65%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .page > * { position: relative; z-index: 1; }
+
+    /* ── HEADER ── */
+    .hdr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 6mm;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 7mm;
+    }
+    .hdr img { height: 22px; }
+    .hdr-label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 5px 14px;
+    }
+    .hdr-dot {
+      width: 5px; height: 5px;
+      background: var(--theme);
+      border-radius: 50%;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      margin-bottom: 6mm;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(227,255,4,0.08);
+      border: 1px solid rgba(227,255,4,0.22);
+      border-radius: 100px;
+      padding: 5px 14px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--theme);
+      margin-bottom: 10px;
+    }
+    .hero h1 {
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      line-height: 1.1;
+      margin-bottom: 7px;
+    }
+    .hero h1 em { font-style: normal; color: var(--theme); }
+    .hero p {
+      font-size: 12px;
+      color: var(--muted);
+      max-width: 420px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* ── WHY ROW ── */
+    .why-row {
+      display: grid;
+      /* auto-fit: 3, 4 lub 5 punktow bez ruszania CSS */
+      grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: visible;
+      margin-bottom: 5mm;
+    }
+    .why-cell {
+      background: var(--bg);
+      padding: 11px 13px 15px;
+      overflow: visible;
+    }
+    .why-cell:first-child { border-radius: 8px 0 0 8px; }
+    .why-cell:last-child  { border-radius: 0 8px 8px 0; }
+    .why-icon {
+      width: 24px; height: 24px;
+      background: rgba(227,255,4,0.10);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 7px;
+    }
+    .why-icon i { color: var(--theme); font-size: 10px; }
+    .why-cell h4 { font-size: 11px; font-weight: 700; margin-bottom: 3px; }
+    .why-cell p  { font-size: 10px; color: var(--muted); line-height: 1.5; }
+
+    /* ── SECTION LABEL ── */
+    .sec-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--theme);
+      margin-bottom: 4mm;
+    }
+    .sec-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ── CARDS GRID (auto-fit: 1/2/3+ pakietow) ── */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 5mm;
+      margin-bottom: 6mm;
+    }
+
+    .card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+    .card.featured {
+      background: var(--bg2);
+      border-color: rgba(227,255,4,0.28);
+    }
+    .card.featured::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--theme), transparent);
+    }
+
+    .card-top {
+      margin-bottom: 10px;
+    }
+    .feat-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--theme);
+      color: var(--black);
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-radius: 100px;
+      padding: 4px 11px;
+      margin-bottom: 8px;
+    }
+    .badge-spacer { height: 22px; margin-bottom: 8px; }
+
+    .pkg-name {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+    .price-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      margin-bottom: 2px;
+    }
+    .price-amt { font-size: 36px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+    .price-cur { font-size: 15px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+    .price-per { font-size: 10px; color: var(--muted); }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 10px 0 9px;
+    }
+
+    .inc-title {
+      font-size: 8.5px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .svc-list { list-style: none; display: flex; flex-direction: column; gap: 0; flex: 1; }
+    .svc-item {
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .svc-item:last-child { border-bottom: none; }
+    .svc-ic {
+      width: 22px; height: 22px; flex-shrink: 0;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .svc-ic i { font-size: 9px; color: var(--theme); }
+    .svc-txt h5 { font-size: 11px; font-weight: 700; color: var(--white); margin-bottom: 2px; }
+    .svc-txt h6 { font-size: 10px; font-weight: 600; color: var(--white); margin: 6px 0 2px; letter-spacing: 0.01em; }
+    .svc-txt p  { font-size: 10px; color: var(--muted); line-height: 1.45; margin-bottom: 4px; }
+    .svc-txt p:last-child { margin-bottom: 0; }
+    .svc-txt ul, .svc-txt ol {
+      list-style: disc;
+      margin: 2px 0 4px 14px;
+      padding: 0;
+      font-size: 9.5px;
+      color: var(--muted);
+      line-height: 1.5;
+      display: block;
+    }
+    .svc-txt ol { list-style: decimal; }
+    .svc-txt li {
+      padding: 1px 0;
+      border: none;
+      display: list-item;
+      margin: 0;
+    }
+    .svc-txt ul ul, .svc-txt ol ol, .svc-txt ul ol, .svc-txt ol ul {
+      margin-top: 2px;
+      margin-bottom: 2px;
+      font-size: 9px;
+    }
+    .svc-txt strong, .svc-txt b { color: var(--white); font-weight: 600; }
+    @media print {
+      .svc-txt ul, .svc-txt ol { font-size: 9px; }
+      .svc-txt h6 { font-size: 9.5px; }
+    }
+
+    .cta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      margin-top: 12px;
+      padding: 11px 20px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      text-decoration: none;
+      border: none;
+    }
+    .cta.outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--white);
+    }
+    .cta.solid {
+      background: var(--theme);
+      color: var(--black);
+    }
+    .cta i { font-size: 9px; transform: rotate(-40deg); }
+
+    /* ── FOOTNOTE ── */
+    .footnote {
+      text-align: center;
+      font-size: 9.5px;
+      color: var(--muted);
+      margin-top: 4mm;
+      line-height: 1.6;
+    }
+
+    /* ── FOOTER ── */
+    .ftr {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid var(--border);
+      padding-top: 5mm;
+      margin-top: 5mm;
+    }
+    .ftr img { height: 18px; opacity: 0.65; }
+    .ftr-contacts {
+      display: flex;
+      gap: 18px;
+    }
+    .ftr-contacts a {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .ftr-contacts a i { color: var(--theme); font-size: 9px; }
+    .ftr p { font-size: 9px; color: var(--muted); }
+
+    /* ── TABELE (tabela markdown z promptu -> <table class="tbl">) ── */
+    .tbl-wrap {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      overflow-x: auto;
+      margin-bottom: 5mm;
+    }
+    .tbl {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+    .tbl th,
+    .tbl td {
+      padding: 8px 11px;
+      text-align: left;
+      vertical-align: top;
+      line-height: 1.5;
+      border-bottom: 1px solid var(--border);
+    }
+    .tbl thead th {
+      background: var(--bg2);
+      font-size: 8.5px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .tbl tbody td { color: var(--muted); }
+    .tbl tbody td:first-child { color: var(--white); font-weight: 600; }
+    .tbl tbody tr:last-child td { border-bottom: none; }
+    .tbl tbody tr.is-total td {
+      background: rgba(227,255,4,0.05);
+      color: var(--white);
+      font-weight: 700;
+    }
+    .tbl td strong { color: var(--white); font-weight: 700; }
+    .tbl .num { text-align: right; white-space: nowrap; }
+
+    /* ── CENA PRZEKRESLONA (~~1 500 zl~~ w prompcie) ── */
+    .old-price,
+    .tbl s,
+    .tbl del {
+      text-decoration: line-through;
+      text-decoration-thickness: 1px;
+      color: var(--muted);
+      opacity: 0.65;
+      font-weight: 500;
+    }
+    /* cena regularna nad aktualna kwota w karcie pakietu */
+    .price-was {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-decoration: line-through;
+      text-decoration-thickness: 1px;
+      opacity: 0.7;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+
+    /* ── PRINT (browser Ctrl+P) ── */
+    @media print {
+      @page { size: A4 portrait; margin: 8mm; }
+      html, body {
+        background: var(--black);
+        min-height: auto;
+      }
+      .page {
+        max-width: none;
+        padding: 0;
+      }
+      .page::before { display: none; }
+      .cards { page-break-inside: avoid; }
+      .card { page-break-inside: avoid; }
+      .why-row { page-break-inside: avoid; }
+      .tbl-wrap { page-break-inside: auto; }
+      .tbl tr { page-break-inside: avoid; }
+      .tbl thead { display: table-header-group; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <header class="hdr">
+    <img src="/img/logo/logo.png" alt="BlueBee">
+    <div class="hdr-label">
+      <span class="hdr-dot"></span>
+      Oferta handlowa · 2026
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-badge">
+      <i class="fas fa-robot" style="font-size:8px"></i>
+      AI-First Marketing Agency
+    </div>
+    <!-- AI: h1 — napisz chwytliwy nagłówek nawiązujący do branży klienta. Pierwsza linia: krótkie hasło (3-4 słowa). Druga linia (w <em>): wyróżniony benefit lub efekt. -->
+    <h1>Marketing, który<br><em>napędza wzrost</em></h1>
+    <!-- AI: p — 2 zdania opisujące wartość BlueBee dla tej konkretnej branży klienta. Wspomóż AI i data-driven podejście. -->
+    <p>Łączymy kreatywność z inteligencją AI — generujemy 15+ wariantów contentu, wybieramy najlepsze i doszlifowujemy do perfekcji. Jakość, nie ilość.</p>
+  </section>
+
+  <!-- WHY — AI: odwzoruj TUTAJ punkty wyjścia / diagnozę klienta z promptu.
+       Grid jest auto-fit: możesz zostawić 3 albo dodać 4. lub 5. <div class="why-cell"> — CSS sam ułoży.
+       Jeśli prompt wymienia N problemów/punktów wyjścia, zrób N komórek. NIE łącz dwóch punktów w jeden.
+       Każda: <div class="why-icon"><i class="fas fa-..."></i></div> + krótki h4 (3-4 słowa) + 1-2 zdania p. -->
+  <div class="why-row">
+    <div class="why-cell">
+      <div class="why-icon"><i class="fas fa-brain"></i></div>
+      <!-- AI: h4 i p dla punktu 1 — AI/technologia w kontekście branży klienta -->
+      <h4>AI w procesie twórczym</h4>
+      <p>15+ wariantów contentu, lepsza selekcja — AI przyspiesza, człowiek decyduje.</p>
+    </div>
+    <div class="why-cell">
+      <div class="why-icon"><i class="fas fa-chart-line"></i></div>
+      <!-- AI: h4 i p dla punktu 2 — wyniki/dane w kontekście branży klienta -->
+      <h4>Data-driven optymalizacja</h4>
+      <p>Kampanie monitorowane na bieżąco, decyzje oparte wyłącznie na danych.</p>
+    </div>
+    <div class="why-cell">
+      <div class="why-icon"><i class="fas fa-user-tie"></i></div>
+      <!-- AI: h4 i p dla punktu 3 — obsługa/dedykacja w kontekście branży klienta -->
+      <h4>Dedykowany opiekun</h4>
+      <p>Jeden punkt kontaktu, pełna transparentność i regularne raporty.</p>
+    </div>
+  </div>
+
+  <!-- PACKAGES -->
+  <div class="sec-label">Pakiety</div>
+  <div class="cards">
+
+    <!-- STARTER — AI: dostosuj opisy 4 usług do branży klienta. Cena 1 500 zł — NIE zmieniaj. h5: nazwa usługi. p: 1 zdanie korzyści dla tej branży. -->
+    <div class="card">
+      <div class="card-top">
+        <div class="badge-spacer"></div>
+        <div class="pkg-name">Pakiet Starter</div>
+        <!-- AI: jeśli prompt podaje cenę regularną ORAZ obniżoną (np. "~~1 500 zł~~ 1 100 zł"),
+             odkomentuj price-was i wstaw tam kwotę regularną, a w price-amt kwotę obniżoną:
+             <div class="price-was">1 500 zł</div> -->
+        <div class="price-row">
+          <span class="price-amt">1 500</span>
+          <span class="price-cur">zł</span>
+        </div>
+        <div class="price-per">netto / miesiąc</div>
+      </div>
+      <div class="divider"></div>
+      <div class="inc-title">Co obejmuje pakiet</div>
+      <ul class="svc-list">
+        <li class="svc-item">
+          <div class="svc-ic"><i class="fab fa-facebook-f"></i></div>
+          <div class="svc-txt">
+            <!-- AI: h5 = nazwa usługi social media dla tej branży, p = korzyść w 1 zdaniu -->
+            <h5>Social Media — FB, IG, LinkedIn</h5>
+            <p>Regularne publikacje budujące wizerunek marki i angażujące społeczność.</p>
+          </div>
+        </li>
+        <li class="svc-item">
+          <div class="svc-ic"><i class="fas fa-pen-nib"></i></div>
+          <div class="svc-txt">
+            <!-- AI: h5 = nazwa usługi content dla tej branży, p = korzyść SEO/content w 1 zdaniu -->
+            <h5>Content Marketing — Artykuły SEO</h5>
+            <p>Eksperckie treści wzmacniające widoczność w Google i autorytet marki.</p>
+          </div>
+        </li>
+        <li class="svc-item">
+          <div class="svc-ic"><i class="fab fa-google"></i></div>
+          <div class="svc-txt">
+            <!-- AI: h5 = nazwa usługi reklamy dla tej branży, p = korzyść performance w 1 zdaniu -->
+            <h5>Performance — FB Ads + Google Ads</h5>
+            <p>Kampanie z kreacjami graficznymi i precyzyjnym targetowaniem.</p>
+          </div>
+        </li>
+        <li class="svc-item">
+          <div class="svc-ic"><i class="fas fa-chart-bar"></i></div>
+          <div class="svc-txt">
+            <!-- AI: h5 = raportowanie/analityka, p = korzyść w 1 zdaniu -->
+            <h5>Raportowanie i optymalizacja</h5>
+            <p>Miesięczne raporty efektywności i ciągła optymalizacja działań.</p>
+          </div>
+        </li>
+      </ul>
+      <a href="mailto:hello@bluebee.marketing" class="cta outline">
+        Zapytaj o pakiet <i class="fas fa-arrow-up"></i>
+      </a>
+    </div>
+
+    <!-- PRO (FEATURED) — AI: dostosuj opisy 5 usług do branży klienta. Cena 2 500 zł — NIE zmieniaj. h5: nazwa usługi. p: 1 zdanie korzyści dla tej branży. -->
+    <div class="card featured">
+      <div class="card-top">
+        <div class="feat-badge"><i class="fas fa-star" style="font-size:7px"></i> Najpopularniejszy</div>
+        <div class="pkg-name">Pakiet Pro</div>
+        <div class="price-row">
+          <span class="price-amt">2 500</span>
+          <span class="price-cur">zł</span>
+        </div>
+        <div class="price-per">netto / miesiąc</div>
+      </div>
+      <div class="divider"></div>
+      <div class="inc-title">Co obejmuje pakiet</div>
+      <ul class="svc-list">
+        <li class="svc-item">
+          <div class="svc-ic"><i class="fab fa-facebook-f"></i></div>
+          <div class="svc-txt">
+            <!-- AI: h5 = rozszerzona social media dla tej branży, p = korzyść w 1 zdaniu -->
+            <h5>Social Media — FB, IG, LinkedIn</h5>
+            <p>Rozszerzona strategia z większą częstotliwością i wyższą jakością kreacji.</p>
+          </div>
+        </li>
+        <li class="svc-item">
+          <div class="svc-ic"><i class="fas fa-pen-nib"></i></div>
+          <div class="svc-txt">
+            <!-- AI: h5 = rozbudowany content dla tej branży, p = korzyść w 1 zdaniu -->
+            <h5>Content Marketing — Artykuły SEO</h5>
+            <p>Regularny, rozbudowany content budujący silną pozycję organiczną.</p>
+          </div>
+        </li>
+        <li class="svc-item">
+          <div class="svc-ic"><i class="fab fa-google"></i></div>
+          <div class="svc-txt">
+            <!-- AI: h5 = pełna obsługa performance dla tej branży, p = korzyść w 1 zdaniu -->
+            <h5>Performance — FB Ads + Google Ads</h5>
+            <p>Pełna obsługa kampanii z rozbudowanym pakietem kreacji i testami A/B.</p>
+          </div>
+        </li>
+        <li class="svc-item">
+          <div class="svc-ic"><i class="fas fa-comments"></i></div>
+          <div class="svc-txt">
+            <!-- AI: h5 = community management dla tej branży, p = korzyść w 1 zdaniu -->
+            <h5>Community Management</h5>
+            <p>Zarządzanie interakcjami — komentarze, wiadomości, budowanie relacji.</p>
+          </div>
+        </li>
+        <li class="svc-item">
+          <div class="svc-ic"><i class="fas fa-chart-bar"></i></div>
+          <div class="svc-txt">
+            <!-- AI: h5 = strategia i raporty dla tej branży, p = korzyść w 1 zdaniu -->
+            <h5>Strategia, raporty i optymalizacja</h5>
+            <p>Miesięczne raporty, analiza trendów i regularne spotkania strategiczne.</p>
+          </div>
+        </li>
+      </ul>
+      <a href="mailto:hello@bluebee.marketing" class="cta solid">
+        Wybierz pakiet Pro <i class="fas fa-arrow-up"></i>
+      </a>
+    </div>
+
+  </div><!-- /cards -->
+
+  <!-- ══ TABELE — AI: KAŻDA tabela markdown z promptu (linie z "|") musi tu wylądować ══
+       Wstaw jeden taki blok NA KAŻDĄ tabelę z promptu (cennik, podział zadań, harmonogram, porównanie...).
+       Wszystkie klasy poniżej MAJĄ już CSS w tym szablonie — nie dopisuj własnych stylów.
+       Zachowaj WSZYSTKIE kolumny i WSZYSTKIE wiersze. Nie zamieniaj tabeli na listę.
+       "~~kwota~~" z promptu => <s>kwota</s> (cena przekreślona). "**tekst**" => <strong>tekst</strong>.
+       Wiersz podsumowania ("Razem", "Łącznie", "Total") => <tr class="is-total">.
+       Komórki z kwotami => <td class="num">.
+
+  <div class="sec-label">Cennik</div>
+  <div class="tbl-wrap">
+    <table class="tbl">
+      <thead>
+        <tr><th>Usługa</th><th>Rozliczenie</th><th class="num">Cena regularna</th><th class="num">Cena dla Was</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Kampanie reklamowe – 1 kanał</td><td>miesięcznie</td><td class="num"><s>1 500 zł</s></td><td class="num">1 100 zł</td></tr>
+        <tr class="is-total"><td><strong>Razem abonament</strong></td><td>miesięcznie</td><td class="num"><s>6 600 zł</s></td><td class="num"><strong>6 200 zł</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+  ══ KONIEC WZORCA — usuń ten komentarz i wstaw realne tabele z promptu ══ -->
+
+  <!-- FOOTNOTE -->
+  <div class="footnote">
+    Ceny netto. Budżet reklamowy (Google Ads / Meta Ads) nie wliczony — ustalany indywidualnie.<br>
+    Konfiguracja kont i kanałów reklamowych wyceniana oddzielnie.
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="ftr">
+    <img src="/img/logo/logo.png" alt="BlueBee">
+    <div class="ftr-contacts">
+      <a href="mailto:hello@bluebee.marketing"><i class="fas fa-envelope"></i> hello@bluebee.marketing</a>
+      <a href="https://bluebee.marketing"><i class="fas fa-globe"></i> bluebee.marketing</a>
+    </div>
+    <p>© 2026 BlueBee Marketing</p>
+  </footer>
+
+</div><!-- /page -->
+</body>
+</html>

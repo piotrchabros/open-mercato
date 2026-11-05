@@ -59,6 +59,7 @@ export default async function SiteCatchAll({ params }: FrontendParams) {
   const pathname = '/' + (p.slug?.join('/') ?? '')
   const match = findRouteManifestMatch(getFrontendRouteManifests(), pathname)
   if (!match) return notFound()
+  await ensureServerBootstrap()
 
   // Customer portal auth gate — separate from staff auth
   if (match.route.requireCustomerAuth) {
@@ -69,7 +70,6 @@ export default async function SiteCatchAll({ params }: FrontendParams) {
     if (!customerAuth) {
       redirect(`/${orgSlug}/portal/login`)
     }
-    await ensureServerBootstrap()
     const portalContainer = await createRequestContainer()
     const em = portalContainer.resolve('em') as EntityManager
     const org = orgSlug
@@ -100,10 +100,7 @@ export default async function SiteCatchAll({ params }: FrontendParams) {
   let auth: AuthContext = null
   let container: Awaited<ReturnType<typeof createRequestContainer>> | null = null
   const ensureContainer = async () => {
-    if (!container) {
-      await ensureServerBootstrap()
-      container = await createRequestContainer()
-    }
+    if (!container) container = await createRequestContainer()
     return container
   }
   if (match.route.requireAuth) {

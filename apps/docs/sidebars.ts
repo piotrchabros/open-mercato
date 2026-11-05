@@ -144,6 +144,7 @@ const sidebars: SidebarsConfig = {
             },
             "user-guide/akeneo-pim",
             "user-guide/meta-lead-ads",
+            "user-guide/offer-generator",
             "user-guide/checkout",
             "user-guide/stripe-payments",
             "user-guide/autopay-payments",
