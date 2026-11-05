@@ -91,7 +91,7 @@ it('accepts a valid source webhook: records ingestion, enqueues dispatch, emits 
   )
   expect(emitWebhooksEvent).toHaveBeenCalledWith(
     'webhooks.inbound.received',
-    expect.objectContaining({ endpointId: 'stripe', eventType: 'payment_intent.succeeded' }),
+    expect.objectContaining({ endpointId: 'stripe', eventType: 'payment_intent.succeeded', ingestionId: expect.any(String) }),
     { persistent: true },
   )
 })

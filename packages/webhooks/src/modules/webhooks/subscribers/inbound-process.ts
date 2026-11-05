@@ -1,6 +1,5 @@
 import { createLogger } from '@open-mercato/shared/lib/logger'
 import { getWebhookEndpointAdapter } from '../lib/adapter-registry'
-import { getWebhookSource } from '../lib/inbound-registry'
 
 const logger = createLogger('webhooks').child({ component: 'inbound' })
 
@@ -19,7 +18,7 @@ export default async function handler(payload: Record<string, unknown>) {
     return
   }
 
-  if (getWebhookSource(providerKey)) {
+  if (typeof payload.ingestionId === 'string') {
     return
   }
 

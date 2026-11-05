@@ -10,10 +10,6 @@ jest.mock('../../lib/adapter-registry', () => ({
   }),
 }))
 
-jest.mock('../../lib/inbound-registry', () => ({
-  getWebhookSource: jest.fn((key: string) => (key === 'calcom' ? { key: 'calcom' } : undefined)),
-}))
-
 describe('webhooks inbound-process subscriber', () => {
   afterEach(() => {
     jest.clearAllMocks()
@@ -64,12 +60,13 @@ describe('webhooks inbound-process subscriber', () => {
     ).rejects.toThrow('"unknown-provider" is not registered')
   })
 
-  it('skips providers handled by the inbound source registry', async () => {
+  it('skips events already dispatched to module webhook source handlers', async () => {
     await expect(
       handler({
         providerKey: 'calcom',
         eventType: 'BOOKING_CREATED',
         payload: { uid: 'x' },
+        ingestionId: '00000000-0000-4000-8000-000000000001',
       }),
     ).resolves.toBeUndefined()
     expect(mockProcessInbound).not.toHaveBeenCalled()

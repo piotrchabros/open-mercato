@@ -192,6 +192,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Res
       providerKey: params.endpointId,
       endpointId: params.endpointId,
       messageId,
+      ingestionId: ingestion.id,
       eventType,
       payload: parsedBody,
       tenantId: verifiedScope.tenantId,
