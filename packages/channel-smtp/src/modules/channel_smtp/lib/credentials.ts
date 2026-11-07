@@ -52,6 +52,12 @@ const hostSchema = z
  *
  * Never log credential values.
  */
+const optionalSecret = (message: string) =>
+  z.preprocess(
+    (value) => (typeof value === 'string' && value === '' ? undefined : value),
+    z.string().min(1, message).optional(),
+  )
+
 export const smtpCredentialsSchema = z
   .object({
     host: hostSchema,
@@ -65,13 +71,33 @@ export const smtpCredentialsSchema = z
       if (allowsInsecureTransport()) return
       ctx.addIssue({ code: 'custom', message: INSECURE_TRANSPORT_MESSAGE })
     }),
-    user: z.string().min(1, 'SMTP username required'),
-    password: z.string().min(1, 'SMTP password required'),
+    user: optionalSecret('SMTP username required'),
+    password: optionalSecret('SMTP password required'),
     fromAddress: z.string().email('From address must be a valid email'),
+    replyToAddress: z.preprocess(
+      (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+      z.string().trim().email('Reply-To address must be a valid email').optional(),
+    ),
   })
   // `.passthrough()` rather than `.strict()`: the integrations credential store
   // stashes bookkeeping keys alongside the operator-entered fields, and a strict
   // schema would reject the blob it just persisted.
   .passthrough()
+  .superRefine((value, ctx) => {
+    if (value.user && !value.password) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['password'],
+        message: 'SMTP password required when a username is set',
+      })
+    }
+    if (value.password && !value.user) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['user'],
+        message: 'SMTP username required when a password is set',
+      })
+    }
+  })
 
 export type SmtpCredentials = z.infer<typeof smtpCredentialsSchema>

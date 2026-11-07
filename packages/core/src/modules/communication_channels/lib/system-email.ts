@@ -269,6 +269,23 @@ function resolveOutboundFromAddress(
   return typeof configured === 'string' && configured.trim().length > 0 ? configured : payload.from
 }
 
+/**
+ * Picks the Reply-To for an outbound system email.
+ *
+ * An explicit `replyTo` from the caller always wins. Otherwise the tenant's configured reply-to
+ * address is applied only when the caller flagged the message as one that expects a reply, so
+ * no-reply notifications never invite answers.
+ */
+function resolveOutboundReplyTo(
+  payload: ResolvedEmailPayload,
+  credentials: Record<string, unknown>,
+): string | undefined {
+  if (typeof payload.replyTo === 'string' && payload.replyTo.trim().length > 0) return payload.replyTo
+  if (payload.expectsReply !== true) return undefined
+  const configured = credentials.replyToAddress
+  return typeof configured === 'string' && configured.trim().length > 0 ? configured.trim() : undefined
+}
+
 export async function sendSystemEmail(
   container: AppContainer,
   payload: ResolvedEmailPayload,
@@ -295,7 +312,7 @@ export async function sendSystemEmail(
       to: payload.to,
       subject: payload.subject,
       from: resolveOutboundFromAddress(payload, credentials),
-      replyTo: payload.replyTo,
+      replyTo: resolveOutboundReplyTo(payload, credentials),
       attachments: payload.attachments,
     },
   })

@@ -72,6 +72,33 @@ describe('sendEmail', () => {
     })
   })
 
+  it('forwards expectsReply to the transport', async () => {
+    registerEmailTransport({ id: 'test', send: sendMock })
+
+    await sendEmail({
+      to: 'user@example.com',
+      subject: 'Hello',
+      react: React.createElement('div', null, 'Hi'),
+      expectsReply: true,
+    })
+
+    expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({
+      expectsReply: true,
+    }))
+  })
+
+  it('leaves expectsReply undefined when the caller does not set it', async () => {
+    registerEmailTransport({ id: 'test', send: sendMock })
+
+    await sendEmail({
+      to: 'user@example.com',
+      subject: 'Hello',
+      react: React.createElement('div', null, 'Hi'),
+    })
+
+    expect(sendMock.mock.calls[0][0].expectsReply).toBeUndefined()
+  })
+
   it('delegates html and text bodies without provider-specific rendering', async () => {
     registerEmailTransport({ id: 'test', send: sendMock })
 

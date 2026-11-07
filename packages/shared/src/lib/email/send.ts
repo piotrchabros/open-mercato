@@ -23,6 +23,10 @@ export type SendEmailOptions = {
   text?: string
   from?: string
   replyTo?: string
+  /**
+   * The recipient may reply to a human. A transport may add the sending organization's configured Reply-To address when `replyTo` is absent.
+   */
+  expectsReply?: boolean
   attachments?: EmailAttachment[]
   tenantId?: string
   organizationId?: string | null
@@ -43,6 +47,8 @@ export type ResolvedEmailPayload = {
    */
   fromIsInstanceDefault?: boolean
   replyTo?: string
+  /** Mirrors `SendEmailOptions.expectsReply`; passed through unchanged so transports can tell a reply-expecting message apart. */
+  expectsReply?: boolean
   attachments?: EmailAttachment[]
   tenantId?: string
   organizationId?: string | null
@@ -144,6 +150,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
     from: fromAddr,
     fromIsInstanceDefault: !options.from,
     replyTo: options.replyTo,
+    expectsReply: options.expectsReply,
     attachments: options.attachments,
     tenantId: options.tenantId,
     organizationId: options.organizationId,

@@ -109,6 +109,7 @@ describe('messages email sender', () => {
         subject: 'Subject',
       }),
     )
+    expect((sendEmailMock.mock.calls as unknown[][])[0][0]).not.toHaveProperty('expectsReply')
     expect(messageEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({
         senderName: 'Alice',
@@ -178,6 +179,7 @@ describe('messages email sender', () => {
       expect.objectContaining({
         to: 'external@example.com',
         subject: 'Subject',
+        expectsReply: true,
       }),
     )
     expect(messageEmailMock).toHaveBeenCalledWith(

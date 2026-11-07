@@ -184,6 +184,7 @@ export async function POST(req: Request) {
       subject: translate('sales.quotes.email.subject', 'Quote {quoteNumber}', { quoteNumber: quote.quoteNumber }),
       react: QuoteSentEmail({ url, copy }),
       tenantId: quote.tenantId,
+      expectsReply: true,
       organizationId: quote.organizationId,
     })
 

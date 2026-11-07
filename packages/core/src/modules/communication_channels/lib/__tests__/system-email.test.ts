@@ -251,6 +251,65 @@ describe('sendSystemEmail', () => {
       }))
     })
 
+    describe('reply-to', () => {
+      const sendWith = async (
+        credentials: Record<string, unknown>,
+        payloadOverrides: Record<string, unknown>,
+      ) => {
+        const convertOutbound = jest.fn().mockResolvedValue({
+          content: { text: 'Hello', bodyFormat: 'text' },
+          metadata: { to: ['user@example.com'], subject: 'Hello', from: 'from@example.com' },
+        })
+        const container = buildContainer({
+          fork: { findOne: jest.fn().mockResolvedValue(null), create: jest.fn(), persist: jest.fn(), flush: jest.fn() },
+          sendMessage: jest.fn().mockResolvedValue({ externalMessageId: 'email-1', status: 'sent' }),
+          credentials,
+          convertOutbound,
+        })
+
+        await sendSystemEmail(container as never, {
+          to: 'user@example.com',
+          subject: 'Hello',
+          from: 'from@example.com',
+          text: 'Hello',
+          tenantId: 'tenant-1',
+          organizationId: 'org-1',
+          ...payloadOverrides,
+        })
+
+        return convertOutbound.mock.calls[0][0].channelMetadata.replyTo
+      }
+
+      it('applies the configured reply-to when the message expects a reply', async () => {
+        const replyTo = await sendWith(
+          { apiKey: 'tenant-key', replyToAddress: 'crm@example.com' },
+          { expectsReply: true },
+        )
+        expect(replyTo).toBe('crm@example.com')
+      })
+
+      it('omits reply-to when the message does not expect a reply', async () => {
+        const replyTo = await sendWith(
+          { apiKey: 'tenant-key', replyToAddress: 'crm@example.com' },
+          {},
+        )
+        expect(replyTo).toBeUndefined()
+      })
+
+      it('keeps an explicit reply-to over the configured one', async () => {
+        const replyTo = await sendWith(
+          { apiKey: 'tenant-key', replyToAddress: 'crm@example.com' },
+          { expectsReply: true, replyTo: 'caller@example.com' },
+        )
+        expect(replyTo).toBe('caller@example.com')
+      })
+
+      it('omits reply-to when no reply-to address is configured', async () => {
+        expect(await sendWith({ apiKey: 'tenant-key', replyToAddress: '  ' }, { expectsReply: true })).toBeUndefined()
+        expect(await sendWith({ apiKey: 'tenant-key' }, { expectsReply: true })).toBeUndefined()
+      })
+    })
+
     it('keeps a sender the caller chose explicitly', async () => {
       const convertOutbound = jest.fn().mockResolvedValue({
         content: { text: 'Hello', bodyFormat: 'text' },

@@ -49,6 +49,14 @@ export const integration: IntegrationDefinition = {
         helpText: 'Verified SES sender address or domain identity.',
       },
       {
+        key: 'replyToAddress',
+        label: 'Reply-To address',
+        type: 'text',
+        required: false,
+        placeholder: 'contact@example.com',
+        helpText: 'Optional. Replies to customer-facing emails (quotes, external messages, payment emails) go here. Leave empty to send them without a Reply-To header.',
+      },
+      {
         key: 'configurationSetName',
         label: 'Configuration set',
         type: 'text',

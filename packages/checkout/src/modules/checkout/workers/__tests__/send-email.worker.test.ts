@@ -107,6 +107,7 @@ describe('checkout send-email worker', () => {
         to: 'buyer@example.com',
         from: 'notifications@example.com',
         replyTo: 'reply@example.com',
+        expectsReply: true,
         subject: 'Your Spring Gala ticket is confirmed',
       }),
     )

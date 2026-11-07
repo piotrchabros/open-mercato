@@ -94,6 +94,34 @@ Environment variables:
 | `EMAIL_FROM` | Default sender fallback. |
 | `ADMIN_EMAIL` | Final sender fallback and operational admin recipient. |
 
+## Per-organization Reply-To
+
+Replies to a system email should reach the organization that sent it, not the platform sender. Each tenant-wide email channel can carry an optional `replyToAddress` credential:
+
+- Supported on `channel_smtp`, `channel_resend` and `channel_ses`.
+- An empty string is treated as unset. A malformed address fails validation the same way `fromAddress` does.
+- Env (pre-tenant) credentials have no `replyToAddress`.
+
+`SendEmailOptions` and `ResolvedEmailPayload` gain an additive optional `expectsReply?: boolean` flag. It only marks that a recipient is expected to reply; it carries no address.
+
+`communication_channels` `sendSystemEmail` resolves Reply-To in this order:
+
+1. An explicit `replyTo` on the call wins.
+2. Otherwise, if `expectsReply === true` and the organization's credentials have a non-empty `replyToAddress`, that address is used.
+3. Otherwise no Reply-To is set.
+
+Callers that opt in with `expectsReply: true`:
+
+- Sales quote send.
+- Messages sent to external addresses (`sendMessageEmailToExternal`).
+- Checkout payment emails (start, success and error).
+
+Excluded: auth, security, invitation, notification, onboarding and forms emails, and internal message emails. These keep the platform sender without Reply-To.
+
+## SMTP relay without authentication
+
+`channel_smtp` credentials accept an empty `user` and `password` (both or neither; an empty string counts as absent). When no username is set the transport connects without SMTP AUTH, for IP-authenticated relays such as a Microsoft 365 inbound connector (`<domain>.mail.protection.outlook.com:25` with STARTTLS). TLS rules are unchanged.
+
 ## Migration & Backward Compatibility
 
 - Existing `sendEmail()` imports continue to work.
@@ -140,3 +168,5 @@ Environment variables:
 - 2026-06-03: Updated spec to use Communications Hub system email transport with Resend default and SES as an external provider package.
 - 2026-09-17: Added `@open-mercato/channel-smtp` (provider key `smtp`) as a third outbound provider for generic SMTP relays, and hoisted the host:port SSRF guard into `@open-mercato/shared/lib/host-pinning` so it is shared with `@open-mercato/channel-imap` rather than duplicated.
 - 2026-09-22: Review follow-up on the SMTP provider. The adapter now normalizes the recipient at the send boundary, so the hub test-send route's raw string and the comma-separated system-email form both reach the relay; a partial recipient rejection is reported as `failed` carrying the message id and the accepted/rejected split instead of an unqualified `sent`; and the provider gained `validateCredentials`, so the loopback-host and cleartext refusals surface as connect-form field errors at save time rather than only at send time — matching `@open-mercato/channel-imap`, the sibling with the same operator-supplied-host surface. Added `TC-CHANNEL-SMTP-001` integration coverage and the new workspace manifest to every Dockerfile install stage.
+- 2026-11-07: Added optional per-organization Reply-To. `channel_smtp`, `channel_resend` and `channel_ses` accept an optional `replyToAddress` credential; `sendSystemEmail` uses it only when the caller sets the additive `expectsReply` flag (sales quote send, external message emails and checkout payment emails) and no explicit `replyTo` is given. No database, API, event or ACL changes.
+- 2026-11-07: `channel_smtp` username and password are optional (both or neither) so the relay can be an IP-authenticated connector without SMTP AUTH.

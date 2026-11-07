@@ -2,6 +2,7 @@
 import { POST as sendQuote } from '@open-mercato/core/modules/sales/api/quotes/send/route'
 import { SalesQuote } from '@open-mercato/core/modules/sales/data/entities'
 import { Dictionary, DictionaryEntry } from '@open-mercato/core/modules/dictionaries/data/entities'
+import { sendEmail } from '@open-mercato/shared/lib/email/send'
 import { QuoteSentEmail } from '@open-mercato/core/modules/sales/emails/QuoteSentEmail'
 
 const ORG_ID = '11111111-1111-4111-8111-111111111111'
@@ -118,6 +119,7 @@ describe('quote send app url', () => {
 
     expect(res.status).toBe(200)
     expect(mockResolveOwn).toHaveBeenCalledWith(ORG_ID)
+    expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ expectsReply: true }))
     expect(readSentQuoteUrl()).toMatch(/^https:\/\/org\.example\.com\/quote\/[0-9a-f-]{36}$/)
   })
 

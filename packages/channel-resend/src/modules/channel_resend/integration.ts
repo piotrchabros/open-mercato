@@ -47,6 +47,14 @@ export const integration: IntegrationDefinition = {
         placeholder: 'no-reply@example.com',
         helpText: 'Verified sender address or domain identity in Resend.',
       },
+      {
+        key: 'replyToAddress',
+        label: 'Reply-To address',
+        type: 'text',
+        required: false,
+        placeholder: 'contact@example.com',
+        helpText: 'Optional. Replies to customer-facing emails (quotes, external messages, payment emails) go here. Leave empty to send them without a Reply-To header.',
+      },
     ],
   },
 }

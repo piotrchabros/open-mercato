@@ -217,6 +217,7 @@ export async function sendMessageEmailToExternal(params: {
 
   await sendEmail({
     to: email,
+    expectsReply: true,
     subject: message.subject,
     react: MessageEmail({
       subject: message.subject,

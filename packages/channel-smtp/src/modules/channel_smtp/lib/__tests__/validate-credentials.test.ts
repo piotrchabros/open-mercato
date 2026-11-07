@@ -68,7 +68,16 @@ describe('SmtpChannelAdapter.validateCredentials', () => {
     const result = await validate({ host: 'smtp.example.com', port: 587, tls: 'starttls' })
 
     expect(result.ok).toBe(false)
-    expect(Object.keys(result.errors ?? {}).sort()).toEqual(['fromAddress', 'password', 'user'])
+    expect(Object.keys(result.errors ?? {}).sort()).toEqual(['fromAddress'])
+  })
+
+  it('accepts an IP-authenticated relay without credentials and verifies without auth', async () => {
+    const { verified } = stubTransport()
+    const { user, password, ...withoutAuth } = credentials
+    const result = await validate(withoutAuth)
+
+    expect(result.ok).toBe(true)
+    expect(verified[0]?.user).toBeUndefined()
   })
 
   it('classifies a rejected login without echoing the relay banner back', async () => {

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import type SMTPTransport from 'nodemailer/lib/smtp-transport'
 import { resolveSafeHostAddress } from '@open-mercato/shared/lib/host-pinning'
 import {
   allowsInsecureTransport,
@@ -14,8 +15,8 @@ export interface SmtpConnection {
   host: string
   port: number
   tls: SmtpTlsMode
-  user: string
-  password: string
+  user?: string
+  password?: string
   timeoutMs?: number
 }
 
@@ -62,6 +63,29 @@ const DEFAULT_TIMEOUT_MS = 10_000
 
 type Transporter = ReturnType<typeof nodemailer.createTransport>
 
+export function buildTransportOptions(
+  connection: SmtpConnection,
+  pinned: { host: string; servername?: string },
+  timeout: number,
+): SMTPTransport.Options {
+  return {
+    host: pinned.host,
+    port: connection.port,
+    secure: connection.tls === 'tls',
+    requireTLS: connection.tls === 'starttls',
+    ...(connection.user ? { auth: { user: connection.user, pass: connection.password } } : {}),
+    connectionTimeout: timeout,
+    greetingTimeout: timeout,
+    socketTimeout: timeout,
+    // Certificate verification stays on for every encrypted mode; only an
+    // explicit `'none'` (already gated in createTransporter) talks cleartext.
+    tls:
+      connection.tls === 'none'
+        ? undefined
+        : { rejectUnauthorized: true, ...(pinned.servername ? { servername: pinned.servername } : {}) },
+  }
+}
+
 async function createTransporter(connection: SmtpConnection): Promise<Transporter> {
   if (connection.tls === 'none' && !allowsInsecureTransport()) {
     throw new Error(`[internal] ${INSECURE_TRANSPORT_MESSAGE}`)
@@ -72,24 +96,7 @@ async function createTransporter(connection: SmtpConnection): Promise<Transporte
     unresolvableMessage: UNRESOLVABLE_HOST_MESSAGE,
   })
   const timeout = connection.timeoutMs ?? DEFAULT_TIMEOUT_MS
-  return nodemailer.createTransport({
-    host: pinned.host,
-    port: connection.port,
-    secure: connection.tls === 'tls',
-    requireTLS: connection.tls === 'starttls',
-    auth: { user: connection.user, pass: connection.password },
-    connectionTimeout: timeout,
-    greetingTimeout: timeout,
-    socketTimeout: timeout,
-    // Certificate verification stays on for every encrypted mode; only an
-    // explicit `'none'` (already gated above) talks cleartext. A relay with a
-    // self-signed certificate is a misconfiguration to fix at the relay, not
-    // something to silently accept here.
-    tls:
-      connection.tls === 'none'
-        ? undefined
-        : { rejectUnauthorized: true, ...(pinned.servername ? { servername: pinned.servername } : {}) },
-  })
+  return nodemailer.createTransport(buildTransportOptions(connection, pinned, timeout))
 }
 
 /**

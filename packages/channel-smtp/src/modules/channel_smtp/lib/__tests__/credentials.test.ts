@@ -66,4 +66,55 @@ describe('smtpCredentialsSchema', () => {
   it('rejects a malformed from-address', () => {
     expect(smtpCredentialsSchema.safeParse({ ...validCredentials, fromAddress: 'nope' }).success).toBe(false)
   })
+
+  it('accepts a missing reply-to address', () => {
+    const parsed = smtpCredentialsSchema.parse(validCredentials)
+    expect(parsed.replyToAddress).toBeUndefined()
+  })
+
+  it('treats an empty reply-to address as unset, because the form stores blank fields as empty strings', () => {
+    const parsed = smtpCredentialsSchema.parse({ ...validCredentials, replyToAddress: '' })
+    expect(parsed.replyToAddress).toBeUndefined()
+  })
+
+  it('accepts a valid reply-to address', () => {
+    const parsed = smtpCredentialsSchema.parse({ ...validCredentials, replyToAddress: 'contact@example.com' })
+    expect(parsed.replyToAddress).toBe('contact@example.com')
+  })
+
+  it('rejects a malformed reply-to address', () => {
+    expect(smtpCredentialsSchema.safeParse({ ...validCredentials, replyToAddress: 'nope' }).success).toBe(false)
+  })
+
+  describe('optional authentication', () => {
+    const { user, password, ...withoutAuth } = validCredentials
+
+    it('accepts neither username nor password', () => {
+      const parsed = smtpCredentialsSchema.parse(withoutAuth)
+      expect(parsed.user).toBeUndefined()
+      expect(parsed.password).toBeUndefined()
+    })
+
+    it('accepts both username and password', () => {
+      expect(smtpCredentialsSchema.safeParse(validCredentials).success).toBe(true)
+    })
+
+    it('rejects a username without a password', () => {
+      const result = smtpCredentialsSchema.safeParse({ ...withoutAuth, user })
+      expect(result.success).toBe(false)
+      expect(!result.success && result.error.issues[0]?.path).toEqual(['password'])
+    })
+
+    it('rejects a password without a username', () => {
+      const result = smtpCredentialsSchema.safeParse({ ...withoutAuth, password })
+      expect(result.success).toBe(false)
+      expect(!result.success && result.error.issues[0]?.path).toEqual(['user'])
+    })
+
+    it('treats empty strings as absent', () => {
+      const parsed = smtpCredentialsSchema.parse({ ...withoutAuth, user: '', password: '' })
+      expect(parsed.user).toBeUndefined()
+      expect(parsed.password).toBeUndefined()
+    })
+  })
 })

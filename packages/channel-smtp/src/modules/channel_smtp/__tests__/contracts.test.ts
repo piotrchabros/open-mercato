@@ -34,6 +34,6 @@ describe('channel_smtp contracts', () => {
 
   it('declares every credential field the schema requires', () => {
     const declared = integration.credentials?.fields.map((field) => field.key) ?? []
-    expect(declared).toEqual(['host', 'port', 'tls', 'user', 'password', 'fromAddress'])
+    expect(declared).toEqual(['host', 'port', 'tls', 'user', 'password', 'fromAddress', 'replyToAddress'])
   })
 })
