@@ -130,6 +130,7 @@ services:
       - mcp_shared:/run/mcp-shared
     environment:
       <<: *tenant-encryption-environment
+      TENANT_DATA_ENCRYPTION_FALLBACK_KEY: ${TENANT_DATA_ENCRYPTION_FALLBACK_KEY:-dev-tenant-encryption-fallback-key-32chars}
       # The image (Dockerfile `runner` stage) is a production build installed with
       # `yarn workspaces focus --production`. The Next server child is insulated (the CLI forces
       # NODE_ENV=production for it), but pinning `development` here still leaked into every other
@@ -236,6 +237,7 @@ services:
     # external reverse proxies (Dokploy, etc.) that also watch the Docker
     # socket don't accidentally pick them up.
     environment:
+      <<: *tenant-encryption-environment
       OM_META_LEAD_ADS_APP_ID: ${OM_META_LEAD_ADS_APP_ID:-}
       OM_META_LEAD_ADS_APP_SECRET: ${OM_META_LEAD_ADS_APP_SECRET:-}
       OM_META_LEAD_ADS_VERIFY_TOKEN: ${OM_META_LEAD_ADS_VERIFY_TOKEN:-}
@@ -407,6 +409,7 @@ services:
       retries: 3
     environment:
       <<: *tenant-encryption-environment
+      TENANT_DATA_ENCRYPTION_FALLBACK_KEY: ${TENANT_DATA_ENCRYPTION_FALLBACK_KEY:-dev-tenant-encryption-fallback-key-32chars}
       NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@mercato-postgres-${DEPLOY_ENV:-local}:5432/${POSTGRES_DB:-open-mercato}
       # Same required secret and bounded legacy-token window as the app service:
