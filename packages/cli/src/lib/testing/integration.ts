@@ -204,6 +204,23 @@ export function resolveEphemeralJwtSecret(env: NodeJS.ProcessEnv = process.env):
   return DEFAULT_EPHEMERAL_JWT_SECRET
 }
 
+const DEFAULT_EPHEMERAL_SUPERADMIN_PASSWORD = 'Om-Ephemeral-Superadmin-2026!'
+
+export function resolveEphemeralSuperadminPassword(env: NodeJS.ProcessEnv = process.env): string {
+  const inherited = env.OM_INIT_SUPERADMIN_PASSWORD
+  if (inherited !== undefined && inherited.trim().length > 0) {
+    try {
+      resolveInitSuperadminCredentials([], { ...env, NODE_ENV: 'production', OM_INIT_SUPERADMIN_PASSWORD: inherited })
+      return inherited
+    } catch {
+      console.warn(
+        '[integration] Ignoring the inherited OM_INIT_SUPERADMIN_PASSWORD: it is a placeholder or fails the password policy and the ephemeral app initializes with NODE_ENV=production. Using the ephemeral default instead.',
+      )
+    }
+  }
+  return DEFAULT_EPHEMERAL_SUPERADMIN_PASSWORD
+}
+
 let generatedEphemeralOAuthStateKey: string | null = null
 
 export function resolveEphemeralOAuthStateKey(env: NodeJS.ProcessEnv = process.env): string {

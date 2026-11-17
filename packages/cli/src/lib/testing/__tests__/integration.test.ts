@@ -17,6 +17,7 @@ import {
   resolveAppReadyTimeoutMs,
   resolveEphemeralPostgresImage,
   resolveEphemeralJwtSecret,
+  resolveEphemeralSuperadminPassword,
   resolveEphemeralOAuthStateKey,
   ephemeralPostgresInitSql,
   shouldReuseBuildArtifacts,
